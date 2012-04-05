@@ -1,0 +1,11 @@
+scription
+
+provides basic script services as well as extremely intelligent command-line
+parsing to make command-line scripts easier:
+
+  - Script: marks function as main function to call
+  - Command: marks function as a subcommand for the script (e.g. add, delete,
+    list, etc.)
+  - Run: runs the Script function if one is present, or the appropriate
+    Command functions specified on the command-line
+  - basic usage/help based on Script and Command call signatures

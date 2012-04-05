@@ -29,23 +29,43 @@ equal to the stringified form of the default.
 """
 
 class Command(object):
-    "adds __annotations__ to decorated function"
-
+    "adds __annotations__ to decorated function, and adds func to Command.subcommands"
+    subcommands = {}
     def __init__(self, **annotations):
         self.annotations = annotations
     def __call__(self, func):
-        argspec = inspect.getargspec(func)
-        names = argspec.args + [argspec.varargs, argspec.keywords]
-        errors = []
-        for spec in self.annotations:
-            if spec not in names:
-                errors.append(spec)
-        if errors:
-            raise TypeError("Annotated names %r not in %s's signature" % (errors, func.__name__))
-        func.__annotations__ = self.annotations
+        _add_annotations(func, self.annotations)
+        Command.subcommands[func.__name__] = func
         return func
 
-def run(func):
+class Script(object):
+    "adds __annotations__ to decorated function, and stores func in Script.command"
+    command = [None]
+    def __init__(self, **annotations):
+        self.annotations = annotations
+    def __call__(self, func):
+        _add_annotations(func, self.annotations)
+        Script.command[0] = func
+        return func
+
+def _add_annotations(func, annotations):
+    argspec = inspect.getargspec(func)
+    names = argspec.args + [argspec.varargs, argspec.keywords]
+    errors = []
+    for spec in annotations:
+        if spec not in names:
+            errors.append(spec)
+    if errors:
+        raise TypeError("names %r not in %s's signature" % (errors, func.__name__))
+    func.__annotations__ = self.annotations
+
+def run(func=None):
+    "parses command-line and compares with either func or, if None, Script.command"
+    if func is None:
+        func = Script.command[0]
+        if func is None:
+            raise TypeError("'run' must be called with a function, or a function must"
+                    " have been declared with @Script")
     params, vararg, keywordarg, defaults = inspect.getargspec(func)
     params = list(params)
     vararg = [vararg] if vararg else []
@@ -72,7 +92,7 @@ def run(func):
     func.__usage__ = '\n'.join(usage)
 
     if not sys.argv[1:]:
-        print func.__usage__
+        print func.__usage__ + '\n00'
         return
 
     args = []
@@ -85,7 +105,11 @@ def run(func):
             raise TypeError("-flags not currently supported")
         elif '=' in item:
             name, value = item.split('=')
-            kwargs[name] = value
+            if name in params:
+                loc = params.index(name)
+                positional[loc] = value
+            else:
+                kwargs[name] = value
         else:
             if pos < len(positional):
                 positional[pos] = item
@@ -93,14 +117,14 @@ def run(func):
             else:
                 args.append(item)
     if not all([p != '' for p in positional]):
-        print func.__usage__
+        print func.__usage__ + '\n01'
         return
     if args and not vararg:
-        print func.__usage__
+        print func.__usage__ + '\n02'
         return
-    for name in kwargs.keys():
-        if name not in keywordarg:
-            print func.__usage__
-            return
+    #for name in kwargs.keys():
+    #    if name not in keywordarg:
+    #        print func.__usage__ + '\n03'
+    #        return
     args = positional + vararg
     return func(*args, **kwargs)
