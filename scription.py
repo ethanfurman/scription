@@ -57,7 +57,7 @@ def _add_annotations(func, annotations):
             errors.append(spec)
     if errors:
         raise TypeError("names %r not in %s's signature" % (errors, func.__name__))
-    func.__annotations__ = self.annotations
+    func.__annotations__ = annotations
 
 def run(func=None):
     "parses command-line and compares with either func or, if None, Script.command"
