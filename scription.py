@@ -27,6 +27,42 @@ form [--option-name METAVAR]. If the metavar is None, then it is equal to the
 uppercased name of the argument, unless the argument has a default: then it is
 equal to the stringified form of the default.
 """
+__all__ = ('Command', 'Script', 'Run', 'InputFile')
+
+class Spec(tuple):
+    "tuple with named attributes for representing a command-line paramter"
+    __slots__= ()
+    def __new__(cls, *args):
+        if not args or isinstance(args[0], (str, unicode)):
+            pass
+        else:
+            args = args[0]
+        args = list(args) + [None] * (6 - len(args))
+        if not args[0]:
+            args[0] = ''
+        if not args[1]:
+            args[1] = 'positional'
+        if not args[3]:
+            args[3] = lambda x: x
+        return tuple.__new__(cls, args)
+    @property
+    def help(self):
+        return self[0]
+    @property
+    def kind(self):
+        return self[1]
+    @property
+    def abbrev(self):
+        return self[2]
+    @property
+    def type(self):
+        return self[3]
+    @property
+    def choices(self):
+        return self[4]
+    @property
+    def metavar(self):
+        return self[5]
 
 class Command(object):
     "adds __annotations__ to decorated function, and adds func to Command.subcommands"
@@ -55,16 +91,16 @@ def _add_annotations(func, annotations):
     for spec in annotations:
         if spec not in names:
             errors.append(spec)
-    if errors:
+    if errors:  
         raise TypeError("names %r not in %s's signature" % (errors, func.__name__))
     func.__annotations__ = annotations
 
-def run(func=None):
+def Run(func=None):
     "parses command-line and compares with either func or, if None, Script.command"
     if func is None:
         func = Script.command[0]
         if func is None:
-            raise TypeError("'run' must be called with a function, or a function must"
+            raise TypeError("'Run' must be called with a function, or a function must"
                     " have been declared with @Script")
     params, vararg, keywordarg, defaults = inspect.getargspec(func)
     params = list(params)
@@ -74,6 +110,19 @@ def run(func=None):
     if not params:
         return func()
     annotations = getattr(func, '__annotations__', {})
+    for name in params + vararg + keywordarg:
+        spec = annotations.get(name, '')
+        annotations[name] = Spec(spec)
+
+    if not vararg or annotations[vararg[0]].type is None:
+        vararg_type = lambda x: x
+    else:
+        vararg_type = annotations[vararg[0]].type
+    if not keywordarg or annotations[keywordarg[0]].type is None:
+        keywordarg_type = lambda x: x
+    else:
+        keywordarg_type = annotations[keywordarg[0]].type
+
     program = sys.argv[0]
     usage = ["usage:", program] + params
     if vararg:
@@ -86,9 +135,9 @@ def run(func=None):
     positional = [''] * (len(params) - len(defaults)) + defaults
     usage.extend(["arguments:", ''])
     for i, name in enumerate(params):
-        usage.append('    %-15s %-15s %s' % (name, positional[i], annotations.get(name, '')))
+        usage.append('    %-15s %-15s %s' % (annotations[name].metavar or name, positional[i], annotations[name].help))
     for name in  (vararg + keywordarg):
-        usage.append('    %-15s %-15s %s' % (name, '', annotations.get(name, '')))
+        usage.append('    %-15s %-15s %s' % (name, '', annotations[name].help))
     func.__usage__ = '\n'.join(usage)
 
     if not sys.argv[1:]:
@@ -106,10 +155,9 @@ def run(func=None):
         elif '=' in item:
             name, value = item.split('=')
             if name in params:
-                loc = params.index(name)
-                positional[loc] = value
-            else:
-                kwargs[name] = value
+                print "%s: '=' not allowed with positional arguments\n" % sys.argv[0] + func.__usage__ + '\n00'
+                return
+            kwargs[name] = value
         else:
             if pos < len(positional):
                 positional[pos] = item
@@ -122,9 +170,17 @@ def run(func=None):
     if args and not vararg:
         print func.__usage__ + '\n02'
         return
-    #for name in kwargs.keys():
-    #    if name not in keywordarg:
-    #        print func.__usage__ + '\n03'
-    #        return
-    args = positional + vararg
+    for i, value in enumerate(positional):
+        print params[i], ': ', value, '-->',
+        positional[i] = annotations[params[i]].type(value)
+        print positional[i]
+    for i, value in enumerate(args):
+        positional[i] = vararg_type(value)
+    for key, value in kwargs.items():
+        kwargs[key] = keywordarg_type(value)
+
+    args = positional + args
     return func(*args, **kwargs)
+
+def InputFile(arg):
+    return file(arg)
