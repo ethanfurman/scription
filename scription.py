@@ -27,7 +27,7 @@ form [--option-name METAVAR]. If the metavar is None, then it is equal to the
 uppercased name of the argument, unless the argument has a default: then it is
 equal to the stringified form of the default.
 """
-__all__ = ('Command', 'Script', 'Run', 'InputFile')
+__all__ = ('Command', 'Script', 'Run', 'InputFile', 'Bool')
 
 class Spec(tuple):
     "tuple with named attributes for representing a command-line paramter"
@@ -184,3 +184,6 @@ def Run(func=None):
 
 def InputFile(arg):
     return file(arg)
+
+def Bool(arg):
+    return arg.lower() in "true t yes y 1 on".split()
