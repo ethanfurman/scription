@@ -27,7 +27,12 @@ form [--option-name METAVAR]. If the metavar is None, then it is equal to the
 uppercased name of the argument, unless the argument has a default: then it is
 equal to the stringified form of the default.
 """
+
+# data
 __all__ = ('Command', 'Script', 'Run', 'InputFile', 'Bool')
+
+class ScriptionError(Exception):
+    "raised for errors"
 
 class Spec(tuple):
     "tuple with named attributes for representing a command-line paramter"
@@ -76,12 +81,12 @@ class Command(object):
 
 class Script(object):
     "adds __annotations__ to decorated function, and stores func in Script.command"
-    command = [None]
+    command = None
     def __init__(self, **annotations):
         self.annotations = annotations
     def __call__(self, func):
         _add_annotations(func, self.annotations)
-        Script.command[0] = func
+        Script.command = staticmethod(func)
         return func
 
 def _add_annotations(func, annotations):
@@ -95,20 +100,15 @@ def _add_annotations(func, annotations):
         raise TypeError("names %r not in %s's signature" % (errors, func.__name__))
     func.__annotations__ = annotations
 
-def Run(func=None):
-    "parses command-line and compares with either func or, if None, Script.command"
-    if func is None:
-        func = Script.command[0]
-        if func is None:
-            raise TypeError("'Run' must be called with a function, or a function must"
-                    " have been declared with @Script")
+def usage(func):
     params, vararg, keywordarg, defaults = inspect.getargspec(func)
     params = list(params)
     vararg = [vararg] if vararg else []
     keywordarg = [keywordarg] if keywordarg else []
     defaults = list(defaults) if defaults else []
     if not params:
-        return func()
+        raise ScriptionError("No parameters -- what's the point?")
+        #return func()
     annotations = getattr(func, '__annotations__', {})
     for name in params + vararg + keywordarg:
         spec = annotations.get(name, '')
@@ -122,7 +122,6 @@ def Run(func=None):
         keywordarg_type = lambda x: x
     else:
         keywordarg_type = annotations[keywordarg[0]].type
-
     program = sys.argv[0]
     usage = ["usage:", program] + params
     if vararg:
@@ -139,24 +138,27 @@ def Run(func=None):
     for name in  (vararg + keywordarg):
         usage.append('    %-15s %-15s %s' % (name, '', annotations[name].help))
     func.__usage__ = '\n'.join(usage)
-
-    if not sys.argv[1:]:
-        print func.__usage__ + '\n00'
-        return
-
     args = []
+
     kwargs = {}
     pos = 0
+    flags = []
     for item in sys.argv[1:]:
         if item.startswith('--'):
-            raise TypeError("--options not currently supported")
+            item = item[2:]
+            if len(item) < 2:
+                raise ScriptionError('double-dash flags must be spelled out')
+            flags.append(item)
         elif item.startswith('-'):
-            raise TypeError("-flags not currently supported")
+            item = item[1:]
+            if len(item) != 1:
+                raise ScriptionError('dash flags must be a single character')
+            flags.append(item)
         elif '=' in item:
             name, value = item.split('=')
             if name in params:
                 print "%s: '=' not allowed with positional arguments\n" % sys.argv[0] + func.__usage__ + '\n00'
-                return
+                sys.exit(-1)
             kwargs[name] = value
         else:
             if pos < len(positional):
@@ -164,26 +166,61 @@ def Run(func=None):
                 pos += 1
             else:
                 args.append(item)
+    if flags and flags[0] in ('h','help'):
+        print func.__usage__ + '\n00\n'
+        sys.exit(-1)
+    for flag in flags:
+        if len(flag) == 1:  # find the full name
+            for name, annote in annotations.items():
+                if annote.abbrev == flag:
+                    flag = name
+                    break
+        if flag not in annotations:
+            raise ScriptionError('%s is not a valid flag' % flag)
+        index = params.index(flag)
+        positional[index] = True
     if not all([p != '' for p in positional]):
-        print func.__usage__ + '\n01'
-        return
+        print func.__usage__ + '\n01\n'
+        sys.exit(-1)
     if args and not vararg:
-        print func.__usage__ + '\n02'
-        return
+        print func.__usage__ + '\n02\n'
+        sys.exit(-1)
     for i, value in enumerate(positional):
-        print params[i], ': ', value, '-->',
+        #print params[i], ': ', value, '-->',
+        annote = annotations[params[i]]
+        if annote.kind != 'positional' and value not in (True, False):
+            raise ScriptionError("%s is a %s, not a positional" % (params[i], annote.kind))
         positional[i] = annotations[params[i]].type(value)
-        print positional[i]
+        #print positional[i]
     for i, value in enumerate(args):
         positional[i] = vararg_type(value)
     for key, value in kwargs.items():
         kwargs[key] = keywordarg_type(value)
+    return positional + args, kwargs
 
-    args = positional + args
+def Run():
+    "parses command-line and compares with either func or, if None, Script.command"
+    #print repr(Script.command), repr(Command.subcommands)
+    if Script.command and Command.subcommands:
+        raise ScriptionError("scription does not support both Script and Command in the same file")
+    if Script.command is None and not Command.subcommands:
+        raise ScriptionError("either Script or Command must be specified")
+    if Command.subcommands:
+        func = Command.subcommands.get(sys.argv[1], None)
+        if func is None:
+            print "usage: %s [%s]" % (sys.argv[0], ' | '.join(sorted(Command.subcommands.keys())))
+            return
+        sys.argv.pop(1)
+    else:
+        func = Script.command
+    args, kwargs = usage(func)
+
     return func(*args, **kwargs)
 
 def InputFile(arg):
     return file(arg)
 
 def Bool(arg):
+    if arg in (True, False):
+        return arg
     return arg.lower() in "true t yes y 1 on".split()
