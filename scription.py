@@ -112,7 +112,11 @@ def usage(func):
     annotations = getattr(func, '__annotations__', {})
     for name in params + vararg + keywordarg:
         spec = annotations.get(name, '')
-        annotations[name] = Spec(spec)
+        help, kind, abbrev, type, choices, metavar = Spec(spec)
+        if kind == 'flag' and not abbrev:
+            abbrev = name[0]
+        annotations[name] = Spec(help, kind, abbrev, type, choices, metavar)
+
 
     if not vararg or annotations[vararg[0]].type is None:
         vararg_type = lambda x: x
