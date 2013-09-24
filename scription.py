@@ -1,7 +1,13 @@
 "intelligently parses command lines"
 
+from email.mime.text import MIMEText
+from syslog import syslog
+import email
 import inspect
+import smtplib
 import sys
+import traceback
+
 
 "-flags -o1 -o2 --option3 --option4 param1 param2 ..."
 
@@ -30,6 +36,49 @@ equal to the stringified form of the default.
 
 # data
 __all__ = ('Command', 'Script', 'Run', 'InputFile', 'Bool')
+     
+def log_exception():
+    exc, err, tb = sys.exc_info()
+    lines = traceback.format_list(traceback.extract_tb(tb))
+    lines.append('%s: %s\n' % (exc.__name__, err))
+    syslog('Traceback (most recent call last):')
+    for line in lines:
+        for ln in line.rstrip().split('\n'):
+            syslog(ln)
+    return lines
+
+def mail(server, port, message):
+    """sends email.message to server:port"""
+    receiver = []
+    msg = MIMEText(message.get_payload())
+    msg['From'] = message.get('From')
+    for to in ('To', 'Cc', 'Bcc'):
+        for address in message.get_all(to, []):
+            msg[to] = address
+            receiver.append(address)
+    for header, value in message.items():
+        if header in ('To','From', 'Cc', 'Bcc'):
+            continue
+        msg[header] = value
+    smtp = smtplib.SMTP(server, port)
+    try:
+        send_errs = smtp.sendmail(msg['From'], receiver, msg.as_string())
+    except smtplib.SMTPRecipientsRefused, exc:
+        send_errs = exc.recipients
+    smtp.quit()
+    errs = {}
+    if send_errs:
+        for user in send_errs:
+            server = 'mail.' + user.split('@')[1]
+            smtp = smtplib.SMTP(server, 25)
+            try:
+                smtp.sendmail(msg['From'], [user], msg.as_string())
+            except smtplib.SMTPRecipientsRefused, exc:
+                errs[user] = [send_errs[user], exc.recipients[user]]
+            smtp.quit()
+    for user, errors in errs.items():
+        for code, response in errors:
+            syslog.syslog('%s --> %s: %s' % (user, code, response))
 
 class ScriptionError(Exception):
     "raised for errors"
