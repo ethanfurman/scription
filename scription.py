@@ -164,6 +164,7 @@ def usage(func):
     if not params:
         raise ScriptionError("No parameters -- what's the point?")
     annotations = getattr(func, '__annotations__', {})
+    indices = {}
     for i, name in enumerate(params + vararg + keywordarg):
         spec = annotations.get(name, '')
         help, kind, abbrev, type, choices, metavar = Spec(spec)
@@ -174,8 +175,10 @@ def usage(func):
         spec = Spec(help, kind, abbrev, type, choices, metavar)
         annotations[i] = spec
         annotations[name] = spec
+        indices[name] = i
         if abbrev is not None:
             annotations[abbrev] = spec
+            indices[abbrev] = i
 
 
     if not vararg or annotations[vararg[0]].type is None:
@@ -235,7 +238,7 @@ def usage(func):
                 item, value = item.split('=', 1)
             if item not in annotations:
                 raise ScriptionError('%s not valid' % item)
-            index = params.index(item)
+            index = indices[item]
             annote = annotations[item]
             value = annote.type(value)
             positional[index] = value
