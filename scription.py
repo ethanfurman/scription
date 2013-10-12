@@ -233,8 +233,6 @@ def usage(func):
                 item = item[3:]
             elif '=' in item:
                 item, value = item.split('=', 1)
-            if len(item) < 2:
-                raise ScriptionError('double-dash names must be spelled out')
             if item not in params:
                 raise ScriptionError('%s not valid' % item)
             index = params.index(item)
