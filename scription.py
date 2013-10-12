@@ -1,42 +1,47 @@
 "intelligently parses command lines"
 
-from email.mime.text import MIMEText
-from syslog import syslog
-import email
 import inspect
-import smtplib
 import sys
 import traceback
+from syslog import syslog
 
-
-"-flags -o1 -o2 --option3 --option4 param1 param2 ..."
+"-flags -f --flag -o=foo --option4=bar param1 param2 ..."
 
 """
 (help, kind, abbrev, type, choices, metavar)
 
-where help is the help message, kind is a string in the set { "flag", "option",
-"positional"}, abbrev is a one-character string or None, type is a callable
-taking a string in input, choices is a discrete sequence of values and metavar
-is a string.
+  - help --> the help message
 
-type is used to automagically convert the command line arguments from the
-string type to any Python type; by default there is no conversion and type=None.
+  - kind --> what kind of parameter
+    - flag       --> simple boolean
+    - option     --> option_name=value
+    - positional --> just like it says (default)n
 
-choices is used to restrict the number of the valid options; by default there
-is no restriction i.e. choices=None.
+  - abbrev is a one-character string (defaults to first letter of
+    argument)
 
-metavar has two meanings. For a positional argument it is used to change the
-argument name in the usage message (and only there). By default the metavar is
-None and the name in the usage message is the same as the argument name. For an
-option the metavar is used differently in the usage message, which has now the
-form [--option-name METAVAR]. If the metavar is None, then it is equal to the
-uppercased name of the argument, unless the argument has a default: then it is
-equal to the stringified form of the default.
+  - type is a callable that converts the arguments to any Python
+    type; by default there is no conversion and type=None 
+
+  - choices is a discrete sequence of values used to restrict the
+    number of the valid options; by default there are no restrictions
+    (i.e. choices=None)
+
+  - metavar is used as the name of the parameter in the help message
 """
+
+# TODO - understand this
+# metavar has two meanings. For a positional argument it is used to change the
+# argument name in the usage message (and only there). By default the metavar is
+# None and the name in the usage message is the same as the argument name. For an
+# option the metavar is used differently in the usage message, which has now the
+# form [--option-name METAVAR]. If the metavar is None, then it is equal to the
+# uppercased name of the argument, unless the argument has a default: then it is
+# equal to the stringified form of the default.
 
 # data
 __all__ = ('Command', 'Script', 'Run', 'InputFile', 'Bool')
-     
+
 def log_exception():
     exc, err, tb = sys.exc_info()
     lines = traceback.format_list(traceback.extract_tb(tb))
@@ -146,7 +151,7 @@ def _add_annotations(func, annotations):
         if spec not in names:
             errors.append(spec)
     if errors:  
-        raise TypeError("names %r not in %s's signature" % (errors, func.__name__))
+        raise ScriptionError("names %r not in %s's signature" % (errors, func.__name__))
     func.__annotations__ = annotations
 
 def usage(func):
@@ -155,16 +160,22 @@ def usage(func):
     vararg = [vararg] if vararg else []
     keywordarg = [keywordarg] if keywordarg else []
     defaults = list(defaults) if defaults else []
+    max_pos = len(params) - len(defaults)
     if not params:
         raise ScriptionError("No parameters -- what's the point?")
-        #return func()
     annotations = getattr(func, '__annotations__', {})
-    for name in params + vararg + keywordarg:
+    for i, name in enumerate(params + vararg + keywordarg):
         spec = annotations.get(name, '')
         help, kind, abbrev, type, choices, metavar = Spec(spec)
         if kind == 'flag' and not abbrev:
             abbrev = name[0]
-        annotations[name] = Spec(help, kind, abbrev, type, choices, metavar)
+        if abbrev in annotations:
+            raise ScriptionError('duplicate abbreviations: %r' % abbrev)
+        spec = Spec(help, kind, abbrev, type, choices, metavar)
+        annotations[i] = spec
+        annotations[name] = spec
+        if abbrev is not None:
+            annotations[abbrev] = spec
 
 
     if not vararg or annotations[vararg[0]].type is None:
@@ -176,7 +187,15 @@ def usage(func):
     else:
         keywordarg_type = annotations[keywordarg[0]].type
     program = sys.argv[0]
-    usage = ["usage:", program] + params
+    if '/' in program:
+        program = program.rsplit('/')[1]
+    print_params = []
+    for param in params:
+        if annotations[param].kind in ('flag', 'option'):
+            print_params.append('--' + param)
+        else:
+            print_params.append(param)
+    usage = ["usage:", program] + print_params
     if vararg:
         usage.append("[{0} [{0} [...]]]".format(vararg[0]))
     if keywordarg:
@@ -184,71 +203,68 @@ def usage(func):
     usage = ['', ' '.join(usage), '']
     if func.__doc__:
         usage.extend([func.__doc__, ''])
-    positional = [''] * (len(params) - len(defaults)) + defaults
+    positional = [None] * (len(params) - len(defaults)) + defaults
     usage.extend(["arguments:", ''])
     for i, name in enumerate(params):
-        usage.append('    %-15s %-15s %s' % (annotations[name].metavar or name, positional[i], annotations[name].help))
+        annote = annotations[name]
+        usage.append('    %-15s %-15s %s %s' % (
+            annote.metavar or name,
+            positional[i],
+            annote.help,
+            annote.choices or '',
+            ))
     for name in  (vararg + keywordarg):
         usage.append('    %-15s %-15s %s' % (name, '', annotations[name].help))
+
     func.__usage__ = '\n'.join(usage)
     args = []
-
     kwargs = {}
     pos = 0
-    flags = []
+    print_help = False
     for item in sys.argv[1:]:
-        if item.startswith('--'):
-            item = item[2:]
+        if item.startswith(('-', '--')):
+            item = item.lstrip('-')
+            if item in ('h', 'help'):
+                print_help = True
+                continue
+            value = True
+            if item.startswith('no-') and '=' not in item:
+                value = False
+                item = item[3:]
+            elif '=' in item:
+                item, value = item.split('=', 1)
             if len(item) < 2:
-                raise ScriptionError('double-dash flags must be spelled out')
-            flags.append(item)
-        elif item.startswith('-'):
-            item = item[1:]
-            if len(item) != 1:
-                raise ScriptionError('dash flags must be a single character')
-            flags.append(item)
+                raise ScriptionError('double-dash names must be spelled out')
+            if item not in params:
+                raise ScriptionError('%s not valid' % item)
+            index = params.index(item)
+            annote = annotations[item]
+            value = annote.type(value)
+            positional[index] = value
         elif '=' in item:
-            name, value = item.split('=')
-            if name in params:
-                print "%s: '=' not allowed with positional arguments\n" % sys.argv[0] + func.__usage__ + '\n00'
-                sys.exit(-1)
-            kwargs[name] = value
+            item, value = item.split('=')
+            if item in params:
+                raise ScriptionError('%s must be specified as a %s' % (item, annotations[item].kind))
+            value = keywordarg_type(value)
+            kwargs[item] = value
         else:
-            if pos < len(positional):
+            if pos < max_pos:
+                annote = annotations[pos]
+                item = annote.type(item)
                 positional[pos] = item
                 pos += 1
             else:
+                item = vararg_type(item)
                 args.append(item)
-    if flags and flags[0] in ('h','help'):
+    if print_help:
         print func.__usage__ + '\n00\n'
         sys.exit(-1)
-    for flag in flags:
-        if len(flag) == 1:  # find the full name
-            for name, annote in annotations.items():
-                if annote.abbrev == flag:
-                    flag = name
-                    break
-        if flag not in annotations:
-            raise ScriptionError('%s is not a valid flag' % flag)
-        index = params.index(flag)
-        positional[index] = True
-    if not all([p != '' for p in positional]):
+    if not all([p is not None for p in positional]):
         print func.__usage__ + '\n01\n'
         sys.exit(-1)
-    if args and not vararg:
+    if args and not vararg or kwargs and not keywordarg:
         print func.__usage__ + '\n02\n'
         sys.exit(-1)
-    for i, value in enumerate(positional):
-        #print params[i], ': ', value, '-->',
-        annote = annotations[params[i]]
-        if annote.kind != 'positional' and value not in (True, False):
-            raise ScriptionError("%s is a %s, not a positional" % (params[i], annote.kind))
-        positional[i] = annotations[params[i]].type(value)
-        #print positional[i]
-    for i, value in enumerate(args):
-        positional[i] = vararg_type(value)
-    for key, value in kwargs.items():
-        kwargs[key] = keywordarg_type(value)
     return positional + args, kwargs
 
 def Run():
