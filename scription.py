@@ -160,16 +160,18 @@ def usage(func):
     vararg = [vararg] if vararg else []
     keywordarg = [keywordarg] if keywordarg else []
     defaults = list(defaults) if defaults else []
-    max_pos = len(params) - len(defaults)
     if not params:
         raise ScriptionError("No parameters -- what's the point?")
     annotations = getattr(func, '__annotations__', {})
     indices = {}
+    max_pos = 0
     for i, name in enumerate(params + vararg + keywordarg):
         spec = annotations.get(name, '')
         help, kind, abbrev, type, choices, metavar = Spec(spec)
         if kind == 'flag' and not abbrev:
             abbrev = name[0]
+        elif kind == 'positional' and name in params:
+            max_pos += 1
         if abbrev in annotations:
             raise ScriptionError('duplicate abbreviations: %r' % abbrev)
         spec = Spec(help, kind, abbrev, type, choices, metavar)
@@ -262,9 +264,12 @@ def usage(func):
         sys.exit(-1)
     if not all([p is not None for p in positional]):
         print func.__usage__ + '\n01\n'
+        print positional
         sys.exit(-1)
     if args and not vararg or kwargs and not keywordarg:
         print func.__usage__ + '\n02\n'
+        print args
+        print kwargs
         sys.exit(-1)
     return positional + args, kwargs
 
