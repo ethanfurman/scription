@@ -233,7 +233,7 @@ def usage(func):
                 item = item[3:]
             elif '=' in item:
                 item, value = item.split('=', 1)
-            if item not in params:
+            if item not in annotations:
                 raise ScriptionError('%s not valid' % item)
             index = params.index(item)
             annote = annotations[item]
