@@ -1,8 +1,10 @@
 "intelligently parses command lines"
 
 import inspect
+import smtplib
 import sys
 import traceback
+from email.mime.text import MIMEText
 from syslog import syslog
 
 "-flags -f --flag -o=foo --option4=bar param1 param2 ..."
