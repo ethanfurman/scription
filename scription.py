@@ -173,7 +173,9 @@ def usage(func):
     for i, name in enumerate(params + vararg + keywordarg):
         spec = annotations.get(name, '')
         help, kind, abbrev, type, choices, metavar = Spec(spec)
-        if kind == 'flag' and not abbrev:
+        if kind == 'positional':
+            max_pos += 1
+        elif kind == 'flag' and not abbrev:
             abbrev = name[0]
         elif kind == 'positional' and name in params:
             max_pos += 1
