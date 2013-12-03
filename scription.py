@@ -44,14 +44,14 @@ from syslog import syslog
 # data
 __all__ = ('Command', 'Script', 'Run', 'InputFile', 'Bool')
 
-def log_exception(traceback=None):
-    if traceback is None:
+def log_exception(tb=None):
+    if tb is None:
         exc, err, tb = sys.exc_info()
         lines = traceback.format_list(traceback.extract_tb(tb))
         lines.append('%s: %s\n' % (exc.__name__, err))
         syslog('Traceback (most recent call last):')
     else:
-        lines = traceback.split('\\n')
+        lines = tb.split('\\n')
     for line in lines:
         for ln in line.rstrip().split('\n'):
             syslog(ln)
