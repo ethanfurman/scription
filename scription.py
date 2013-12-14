@@ -17,7 +17,7 @@ from syslog import syslog
   - kind --> what kind of parameter
     - flag       --> simple boolean
     - option     --> option_name=value
-    - positional --> just like it says (default)n
+    - required --> just like it says (default)
 
   - abbrev is a one-character string (defaults to first letter of
     argument)
@@ -33,7 +33,7 @@ from syslog import syslog
 """
 
 # TODO - understand this
-# metavar has two meanings. For a positional argument it is used to change the
+# metavar has two meanings. For a required argument it is used to change the
 # argument name in the usage message (and only there). By default the metavar is
 # None and the name in the usage message is the same as the argument name. For an
 # option the metavar is used differently in the usage message, which has now the
@@ -94,7 +94,11 @@ class ScriptionError(Exception):
     "raised for errors"
 
 class Spec(tuple):
-    "tuple with named attributes for representing a command-line paramter"
+    """tuple with named attributes for representing a command-line paramter
+
+    help, kind, abbrev, type, choices, metavar
+    """
+
     __slots__= ()
     def __new__(cls, *args):
         if not args or isinstance(args[0], (str, unicode)):
@@ -105,7 +109,7 @@ class Spec(tuple):
         if not args[0]:
             args[0] = ''
         if not args[1]:
-            args[1] = 'positional'
+            args[1] = 'required'
         if not args[3]:
             args[3] = lambda x: x
         return tuple.__new__(cls, args)
@@ -159,7 +163,9 @@ def _add_annotations(func, annotations):
         raise ScriptionError("names %r not in %s's signature" % (errors, func.__name__))
     func.__annotations__ = annotations
 
-def usage(func):
+empty = object()
+
+def usage(func, param_line_args):
     params, vararg, keywordarg, defaults = inspect.getargspec(func)
     params = list(params)
     vararg = [vararg] if vararg else []
@@ -170,15 +176,19 @@ def usage(func):
     annotations = getattr(func, '__annotations__', {})
     indices = {}
     max_pos = 0
+    positional = []
     for i, name in enumerate(params + vararg + keywordarg):
         spec = annotations.get(name, '')
         help, kind, abbrev, type, choices, metavar = Spec(spec)
-        if kind == 'positional':
+        if kind == 'required':
             max_pos += 1
-        elif kind == 'flag' and not abbrev:
-            abbrev = name[0]
-        elif kind == 'positional' and name in params:
-            max_pos += 1
+            positional.append(empty)
+        elif kind == 'flag':
+            positional.append(False)
+            if not abbrev:
+                abbrev = name[0]
+        elif kind == 'option':
+            positional.append(None)
         if abbrev in annotations:
             raise ScriptionError('duplicate abbreviations: %r' % abbrev)
         spec = Spec(help, kind, abbrev, type, choices, metavar)
@@ -188,7 +198,8 @@ def usage(func):
         if abbrev is not None:
             annotations[abbrev] = spec
             indices[abbrev] = i
-
+    if defaults:
+        positional[-len(defaults):] = defaults
 
     if not vararg or annotations[vararg[0]].type is None:
         vararg_type = lambda x: x
@@ -198,7 +209,7 @@ def usage(func):
         keywordarg_type = lambda x: x
     else:
         keywordarg_type = annotations[keywordarg[0]].type
-    program = sys.argv[0]
+    program = param_line_args[0]
     if '/' in program:
         program = program.rsplit('/')[1]
     print_params = []
@@ -215,7 +226,6 @@ def usage(func):
     usage = ['', ' '.join(usage), '']
     if func.__doc__:
         usage.extend([func.__doc__, ''])
-    positional = [None] * (len(params) - len(defaults)) + defaults
     usage.extend(["arguments:", ''])
     for i, name in enumerate(params):
         annote = annotations[name]
@@ -225,7 +235,7 @@ def usage(func):
             annote.help,
             annote.choices or '',
             ))
-    for name in  (vararg + keywordarg):
+    for name in (vararg + keywordarg):
         usage.append('    %-15s %-15s %s' % (name, '', annotations[name].help))
 
     func.__usage__ = '\n'.join(usage)
@@ -233,8 +243,22 @@ def usage(func):
     kwargs = {}
     pos = 0
     print_help = False
-    for item in sys.argv[1:]:
-        if item.startswith(('-', '--')):
+    value = None
+    for item in param_line_args[1:] + [None]:
+        # required arguments /should/ be kept together
+        # once an option is found all text until the next option/flag/variable
+        # is part of that option
+        if value is not None:
+            if item is None or item.startswith('-') or '=' in item:
+                value = annote.type(value.strip())
+                positional[index] = value
+                value = None
+            else:
+                value += ' ' + item
+                continue
+        if item is None:
+            break
+        if item.startswith('-'):
             item = item.lstrip('-')
             if item in ('h', 'help'):
                 print_help = True
@@ -249,14 +273,19 @@ def usage(func):
                 raise ScriptionError('%s not valid' % item)
             index = indices[item]
             annote = annotations[item]
-            value = annote.type(value)
-            positional[index] = value
+            if annote.kind == 'option' and value in (True, False):
+                value = ''
+            elif annote.kind == 'flag':
+                value = annote.type(value)
+                positional[index] = value
+                value = None
         elif '=' in item:
             item, value = item.split('=')
             if item in params:
                 raise ScriptionError('%s must be specified as a %s' % (item, annotations[item].kind))
             value = keywordarg_type(value)
             kwargs[item] = value
+            value = None
         else:
             if pos < max_pos:
                 annote = annotations[pos]
@@ -269,7 +298,7 @@ def usage(func):
     if print_help:
         print func.__usage__ + '\n00\n'
         sys.exit(-1)
-    if not all([p is not None for p in positional]):
+    if not all([p is not empty for p in positional]):
         print func.__usage__ + '\n01\n'
         print positional
         sys.exit(-1)
@@ -278,7 +307,7 @@ def usage(func):
         print args
         print kwargs
         sys.exit(-1)
-    return positional + args, kwargs
+    return tuple(positional + args), kwargs
 
 def Run():
     "parses command-line and compares with either func or, if None, Script.command"
@@ -288,19 +317,27 @@ def Run():
     if Script.command is None and not Command.subcommands:
         raise ScriptionError("either Script or Command must be specified")
     if Command.subcommands:
-        func = Command.subcommands.get(sys.argv[1], None)
-        if func is None:
-            print "usage: %s [%s]" % (sys.argv[0], ' | '.join(sorted(Command.subcommands.keys())))
-            return
-        sys.argv.pop(1)
+        func = Command.subcommands.get(sys.argv[0], None)
+        if func is not None:
+            prog_name = sys.argv.pop(0)
+            param_line = [prog_name] + sys.argv[1:]
+        else:
+            func = Command.subcommands.get(sys.argv[1], None)
+            if func is not None:
+                prog_name = ' '.join(sys.argv[:2])
+                param_line = [prog_name] + sys.argv[2:]
+            else:
+                print "usage: %s [%s]" % (sys.argv[0], ' | '.join(sorted(Command.subcommands.keys())))
+                return
     else:
+        param_line = sys.argv[:]
         func = Script.command
-    args, kwargs = usage(func)
+    args, kwargs = usage(func, param_line)
 
     return func(*args, **kwargs)
 
 def InputFile(arg):
-    return file(arg)
+    return open(arg)
 
 def Bool(arg):
     if arg in (True, False):
