@@ -163,7 +163,12 @@ def _add_annotations(func, annotations):
         raise ScriptionError("names %r not in %s's signature" % (errors, func.__name__))
     func.__annotations__ = annotations
 
-empty = object()
+class empty(object):
+    def __nonzero__(self):
+        return False
+    def __repr__(self):
+        return ''
+empty = empty()
 
 def usage(func, param_line_args):
     params, vararg, keywordarg, defaults = inspect.getargspec(func)
@@ -228,11 +233,16 @@ def usage(func, param_line_args):
         usage.extend([func.__doc__, ''])
     usage.extend(["arguments:", ''])
     for i, name in enumerate(params):
+        posi = positional[i]
+        if posi is empty:
+            posi = ''
+        else:
+            posi = 'default: ' + repr(posi)
         annote = annotations[name]
-        usage.append('    %-15s %-15s %s %s' % (
+        usage.append('    %-15s %s %s %s' % (
             annote.metavar or name,
-            positional[i],
             annote.help,
+            posi,
             annote.choices or '',
             ))
     for name in (vararg + keywordarg):
@@ -296,16 +306,13 @@ def usage(func, param_line_args):
                 item = vararg_type(item)
                 args.append(item)
     if print_help:
-        print func.__usage__ + '\n00\n'
+        print func.__usage__
         sys.exit(-1)
     if not all([p is not empty for p in positional]):
-        print func.__usage__ + '\n01\n'
-        print positional
+        print func.__usage__
         sys.exit(-1)
     if args and not vararg or kwargs and not keywordarg:
-        print func.__usage__ + '\n02\n'
-        print args
-        print kwargs
+        print func.__usage__
         sys.exit(-1)
     return tuple(positional + args), kwargs
 
@@ -319,16 +326,25 @@ def Run():
     if Command.subcommands:
         func = Command.subcommands.get(sys.argv[0], None)
         if func is not None:
-            prog_name = sys.argv.pop(0)
+            prog_name = sys.argv[0]
             param_line = [prog_name] + sys.argv[1:]
         else:
-            func = Command.subcommands.get(sys.argv[1], None)
-            if func is not None:
+            func_name = sys.argv[1:2]
+            if not func_name:
+                func = None
+            else:
+                func = Command.subcommands.get(func_name[0])
+            if func and func is not None:
                 prog_name = ' '.join(sys.argv[:2])
                 param_line = [prog_name] + sys.argv[2:]
             else:
-                print "usage: %s [%s]" % (sys.argv[0], ' | '.join(sorted(Command.subcommands.keys())))
-                return
+                print '\n' + sys.argv[0]
+                for name, func in sorted(Command.subcommands.items()):
+                    try:
+                        usage(func, [name])
+                    except SystemExit:
+                        continue
+                sys.exit(-1)
     else:
         param_line = sys.argv[:]
         func = Script.command
