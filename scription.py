@@ -5,6 +5,7 @@ import smtplib
 import sys
 import traceback
 from email.mime.text import MIMEText
+from path import Path
 from syslog import syslog
 
 "-flags -f --flag -o=foo --option4=bar param1 param2 ..."
@@ -17,6 +18,8 @@ from syslog import syslog
   - kind --> what kind of parameter
     - flag       --> simple boolean
     - option     --> option_name=value
+    - keyword    --> key=value syntax (no dashes, key can be any
+                     valid Python identifier)
     - required --> just like it says (default)
 
   - abbrev is a one-character string (defaults to first letter of
@@ -167,7 +170,7 @@ class empty(object):
     def __nonzero__(self):
         return False
     def __repr__(self):
-        return ''
+        return '<empty>'
 empty = empty()
 
 def usage(func, param_line_args):
@@ -194,6 +197,8 @@ def usage(func, param_line_args):
                 abbrev = name[0]
         elif kind == 'option':
             positional.append(None)
+        elif kind == 'keyword':
+            pass
         if abbrev in annotations:
             raise ScriptionError('duplicate abbreviations: %r' % abbrev)
         spec = Spec(help, kind, abbrev, type, choices, metavar)
@@ -318,13 +323,13 @@ def usage(func, param_line_args):
 
 def Run():
     "parses command-line and compares with either func or, if None, Script.command"
-    #print repr(Script.command), repr(Command.subcommands)
     if Script.command and Command.subcommands:
         raise ScriptionError("scription does not support both Script and Command in the same file")
     if Script.command is None and not Command.subcommands:
         raise ScriptionError("either Script or Command must be specified")
     if Command.subcommands:
-        func = Command.subcommands.get(sys.argv[0], None)
+        prog_name = Path(sys.argv[0]).filename
+        func = Command.subcommands.get(prog_name, None)
         if func is not None:
             prog_name = sys.argv[0]
             param_line = [prog_name] + sys.argv[1:]
@@ -338,7 +343,6 @@ def Run():
                 prog_name = ' '.join(sys.argv[:2])
                 param_line = [prog_name] + sys.argv[2:]
             else:
-                print '\n' + sys.argv[0]
                 for name, func in sorted(Command.subcommands.items()):
                     try:
                         usage(func, [name])
