@@ -148,9 +148,14 @@ class Command(object):
 class Script(object):
     "adds __annotations__ to decorated function, and stores func in Script.command"
     command = None
+    settings = {}
     def __init__(self, **annotations):
         self.annotations = annotations
+        if not Script.settings:
+            Script.settings = annotations
     def __call__(self, func):
+        if Script.settings == self.annotations:
+            Script.settings = {}
         _add_annotations(func, self.annotations)
         Script.command = staticmethod(func)
         return func
@@ -179,8 +184,8 @@ def usage(func, param_line_args):
     vararg = [vararg] if vararg else []
     keywordarg = [keywordarg] if keywordarg else []
     defaults = list(defaults) if defaults else []
-    if not params:
-        raise ScriptionError("No parameters -- what's the point?")
+    #if not params:
+    #    raise ScriptionError("No parameters -- what's the point?")
     annotations = getattr(func, '__annotations__', {})
     indices = {}
     max_pos = 0
@@ -285,7 +290,10 @@ def usage(func, param_line_args):
             elif '=' in item:
                 item, value = item.split('=', 1)
             if item not in annotations:
-                raise ScriptionError('%s not valid' % item)
+                if item in Script.settings:
+                    Script.settings[item] = value
+                else:
+                    raise ScriptionError('%s not valid' % item)
             index = indices[item]
             annote = annotations[item]
             if annote.kind == 'option' and value in (True, False):
@@ -321,40 +329,56 @@ def usage(func, param_line_args):
         sys.exit(-1)
     return tuple(positional + args), kwargs
 
-def Run():
+def Run(logger=None):
     "parses command-line and compares with either func or, if None, Script.command"
-    if Script.command and Command.subcommands:
-        raise ScriptionError("scription does not support both Script and Command in the same file")
-    if Script.command is None and not Command.subcommands:
-        raise ScriptionError("either Script or Command must be specified")
-    if Command.subcommands:
+    module = None
+    try:
         prog_name = Path(sys.argv[0]).filename
-        func = Command.subcommands.get(prog_name, None)
-        if func is not None:
-            prog_name = sys.argv[0]
-            param_line = [prog_name] + sys.argv[1:]
+        if logger:
+            logger.openlog(progname.filename, logger.LOG_PID)
+        if Script.command and Command.subcommands:
+            raise ScriptionError("scription does not support both Script and Command in the same file")
+        if Script.command is None and not Command.subcommands:
+            raise ScriptionError("either Script or Command must be specified")
+        if Command.subcommands:
+            func = Command.subcommands.get(prog_name, None)
+            module = func.func_globals
+            if func is not None:
+                prog_name = sys.argv[0]
+                param_line = [prog_name] + sys.argv[1:]
+            else:
+                func_name = sys.argv[1:2]
+                if not func_name:
+                    func = None
+                else:
+                    func = Command.subcommands.get(func_name[0])
+                if func and func is not None:
+                    prog_name = ' '.join(sys.argv[:2])
+                    param_line = [prog_name] + sys.argv[2:]
+                else:
+                    for name, func in sorted(Command.subcommands.items()):
+                        try:
+                            usage(func, [name])
+                        except SystemExit:
+                            continue
+                    sys.exit(-1)
         else:
-            func_name = sys.argv[1:2]
-            if not func_name:
-                func = None
-            else:
-                func = Command.subcommands.get(func_name[0])
-            if func and func is not None:
-                prog_name = ' '.join(sys.argv[:2])
-                param_line = [prog_name] + sys.argv[2:]
-            else:
-                for name, func in sorted(Command.subcommands.items()):
-                    try:
-                        usage(func, [name])
-                    except SystemExit:
-                        continue
-                sys.exit(-1)
-    else:
-        param_line = sys.argv[:]
-        func = Script.command
-    args, kwargs = usage(func, param_line)
-
-    return func(*args, **kwargs)
+            param_line = sys.argv[:]
+            func = Script.command
+            module = func.func_globals
+        args, kwargs = usage(func, param_line)
+        func.func_globals.update(Script.settings)
+        result = func(*args, **kwargs)
+        if logger:
+            logger.syslog('done')
+            logger.closelog()
+        return result
+    except Exception:
+        if logger:
+            result = log_exception()
+            if module:
+                module.exception_lines = result
+        raise
 
 def InputFile(arg):
     return open(arg)
