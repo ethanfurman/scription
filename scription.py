@@ -193,6 +193,8 @@ def usage(func, param_line_args):
     for i, name in enumerate(params + vararg + keywordarg):
         spec = annotations.get(name, '')
         help, kind, abbrev, type, choices, metavar = Spec(spec)
+	if name in keywordarg:
+		kind = 'keyword'
         if kind == 'required':
             max_pos += 1
             positional.append(empty)
@@ -221,12 +223,14 @@ def usage(func, param_line_args):
     else:
         vararg_type = annotations[vararg[0]].type
     if not keywordarg or annotations[keywordarg[0]].type is None:
-        keywordarg_type = lambda x: x
+        keywordarg_type = lambda k, v: (k, v)
     else:
-        keywordarg_type = annotations[keywordarg[0]].type
+        kywd_func = annotations[keywordarg[0]].type
+        if isinstance(kywd_func, tuple):
+            keywordarg_type = lambda k, v: (kywd_func[0](k), kywd_func[1](v))
+        else:
+            keywordarg_type = lambda k, v: (k, kywd_func(v))
     program = param_line_args[0]
-    if '/' in program:
-        program = program.rsplit('/')[1]
     print_params = []
     for param in params:
         if annotations[param].kind in ('flag', 'option'):
@@ -235,9 +239,9 @@ def usage(func, param_line_args):
             print_params.append(param)
     usage = ["usage:", program] + print_params
     if vararg:
-        usage.append("[{0} [{0} [...]]]".format(vararg[0]))
+        usage.append("[%s [%s [...]]]" % (vararg[0], vararg[0]))
     if keywordarg:
-        usage.append("[{0}=value [{0}=value [...]]]".format(keywordarg[0]))
+        usage.append("[%s=value [%s=value [...]]]" % (keywordarg[0], keywordarg[0]))
     usage = ['', ' '.join(usage), '']
     if func.__doc__:
         usage.extend([func.__doc__, ''])
@@ -306,7 +310,9 @@ def usage(func, param_line_args):
             item, value = item.split('=')
             if item in params:
                 raise ScriptionError('%s must be specified as a %s' % (item, annotations[item].kind))
-            value = keywordarg_type(value)
+            item, value = keywordarg_type(item, value)
+            if not isinstance(item, str):
+                raise ScriptionError('keyword names must be strings')
             kwargs[item] = value
             value = None
         else:
