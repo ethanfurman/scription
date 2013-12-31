@@ -161,8 +161,8 @@ class Script(object):
         return func
 
 def _add_annotations(func, annotations):
-    argspec = inspect.getargspec(func)
-    names = argspec.args + [argspec.varargs, argspec.keywords]
+    params, varargs, keywords, defaults = inspect.getargspec(func)
+    names = params + [varargs, keywords]
     errors = []
     for spec in annotations:
         if spec not in names:
@@ -335,15 +335,15 @@ def Run(logger=None):
     try:
         prog_name = Path(sys.argv[0]).filename
         if logger:
-            logger.openlog(progname.filename, logger.LOG_PID)
+            logger.openlog(str(prog_name.filename), logger.LOG_PID)
         if Script.command and Command.subcommands:
             raise ScriptionError("scription does not support both Script and Command in the same file")
         if Script.command is None and not Command.subcommands:
             raise ScriptionError("either Script or Command must be specified")
         if Command.subcommands:
             func = Command.subcommands.get(prog_name, None)
-            module = func.func_globals
             if func is not None:
+                module = func.func_globals
                 prog_name = sys.argv[0]
                 param_line = [prog_name] + sys.argv[1:]
             else:
@@ -353,6 +353,7 @@ def Run(logger=None):
                 else:
                     func = Command.subcommands.get(func_name[0])
                 if func and func is not None:
+                    module = func.func_globals
                     prog_name = ' '.join(sys.argv[:2])
                     param_line = [prog_name] + sys.argv[2:]
                 else:
@@ -377,7 +378,7 @@ def Run(logger=None):
         if logger:
             result = log_exception()
             if module:
-                module.exception_lines = result
+                module['exception_lines'] = result
         raise
 
 def InputFile(arg):
