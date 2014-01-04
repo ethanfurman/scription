@@ -115,6 +115,8 @@ class Spec(tuple):
             args[1] = 'required'
         if not args[3]:
             args[3] = lambda x: x
+        if not args[4]:
+            args[4] = []
         return tuple.__new__(cls, args)
     @property
     def help(self):
@@ -253,11 +255,14 @@ def usage(func, param_line_args):
         else:
             posi = 'default: ' + repr(posi)
         annote = annotations[name]
+        choices = ''
+        if annote.choices:
+            choices = '[ %s ]' % ' | '.join(annote.choices)
         usage.append('    %-15s %s %s %s' % (
             annote.metavar or name,
             annote.help,
             posi,
-            annote.choices or '',
+            choices,
             ))
     for name in (vararg + keywordarg):
         usage.append('    %-15s %-15s %s' % (name, '', annotations[name].help))
@@ -268,6 +273,7 @@ def usage(func, param_line_args):
     pos = 0
     print_help = False
     value = None
+    errors = []
     for item in param_line_args[1:] + [None]:
         # required arguments /should/ be kept together
         # once an option is found all text until the next option/flag/variable
@@ -309,7 +315,8 @@ def usage(func, param_line_args):
         elif '=' in item:
             item, value = item.split('=')
             if item in params:
-                raise ScriptionError('%s must be specified as a %s' % (item, annotations[item].kind))
+                errors.append('%s must be specified as a %s' % (item, annotations[item].kind))
+                continue
             item, value = keywordarg_type(item, value)
             if not isinstance(item, str):
                 raise ScriptionError('keyword names must be strings')
@@ -319,11 +326,17 @@ def usage(func, param_line_args):
             if pos < max_pos:
                 annote = annotations[pos]
                 item = annote.type(item)
+                if annote.choices and item not in annote.choices:
+                    errors.append('%r not in [ %s ]' % (item, ' | '.join(annote.choices)))
+                    continue
                 positional[pos] = item
                 pos += 1
             else:
                 item = vararg_type(item)
                 args.append(item)
+    if errors:
+        print '\n' + '\n'.join(errors) #+ '\n\n'
+        print_help = True
     if print_help:
         print func.__usage__
         sys.exit(-1)
