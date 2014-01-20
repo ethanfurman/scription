@@ -246,7 +246,7 @@ def usage(func, param_line_args):
         usage.append("[%s=value [%s=value [...]]]" % (keywordarg[0], keywordarg[0]))
     usage = ['', ' '.join(usage), '']
     if func.__doc__:
-        usage.extend(['    ' + func.__doc__, ''])
+        usage.extend(['    ' + func.__doc__.strip(), ''])
     for i, name in enumerate(params):
         posi = positional[i]
         if posi is empty:
@@ -379,6 +379,7 @@ def Run(logger=None):
                         try:
                             usage(func, [name, '--help'])
                         except SystemExit:
+                            print
                             continue
                     sys.exit(-1)
         else:
