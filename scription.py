@@ -195,9 +195,9 @@ def usage(func, param_line_args):
     for i, name in enumerate(params + vararg + keywordarg):
         spec = annotations.get(name, '')
         help, kind, abbrev, type, choices, metavar = Spec(spec)
-	if name in keywordarg:
-		kind = 'keyword'
-        if kind == 'required':
+        if name in keywordarg:
+            kind = 'keyword'
+        if kind == 'required' and name not in vararg + keywordarg:
             max_pos += 1
             positional.append(empty)
         elif kind == 'flag':
@@ -218,8 +218,14 @@ def usage(func, param_line_args):
             annotations[abbrev] = spec
             indices[abbrev] = i
     if defaults:
+        new_defaults = []
+        for name, dflt in zip(reversed(params), reversed(defaults)):
+            if isinstance(dflt, (str, unicode)):
+                new_defaults.append(annotations[name].type(dflt))
+            else:
+                new_defaults.append(dflt)
+        defaults = list(reversed(new_defaults))
         positional[-len(defaults):] = defaults
-
     if not vararg or annotations[vararg[0]].type is None:
         vararg_type = lambda x: x
     else:
@@ -235,8 +241,10 @@ def usage(func, param_line_args):
     program = param_line_args[0]
     print_params = []
     for param in params:
-        if annotations[param].kind in ('flag', 'option'):
+        if annotations[param].kind == 'flag':
             print_params.append('--' + param)
+        elif annotations[param].kind == 'option':
+            print_params.append('--' + param + ' ...')
         else:
             print_params.append(param)
     usage = ["usage:", program] + print_params
@@ -264,7 +272,7 @@ def usage(func, param_line_args):
             choices,
             ))
     for name in (vararg + keywordarg):
-        usage.append('    %-15s %-15s %s' % (name, '', annotations[name].help))
+        usage.append('    %-15s %s' % (annotations[name].metavar or name, annotations[name].help))
 
     func.__usage__ = '\n'.join(usage)
     args = []
@@ -342,7 +350,10 @@ def usage(func, param_line_args):
     if not all([p is not empty for p in positional]):
         print func.__usage__
         sys.exit(-1)
-    if args and not vararg or kwargs and not keywordarg:
+    if (args and not vararg
+    or  kwargs and not keywordarg
+    or  vararg and annotations[vararg[0]].kind == 'required' and not args
+    ):
         print func.__usage__
         sys.exit(-1)
     return tuple(positional + args), kwargs
