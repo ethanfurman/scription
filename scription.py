@@ -2,9 +2,12 @@
 
 import inspect
 import smtplib
+import subprocess
 import sys
+import tempfile
 import traceback
 from email.mime.text import MIMEText
+from enum import Enum
 from path import Path
 from syslog import syslog
 
@@ -45,7 +48,79 @@ from syslog import syslog
 # equal to the stringified form of the default.
 
 # data
-__all__ = ('Command', 'Script', 'Run', 'InputFile', 'Bool')
+__all__ = ('Command', 'Script', 'Run', 'Execute', 'InputFile', 'Bool', 'FLAG', 'OPTION', 'KEYWORD', 'REQUIRED')
+
+
+class DocEnum(Enum):
+    """compares equal to all cased versions of its name
+    accepts a doctring for each member
+    """
+
+    def __new__(cls, *args):
+        """Ignores arguments (will be handled in __init__)"""
+        obj = object.__new__(cls)
+        obj._value_ = None
+        return obj
+
+    def __init__(self, *args):
+        """Can handle 0 or 1 argument; more requires a custom __init__.
+        0  = auto-number w/o docstring
+        1  = auto-number w/ docstring
+        2+ = needs custom __init__
+        """
+        # first, fix _value_
+        self._value_ = self._name_.lower()
+        if len(args) == 1 and isinstance(args[0], (str, unicode)):
+            self.__doc__ = args[0]
+        elif args:
+            raise TypeError('%s not dealt with -- need custom __init__' % (args,))
+
+    def __eq__(self, other):
+        if isinstance(other, (str, unicode)):
+            return self._value_ == other.lower()
+        elif not isinstance(other, self.__class__):
+            return NotImplemented
+        return self is other
+
+    def __ne__(self, other):
+        return not self == other
+
+
+class SpecKind(DocEnum):
+    FLAG = "True/False setting"
+    OPTION = "variable setting"
+    KEYWORD = "global setting (useful for @Command scripts)"
+    REQUIRED = "required setting"
+globals().update(SpecKind.__members__)
+
+
+class Execute(subprocess.Popen):
+    "runs command in subprocess"
+
+    __send_stdin = False
+    __read_stdout = False
+    __read_stderr = False
+
+    def __init__(self, args, bufsize=-1, executable=None, stdin=None, stdout=None, stderr=None, **kwds):
+        self.__send_stdin = stdin
+        stdin = subprocess.PIPE
+        if stdout is None:
+            stdout = tempfile.TemporaryFile()
+            self.__read_stdout = True
+        if stderr is None:
+            stderr = tempfile.TemporaryFile()
+            self.__read_stderr = True
+        super(Execute, self).__init__(args, bufsize=-1, executable=None, stdin=stdin, stdout=stdout, stderr=stderr, **kwds)
+        self.communicate(self.__send_stdin)
+        if self.__read_stdout:
+            stdout.seek(0)
+            self.stdout = stdout.read()
+            stdout.close()
+        if self.__read_stderr:
+            stderr.seek(0)
+            self.stderr = stderr.read()
+            stderr.close()
+
 
 def log_exception(tb=None):
     if tb is None:
