@@ -1,12 +1,13 @@
 "intelligently parses command lines"
 
+import email
 import inspect
 import smtplib
+import socket
 import subprocess
 import sys
 import tempfile
 import traceback
-from email.mime.text import MIMEText
 from enum import Enum
 from path import Path
 from syslog import syslog
@@ -136,34 +137,40 @@ def log_exception(tb=None):
     return lines
 
 def mail(server, port, message):
-    """sends email.message to server:port"""
-    receiver = []
-    msg = MIMEText(message.get_payload())
-    msg['From'] = message.get('From')
-    for to in ('To', 'Cc', 'Bcc'):
-        for address in message.get_all(to, []):
-            msg[to] = address
-            receiver.append(address)
-    for header, value in message.items():
-        if header in ('To','From', 'Cc', 'Bcc'):
-            continue
-        msg[header] = value
-    smtp = smtplib.SMTP(server, port)
+    """sends email.message to server:port
+    """
+    if isinstance(message, String):
+        message = email.message_from_string(message)
+    receiver = message.get_all('To', []) + message.get_all('Cc', []) + message.get_all('Bcc', [])
+    sender = message['From']
     try:
-        send_errs = smtp.sendmail(msg['From'], receiver, msg.as_string())
-    except smtplib.SMTPRecipientsRefused, exc:
-        send_errs = exc.recipients
-    smtp.quit()
+        smtp = smtplib.SMTP(server, port)
+    except socket.error, exc:
+        send_errs = {}
+        for rec in receiver:
+            send_errs[rec] = exc.args
+    else:
+        try:
+            send_errs = smtp.sendmail(sender, receiver, message.as_string())
+        except smtplib.SMTPRecipientsRefused, exc:
+            send_errs = exc.recipients
+        finally:
+            smtp.quit()
     errs = {}
     if send_errs:
         for user in send_errs:
-            server = 'mail.' + user.split('@')[1]
-            smtp = smtplib.SMTP(server, 25)
             try:
-                smtp.sendmail(msg['From'], [user], msg.as_string())
-            except smtplib.SMTPRecipientsRefused, exc:
-                errs[user] = [send_errs[user], exc.recipients[user]]
-            smtp.quit()
+                server = 'mail.' + user.split('@')[1]
+                smtp = smtplib.SMTP(server, 25)
+            except socket.error, exc:
+                errs[user] = [user, exc.args]
+            else:
+                try:
+                    smtp.sendmail(sender, [user], message.as_string())
+                except smtplib.SMTPRecipientsRefused, exc:
+                    errs[user] = [send_errs[user], exc.recipients[user]]
+                finally:
+                    smtp.quit()
     for user, errors in errs.items():
         for code, response in errors:
             syslog.syslog('%s --> %s: %s' % (user, code, response))
