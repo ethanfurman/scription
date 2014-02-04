@@ -139,7 +139,7 @@ def log_exception(tb=None):
 def mail(server, port, message):
     """sends email.message to server:port
     """
-    if isinstance(message, String):
+    if isinstance(message, basestring):
         message = email.message_from_string(message)
     receiver = message.get_all('To', []) + message.get_all('Cc', []) + message.get_all('Bcc', [])
     sender = message['From']
@@ -148,12 +148,14 @@ def mail(server, port, message):
     except socket.error, exc:
         send_errs = {}
         for rec in receiver:
-            send_errs[rec] = exc.args
+            send_errs[rec] = (server, exc.args)
     else:
         try:
             send_errs = smtp.sendmail(sender, receiver, message.as_string())
         except smtplib.SMTPRecipientsRefused, exc:
-            send_errs = exc.recipients
+            send_errs = {}
+            for user, detail in exc.recipients.items():
+                send_errs[user] = (server, detail)
         finally:
             smtp.quit()
     errs = {}
@@ -163,17 +165,17 @@ def mail(server, port, message):
                 server = 'mail.' + user.split('@')[1]
                 smtp = smtplib.SMTP(server, 25)
             except socket.error, exc:
-                errs[user] = [user, exc.args]
+                errs[user] = [send_errs[user], (server, exc.args)]
             else:
                 try:
                     smtp.sendmail(sender, [user], message.as_string())
                 except smtplib.SMTPRecipientsRefused, exc:
-                    errs[user] = [send_errs[user], exc.recipients[user]]
+                    errs[user] = [send_errs[user], (server, exc.recipients[user])]
                 finally:
                     smtp.quit()
     for user, errors in errs.items():
-        for code, response in errors:
-            syslog.syslog('%s --> %s: %s' % (user, code, response))
+        for server, (code, response) in errors:
+            syslog('%s: %s --> %s: %s' % (server, user, code, response))
 
 class ScriptionError(Exception):
     "raised for errors"
