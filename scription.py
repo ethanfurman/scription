@@ -49,7 +49,12 @@ from syslog import syslog
 # equal to the stringified form of the default.
 
 # data
-__all__ = ('Command', 'Script', 'Run', 'Execute', 'InputFile', 'Bool', 'FLAG', 'OPTION', 'KEYWORD', 'REQUIRED')
+__all__ = (
+    'Command', 'Script', 'Run',
+    'InputFile', 'Bool',
+    'FLAG', 'OPTION', 'KEYWORD', 'REQUIRED',
+    'ScriptionError',
+    )
 
 
 class DocEnum(Enum):
