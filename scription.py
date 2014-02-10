@@ -116,16 +116,22 @@ class Execute(subprocess.Popen):
         if stderr is None:
             stderr = tempfile.TemporaryFile()
             self.__read_stderr = True
-        super(Execute, self).__init__(args, bufsize=-1, executable=None, stdin=stdin, stdout=stdout, stderr=stderr, **kwds)
-        self.communicate(self.__send_stdin)
-        if self.__read_stdout:
-            stdout.seek(0)
-            self.stdout = stdout.read()
-            stdout.close()
-        if self.__read_stderr:
-            stderr.seek(0)
-            self.stderr = stderr.read()
-            stderr.close()
+        try:
+            super(Execute, self).__init__(args, bufsize=-1, executable=None, stdin=stdin, stdout=stdout, stderr=stderr, **kwds)
+        except Exception, exc:
+            self.stdout = ''
+            self.stderr = '%s: %s' % (exc.__class__.__name__, ' - '.join([str(a) for a in exc.args]))
+            self.returncode = -1
+        else:
+            self.communicate(self.__send_stdin)
+            if self.__read_stdout:
+                stdout.seek(0)
+                self.stdout = stdout.read()
+                stdout.close()
+            if self.__read_stderr:
+                stderr.seek(0)
+                self.stderr = stderr.read()
+                stderr.close()
 
 
 def log_exception(tb=None):
