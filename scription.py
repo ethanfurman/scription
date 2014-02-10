@@ -370,6 +370,8 @@ def usage(func, param_line_args):
     print_help = False
     value = None
     errors = []
+    rest = []
+    doubledash = False
     for item in param_line_args[1:] + [None]:
         # required arguments /should/ be kept together
         # once an option is found all text until the next option/flag/variable
@@ -384,11 +386,17 @@ def usage(func, param_line_args):
                 continue
         if item is None:
             break
+        if doubledash:
+            rest.append(item)
+            continue
+        if item == '--':
+            doubledash = True
+            continue
         if item.startswith('-'):
-            item = item.lstrip('-')
-            if item in ('h', 'help'):
+            if item == '--help':
                 print_help = True
                 continue
+            item = item.lstrip('-')
             value = True
             if item.startswith('no-') and '=' not in item:
                 value = False
@@ -430,6 +438,10 @@ def usage(func, param_line_args):
             else:
                 item = vararg_type(item)
                 args.append(item)
+    if args and rest:
+        errors.append('-- should be used to separate %s arguments from the rest' % program)
+    elif rest:
+        args = rest
     if errors:
         print '\n' + '\n'.join(errors) #+ '\n\n'
         print_help = True
