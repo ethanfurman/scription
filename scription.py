@@ -2,14 +2,21 @@
 
 import email
 import inspect
+import os
+import pty
+import resource
+import select
+import signal
 import smtplib
 import socket
-import subprocess
 import sys
 import tempfile
+import termios
+import time
 import traceback
 from enum import Enum
 from path import Path
+from subprocess import PIPE
 from syslog import syslog
 
 "-flags -f --flag -o=foo --option4=bar param1 param2 ..."
@@ -56,6 +63,11 @@ __all__ = (
     'ScriptionError',
     )
 
+try:
+    bytes
+except NameError:
+    bytes = str
+
 
 class DocEnum(Enum):
     """compares equal to all cased versions of its name
@@ -99,39 +111,127 @@ class SpecKind(DocEnum):
     REQUIRED = "required setting"
 globals().update(SpecKind.__members__)
 
+class ExecutionError(Exception):
+    "errors raised by Execute"
 
-class Execute(subprocess.Popen):
-    "runs command in subprocess"
+class Execute(object):
+    "runs command in forked process"
 
-    __send_stdin = False
-    __read_stdout = False
-    __read_stderr = False
+    def __init__(self, args, bufsize=-1, cwd=None, password=None, **kwds):
+        self.env = None
+        self.pid, self.child_fd = pty.fork()
+        if self.pid == 0: # child process
+            self.child_fd = sys.stdout.fileno()
+            os.dup2(1, 2)
+            max_fd = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
+            for fd in range(3, max_fd):
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+            if cwd:
+                os.chdir(cwd)
+            try:
+                if self.env:
+                    os.execvpe(args[0], args, self.env)
+                else:
+                    os.execvp(args[0], args)
+            except Exception, exc:
+                print("%s:  %s" % (exc.__class__.__name__, ' - '.join([str(a) for a in exc.args])))
+                os._exit(-1)
+        # parent process
+        self.returncode = None
+        self.signal = None
+        output = []
+        self.closed = False
+        self.terminated = False
+        submission_received = True
+        # loop to read output
+        time.sleep(0.25)
+        while self.is_alive():
+            if not self.get_echo() and password and submission_received:
+                self.write(password + '\r\n')
+                submission_received = False
+            result = self.read(1024)
+            if result:
+                output.append(result)
+                submission_received = True
+            time.sleep(0.1)
+        output.append(self.read(1024))
+        self.stdout = ''.join(output)
+        self.close()
 
-    def __init__(self, args, bufsize=-1, executable=None, stdin=None, stdout=None, stderr=None, **kwds):
-        self.__send_stdin = stdin
-        stdin = subprocess.PIPE
-        if stdout is None:
-            stdout = tempfile.TemporaryFile()
-            self.__read_stdout = True
-        if stderr is None:
-            stderr = tempfile.TemporaryFile()
-            self.__read_stderr = True
-        try:
-            super(Execute, self).__init__(args, bufsize=-1, executable=None, stdin=stdin, stdout=stdout, stderr=stderr, **kwds)
-        except Exception, exc:
-            self.stdout = ''
-            self.stderr = '%s: %s' % (exc.__class__.__name__, ' - '.join([str(a) for a in exc.args]))
-            self.returncode = -1
-        else:
-            self.communicate(self.__send_stdin)
-            if self.__read_stdout:
-                stdout.seek(0)
-                self.stdout = stdout.read()
-                stdout.close()
-            if self.__read_stderr:
-                stderr.seek(0)
-                self.stderr = stderr.read()
-                stderr.close()
+    def close(self, force=True):
+        if not self.closed:
+            os.close(self.child_fd)
+            time.sleep(1)
+            if self.is_alive():
+                if not self.terminate(force):
+                    raise ExecutionError("Could not terminate the child.")
+            self.child_fd = -1
+            self.closed = True
+
+    def fileno(self):
+        return self.child_fd
+
+    def get_echo(self):
+        "return the child's terminal echo status (True is on)"
+        attr = termios.tcgetattr(self.child_fd)
+        if attr[3] & termios.ECHO:
+            return True
+        return False
+
+    def isatty(self):
+        return os.isatty(self.child_fd)
+
+    def is_alive(self):
+        if self.terminated:
+            return False
+        pid, status = os.waitpid(self.pid, os.WNOHANG)
+        if pid != 0:
+            self.signal = status % 256
+            self.returncode = status >> 8
+            self.terminated = True
+            return False
+        return True
+
+    def read(self, size=1, timeout=10):
+        "non-blocking read"
+        if self.closed:
+            raise ValueError("I/O operation on closed file.")
+        r, w, x = select.select([self.child_fd], [], [], 0)
+        if not r:
+            return ''
+        if self.child_fd in r:
+            try:
+                result = os.read(self.child_fd, size)
+            except OSError:
+                result = ''
+            return result.decode('utf-8')
+        raise ExecutionException('unknown problem with read')
+
+
+    def terminate(self, force=False):
+        if not self.is_alive():
+            return True
+        for sig in (signal.SIGHUP, signal.SIGINT):
+            os.kill(self.pid, sig)
+            time.sleep(0.1)
+            if not self.is_alive():
+                self.terminated = True
+                return True
+        if force:
+            os.kill(self.pid, signal.SIGKILL)
+            time.sleep(0.1)
+            if not self.is_alive():
+                self.terminated = True
+                return True
+        return False
+
+    def write(self, data):
+        if not isinstance(data, bytes):
+            data = data.encode('utf-8')
+        os.write(self.child_fd, data)
 
 
 def log_exception(tb=None):
