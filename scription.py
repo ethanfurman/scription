@@ -152,12 +152,13 @@ class Execute(object):
             if not self.get_echo() and password and submission_received:
                 self.write(password + '\r\n')
                 submission_received = False
-            result = self.read(1024)
-            if result:
-                output.append(result)
+            while pocket(self.read(1024)):
+                output.append(pocket())
                 submission_received = True
             time.sleep(0.1)
-        output.append(self.read(1024))
+        while pocket(self.read(1024)):
+            output.append(pocket())
+            time.sleep(0.1)
         self.stdout = ''.join(output)
         self.close()
 
@@ -287,6 +288,11 @@ def mail(server, port, message):
     for user, errors in errs.items():
         for server, (code, response) in errors:
             syslog('%s: %s --> %s: %s' % (server, user, code, response))
+
+def pocket(value=None, _pocket=[]):
+    if value is not None:
+        _pocket[:] = [value]
+    return _pocket[0]
 
 class ScriptionError(Exception):
     "raised for errors"
