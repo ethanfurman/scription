@@ -16,7 +16,6 @@ import time
 import traceback
 from enum import Enum
 from path import Path
-from subprocess import PIPE
 from syslog import syslog
 
 "-flags -f --flag -o=foo --option4=bar param1 param2 ..."
