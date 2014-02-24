@@ -631,3 +631,21 @@ def Bool(arg):
     if arg in (True, False):
         return arg
     return arg.lower() in "true t yes y 1 on".split()
+
+
+# from scription.api import *
+
+class fake_module(object):
+
+    def __init__(self, name, *args):
+        self.name = name
+        self.__all__ = []
+        all_objects = globals()
+        for name in args:
+            self.__dict__[name] = all_objects[name]
+            self.__all__.append(name)
+
+    def register(self):
+        sys.modules["%s.%s" % (__name__, self.name)] = self
+
+fake_module('api', *__all__).register()
