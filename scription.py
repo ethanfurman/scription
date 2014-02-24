@@ -540,10 +540,11 @@ def usage(func, param_line_args):
         else:
             if pos < max_pos:
                 annote = annotations[pos]
-                item = annote.type(item)
+                # check for choices membership before transforming into a type
                 if annote.choices and item not in annote.choices:
                     errors.append('%r not in [ %s ]' % (item, ' | '.join(annote.choices)))
                     continue
+                item = annote.type(item)
                 positional[pos] = item
                 pos += 1
             else:
