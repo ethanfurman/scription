@@ -1,4 +1,10 @@
-"intelligently parses command lines"
+"""
+intelligently parses command lines
+
+flags: true/false values
+options: other specified value (e.g. user name)
+global script variables:  i.e. debug=True (python expression)
+"""
 
 import email
 import inspect
@@ -27,10 +33,10 @@ from syslog import syslog
 
   - kind --> what kind of parameter
     - flag       --> simple boolean
-    - option     --> option_name=value
+    - option     --> option_name value
     - keyword    --> key=value syntax (no dashes, key can be any
                      valid Python identifier)
-    - required --> just like it says (default)
+    - required   --> just like it says (default)
 
   - abbrev is a one-character string (defaults to first letter of
     argument)
