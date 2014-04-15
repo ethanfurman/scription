@@ -301,6 +301,9 @@ def pocket(value=None, _pocket=[]):
 
 class ScriptionError(Exception):
     "raised for errors"
+    def __init__(self, msg=None, command_line=None):
+        super(ScriptionError, self).__init__(msg)
+        self.command_line = command_line
 
 class Spec(tuple):
     """tuple with named attributes for representing a command-line paramter
@@ -415,7 +418,7 @@ def usage(func, param_line_args):
         elif kind == 'keyword':
             pass
         if abbrev in annotations:
-            raise ScriptionError('duplicate abbreviations: %r' % abbrev)
+            raise ScriptionError('duplicate abbreviations: %r' % abbrev, ' '.join(param_line_args))
         spec = Spec(help, kind, abbrev, type, choices, metavar)
         annotations[i] = spec
         annotations[name] = spec
@@ -493,6 +496,7 @@ def usage(func, param_line_args):
         # required arguments /should/ be kept together
         # once an option is found all text until the next option/flag/variable
         # is part of that option
+        original_item = item
         if value is not None:
             if item is None or item.startswith('-') or '=' in item:
                 value = annote.type(value.strip())
@@ -524,7 +528,7 @@ def usage(func, param_line_args):
                 if item in Script.settings:
                     Script.settings[item] = value
                 else:
-                    raise ScriptionError('%s not valid' % item)
+                    raise ScriptionError('%s not valid' % original_item, ' '.join(param_line_args))
             index = indices[item]
             annote = annotations[item]
             if annote.kind == 'option' and value in (True, False):
@@ -540,7 +544,7 @@ def usage(func, param_line_args):
                 continue
             item, value = keywordarg_type(item, value)
             if not isinstance(item, str):
-                raise ScriptionError('keyword names must be strings')
+                raise ScriptionError('keyword names must be strings', ' '.join(param_line_args))
             kwargs[item] = value
             value = None
         else:
@@ -556,25 +560,24 @@ def usage(func, param_line_args):
             else:
                 item = vararg_type(item)
                 args.append(item)
+    exc = None
     if args and rest:
         errors.append('-- should be used to separate %s arguments from the rest' % program)
     elif rest:
         args = rest
     if errors:
         print '\n' + '\n'.join(errors) #+ '\n\n'
-        print_help = True
+        raise ScriptionError('Invalid command line', command_line=' '.join(param_line_args))
     if print_help:
         print func.__usage__
-        sys.exit(-1)
+        sys.exit()
     if not all([p is not empty for p in positional]):
-        print func.__usage__
-        sys.exit(-1)
+        raise ScriptionError('Invalid command line', command_line=' '.join(param_line_args))
     if (args and not vararg
     or  kwargs and not keywordarg
     or  vararg and annotations[vararg[0]].kind == 'required' and not args
     ):
-        print func.__usage__
-        sys.exit(-1)
+        raise ScriptionError('Invalid command line', command_line=' '.join(param_line_args))
     return tuple(positional + args), kwargs
 
 def Run(logger=None):
