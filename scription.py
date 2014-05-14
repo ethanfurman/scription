@@ -567,17 +567,23 @@ def usage(func, param_line_args):
         args = rest
     if errors:
         print '\n' + '\n'.join(errors) #+ '\n\n'
-        raise ScriptionError('Invalid command line', command_line=' '.join(param_line_args))
+        print '\nInvalid command line:  %s' % ' '.join(param_line_args)
+        print func.__usage__
+        sys.exit(-1)
     if print_help:
         print func.__usage__
         sys.exit()
     if not all([p is not empty for p in positional]):
-        raise ScriptionError('Invalid command line', command_line=' '.join(param_line_args))
+        print '\nInvalid command line:  %s' % ' '.join(param_line_args)
+        print func.__usage__
+        sys.exit(-1)
     if (args and not vararg
     or  kwargs and not keywordarg
     or  vararg and annotations[vararg[0]].kind == 'required' and not args
     ):
-        raise ScriptionError('Invalid command line', command_line=' '.join(param_line_args))
+        print 'Invalid command line:  %s\n' % ' '.join(param_line_args)
+        print func.__usage__
+        sys.exit(-1)
     return tuple(positional + args), kwargs
 
 def Run(logger=None):
