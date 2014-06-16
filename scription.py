@@ -68,6 +68,8 @@ __all__ = (
     'ScriptionError',
     )
 
+version = 0, 45, 0
+
 try:
     bytes
 except NameError:
