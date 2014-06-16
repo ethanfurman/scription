@@ -598,21 +598,20 @@ def Run(logger=None):
         if Script.command is None and not Command.subcommands:
             raise ScriptionError("either Script or Command must be specified")
         if Command.subcommands:
-            func = Command.subcommands.get(prog_name, None)
+            func_name = sys.argv[1:2]
+            if not func_name:
+                func = None
+            else:
+                func = Command.subcommands.get(func_name[0])
             if func is not None:
                 module = func.func_globals
-                prog_name = sys.argv[0]
-                param_line = [prog_name] + sys.argv[1:]
+                prog_name = func_name
+                param_line = [prog_name] + sys.argv[2:]
             else:
-                func_name = sys.argv[1:2]
-                if not func_name:
-                    func = None
-                else:
-                    func = Command.subcommands.get(func_name[0])
-                if func and func is not None:
+                func = Command.subcommands.get(prog_name, None)
+                if func is not None:
                     module = func.func_globals
-                    prog_name = ' '.join(sys.argv[:2])
-                    param_line = [prog_name] + sys.argv[2:]
+                    param_line = [prog_name] + sys.argv[1:]
                 else:
                     for name, func in sorted(Command.subcommands.items()):
                         try:
