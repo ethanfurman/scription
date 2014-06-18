@@ -68,7 +68,7 @@ __all__ = (
     'ScriptionError',
     )
 
-version = 0, 45, 0
+version = 0, 45, 1
 
 try:
     bytes
@@ -607,7 +607,7 @@ def Run(logger=None):
                 func = Command.subcommands.get(func_name[0])
             if func is not None:
                 module = func.func_globals
-                prog_name = func_name
+                prog_name = func_name[0]
                 param_line = [prog_name] + sys.argv[2:]
             else:
                 func = Command.subcommands.get(prog_name, None)
