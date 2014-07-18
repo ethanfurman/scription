@@ -68,7 +68,7 @@ __all__ = (
     'ScriptionError',
     )
 
-version = 0, 45, 1
+version = 0, 45, 2
 
 try:
     bytes
@@ -397,8 +397,6 @@ def usage(func, param_line_args):
     vararg = [vararg] if vararg else []
     keywordarg = [keywordarg] if keywordarg else []
     defaults = list(defaults) if defaults else []
-    #if not params:
-    #    raise ScriptionError("No parameters -- what's the point?")
     annotations = getattr(func, '__annotations__', {})
     indices = {}
     max_pos = 0
@@ -491,7 +489,6 @@ def usage(func, param_line_args):
     pos = 0
     print_help = False
     value = None
-    errors = []
     rest = []
     doubledash = False
     for item in param_line_args[1:] + [None]:
@@ -501,11 +498,11 @@ def usage(func, param_line_args):
         original_item = item
         if value is not None:
             if item is None or item.startswith('-') or '=' in item:
-                value = annote.type(value.strip())
+                raise ScriptionError('%s has no value' % last_item)
+            else:
+                value = annote.type(item)
                 positional[index] = value
                 value = None
-            else:
-                value += ' ' + item
                 continue
         if item is None:
             break
@@ -535,6 +532,7 @@ def usage(func, param_line_args):
             annote = annotations[item]
             if annote.kind == 'option' and value in (True, False):
                 value = ''
+                last_item = item
             elif annote.kind == 'flag':
                 value = annote.type(value)
                 positional[index] = value
@@ -542,8 +540,7 @@ def usage(func, param_line_args):
         elif '=' in item:
             item, value = item.split('=')
             if item in params:
-                errors.append('%s must be specified as a %s' % (item, annotations[item].kind))
-                continue
+                raise ScriptionError('%s must be specified as a %s' % (item, annotations[item].kind))
             item, value = keywordarg_type(item, value)
             if not isinstance(item, str):
                 raise ScriptionError('keyword names must be strings', ' '.join(param_line_args))
@@ -554,8 +551,7 @@ def usage(func, param_line_args):
                 annote = annotations[pos]
                 # check for choices membership before transforming into a type
                 if annote.choices and item not in annote.choices:
-                    errors.append('%r not in [ %s ]' % (item, ' | '.join(annote.choices)))
-                    continue
+                    raise ScriptionError('%r not in [ %s ]' % (item, ' | '.join(annote.choices)))
                 item = annote.type(item)
                 positional[pos] = item
                 pos += 1
@@ -564,28 +560,20 @@ def usage(func, param_line_args):
                 args.append(item)
     exc = None
     if args and rest:
-        errors.append('-- should be used to separate %s arguments from the rest' % program)
+        raise ScriptionError('-- should be used to separate %s arguments from the rest' % program)
     elif rest:
         args = rest
-    if errors:
-        print '\n' + '\n'.join(errors) #+ '\n\n'
-        print '\nInvalid command line:  %s' % ' '.join(param_line_args)
-        print func.__usage__
-        sys.exit(-1)
     if print_help:
         print func.__usage__
         sys.exit()
     if not all([p is not empty for p in positional]):
-        print '\nInvalid command line:  %s' % ' '.join(param_line_args)
-        print func.__usage__
-        sys.exit(-1)
-    if (args and not vararg
-    or  kwargs and not keywordarg
-    or  vararg and annotations[vararg[0]].kind == 'required' and not args
-    ):
-        print 'Invalid command line:  %s\n' % ' '.join(param_line_args)
-        print func.__usage__
-        sys.exit(-1)
+        raise ScriptionError('\n01 - Invalid command line:  %s' % ' '.join(param_line_args))
+    if args and not vararg:
+        raise ScriptionError("\n02 - don't know what to do with %s" % ', '.join(args))
+    elif kwargs and not keywordarg:
+        raise ScriptionError("\n03 - don't know what to do with %s" % ', '.join(['%s=%s' % (k, v) for k, v in kwargs.items()]))
+    elif vararg and annotations[vararg[0]].kind == 'required' and not args:
+        raise ScriptionError('\n04 - %s values are required\n' % vararg[0])
     return tuple(positional + args), kwargs
 
 def Run(logger=None):
@@ -634,11 +622,12 @@ def Run(logger=None):
             logger.closelog()
         return result
     except Exception:
+        exc = sys.exc_info()[1]
         if logger:
             result = log_exception()
             if module:
                 module['exception_lines'] = result
-        raise
+        raise SystemExit(exc.message)
 
 def InputFile(arg):
     return open(arg)
