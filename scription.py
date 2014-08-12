@@ -627,7 +627,7 @@ def Run(logger=None):
             result = log_exception()
             if module:
                 module['exception_lines'] = result
-        raise SystemExit(exc.message)
+        raise SystemExit(str(exc))
 
 def InputFile(arg):
     return open(arg)
