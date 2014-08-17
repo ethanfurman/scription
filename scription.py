@@ -526,6 +526,8 @@ def usage(func, param_line_args):
             if item not in annotations:
                 if item in Script.settings:
                     Script.settings[item] = value
+                    value = None
+                    continue
                 else:
                     raise ScriptionError('%s not valid' % original_item, ' '.join(param_line_args))
             index = indices[item]
@@ -627,7 +629,9 @@ def Run(logger=None):
             result = log_exception()
             if module:
                 module['exception_lines'] = result
-        raise SystemExit(str(exc))
+        if isinstance(exc, ScriptionError):
+            raise SystemExit(str(exc))
+        raise
 
 def InputFile(arg):
     return open(arg)
