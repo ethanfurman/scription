@@ -524,7 +524,7 @@ def usage(func, param_line_args):
             elif '=' in item:
                 item, value = item.split('=', 1)
             if item not in annotations:
-                if item in Script.settings:
+                if item in Script.settings or item in ('SCRIPTION_DEBUG', ):
                     Script.settings[item] = value
                     value = None
                     continue
@@ -581,10 +581,13 @@ def usage(func, param_line_args):
 def Run(logger=None):
     "parses command-line and compares with either func or, if None, Script.command"
     module = None
+    debug = Script.settings.get('SCRIPTION_DEBUG')
     try:
         prog_name = Path(sys.argv[0]).filename
         if logger:
             logger.openlog(str(prog_name.filename), logger.LOG_PID)
+        if debug:
+            print(prog_name.filename)
         if Script.command and Command.subcommands:
             raise ScriptionError("scription does not support both Script and Command in the same file")
         if Script.command is None and not Command.subcommands:
@@ -625,6 +628,8 @@ def Run(logger=None):
         return result
     except Exception:
         exc = sys.exc_info()[1]
+        if debug:
+            print exc
         if logger:
             result = log_exception()
             if module:
