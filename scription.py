@@ -526,6 +526,8 @@ def usage(func, param_line_args):
             if item not in annotations:
                 if item in Script.settings:
                     Script.settings[item] = value
+                    value = None
+                    continue
                 else:
                     raise ScriptionError('%s not valid' % original_item, ' '.join(param_line_args))
             index = indices[item]
