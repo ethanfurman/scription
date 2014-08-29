@@ -635,7 +635,7 @@ def Run(logger=None):
             if module:
                 module['exception_lines'] = result
         if isinstance(exc, ScriptionError):
-            raise SystemExit(exc.message)
+            raise SystemExit(str(exc))
         raise
 
 def InputFile(arg):
