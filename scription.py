@@ -75,7 +75,6 @@ try:
 except NameError:
     bytes = str
 
-
 class DocEnum(Enum):
     """compares equal to all cased versions of its name
     accepts a doctring for each member
@@ -513,12 +512,12 @@ def usage(func, param_line_args):
             doubledash = True
             continue
         if item.startswith('-'):
-            if item == '--help':
+            if item.lower() == '--help':
                 print_help = True
                 continue
             item = item.lstrip('-')
             value = True
-            if item.startswith('no-') and '=' not in item:
+            if item.lower().startswith('no-') and '=' not in item:
                 value = False
                 item = item[3:]
             elif '=' in item:
