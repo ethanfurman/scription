@@ -56,7 +56,7 @@ __all__ = (
     'ScriptionError',
     )
 
-version = 0, 50, 0
+version = 0, 50, 1
 
 try:
     bytes
@@ -411,7 +411,7 @@ def usage(func, param_line_args):
             if not abbrev:
                 abbrev = name[0]
         elif kind == 'multi':
-            positional.append([])
+            positional.append(tuple())
             if not abbrev:
                 abbrev = name[0]
         elif kind == 'keyword':
@@ -507,8 +507,8 @@ def usage(func, param_line_args):
                 if value[-1][-1] != '"':
                     continue
             value = annote.type(' '.join(value).strip('"'))
-            if isinstance(positional[index], list):
-                positional[index].append(value)
+            if isinstance(positional[index], tuple):
+                positional[index] += (value,)
             else:
                 positional[index] = value
             value = None
@@ -538,7 +538,6 @@ def usage(func, param_line_args):
                     value = None
                     continue
                 else:
-                    print annotations
                     raise ScriptionError('%s not valid' % original_item, ' '.join(param_line_args))
             index = indices[item]
             annote = annotations[item]
@@ -553,7 +552,7 @@ def usage(func, param_line_args):
                     if annote.kind == 'option':
                         positional[index] = value
                     else:
-                        positional[index].append(value)
+                        positional[index] += (value,)
                     value = None
             elif annote.kind == 'flag':
                 value = annote.type(value)

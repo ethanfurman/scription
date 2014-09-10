@@ -9,3 +9,7 @@ parsing to make command-line scripts easier:
   - Run: runs the Script function if one is present, or the appropriate
     Command functions specified on the command-line
   - basic usage/help based on Script and Command call signatures
+
+version 0.50 is a backwards-compatible break:
+  - KEYWORD is removed
+  - MULTI is added, and by default generates a tuple

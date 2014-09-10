@@ -17,8 +17,18 @@ class TestCommandlineProcessing(TestCase):
         def tester(huh):
             pass
         for func, params, args, kwds in (
-                (tester, 'tester -h file1'.split(), (['file1'],), {}),
-                (tester, 'tester -h file1 -h file2'.split(), (['file1', 'file2'],), {}),
+                (
+                    tester,
+                    'tester -h file1'.split(),
+                    (('file1',),),
+                    {},
+                ),
+                (
+                    tester,
+                    'tester -h file1 -h file2'.split(),
+                    (('file1', 'file2'),),
+                    {},
+                ),
                 ):
             self.assertEqual(usage(func, params), (args, kwds))
             for key in func.__annotations__.keys():
@@ -33,10 +43,30 @@ class TestCommandlineProcessing(TestCase):
         def tester(huh, wow):
             pass
         for func, params, args, kwds in (
-                (tester, 'tester -h file1'.split(), (['file1'], None), {}),
-                (tester, 'tester -h file1 -w google'.split(), (['file1'], 'google'), {}),
-                (tester, 'tester -h file1 -h file2'.split(), (['file1', 'file2'], None), {}),
-                (tester, 'tester -h file1 -h file2 -w frizzle'.split(), (['file1', 'file2'], 'frizzle'), {}),
+                (
+                    tester,
+                    'tester -h file1'.split(),
+                    (('file1',), None),
+                    {},
+                ),
+                (
+                    tester,
+                    'tester -h file1 -w google'.split(),
+                    (('file1',), 'google'),
+                    {},
+                ),
+                (
+                    tester,
+                    'tester -h file1 -h file2'.split(),
+                    (('file1', 'file2'), None),
+                    {},
+                ),
+                (
+                    tester,
+                    'tester -h file1 -h file2 -w frizzle'.split(),
+                    (('file1', 'file2'), 'frizzle'),
+                    {},
+                ),
                 ):
             self.assertEqual(usage(func, params), (args, kwds))
             for key in func.__annotations__.keys():
