@@ -1,5 +1,7 @@
-from scription import Script, Command, Run, InputFile, Bool, usage
+from scription import Script, Command, Run, InputFile, Bool, usage, version
 from unittest import TestCase, main
+
+print('Scription', version)
 
 #@Script(blah=('configuration file',None,None,InputFile))
 #def main(jobstep, blah='foo', **stuff):
@@ -7,6 +9,39 @@ from unittest import TestCase, main
 #    print jobstep, blah, stuff
 
 class TestCommandlineProcessing(TestCase):
+
+    def test_multi(self):
+        @Script(
+                huh=('misc options', 'multi'),
+                )
+        def tester(huh):
+            pass
+        for func, params, args, kwds in (
+                (tester, 'tester -h file1'.split(), (['file1'],), {}),
+                (tester, 'tester -h file1 -h file2'.split(), (['file1', 'file2'],), {}),
+                ):
+            self.assertEqual(usage(func, params), (args, kwds))
+            for key in func.__annotations__.keys():
+                if key not in ('huh', ):
+                    del func.__annotations__[key]
+
+    def test_multi_with_option(self):
+        @Script(
+                huh=('misc options', 'multi'),
+                wow=('oh yeah', 'option'),
+                )
+        def tester(huh, wow):
+            pass
+        for func, params, args, kwds in (
+                (tester, 'tester -h file1'.split(), (['file1'], None), {}),
+                (tester, 'tester -h file1 -w google'.split(), (['file1'], 'google'), {}),
+                (tester, 'tester -h file1 -h file2'.split(), (['file1', 'file2'], None), {}),
+                (tester, 'tester -h file1 -h file2 -w frizzle'.split(), (['file1', 'file2'], 'frizzle'), {}),
+                ):
+            self.assertEqual(usage(func, params), (args, kwds))
+            for key in func.__annotations__.keys():
+                if key not in ('huh', 'wow'):
+                    del func.__annotations__[key]
 
     def test_positional_only(self):
         @Script(
@@ -49,8 +84,8 @@ class TestCommandlineProcessing(TestCase):
                 (copy, 'copy file1 file2'.split(), ('file1', 'file2', None), {}),
                 (copy, 'copy file1 file2 --comment=howdy!'.split(), ('file1', 'file2', 'howdy!'), {}),
                 (copy, 'copy file1 file2 --comment howdy!'.split(), ('file1', 'file2', 'howdy!'), {}),
-                (copy, 'copy file1 file2 --comment=howdy doody!'.split(), ('file1', 'file2', 'howdy doody!'), {}),
-                (copy, 'copy file1 file2 --comment howdy doody!'.split(), ('file1', 'file2', 'howdy doody!'), {}),
+                (copy, 'copy file1 file2 --comment="howdy doody!"'.split(), ('file1', 'file2', 'howdy doody!'), {}),
+                (copy, 'copy file1 file2 --comment "howdy doody!"'.split(), ('file1', 'file2', 'howdy doody!'), {}),
                 ):
             self.assertEqual(usage(func, params), (args, kwds))
             for key in func.__annotations__.keys():
@@ -69,14 +104,16 @@ class TestCommandlineProcessing(TestCase):
         for func, params, args, kwds in (
                 (copy, 'copy file1 file2'.split(), ('file1', 'file2', True, ''), {}),
                 (copy, 'copy file1 file2 --no-binary'.split(), ('file1', 'file2', False, ''), {}),
+                (copy, 'copy file1 file2 --comment howdy!'.split(), ('file1', 'file2', True, 'howdy!'), {}),
                 (copy, 'copy file1 file2 --comment=howdy!'.split(), ('file1', 'file2', True, 'howdy!'), {}),
                 (copy, 'copy file1 file2 --no-binary --comment=howdy!'.split(), ('file1', 'file2', False, 'howdy!'), {}),
                 (copy, 'copy file1 file2 --comment howdy!'.split(), ('file1', 'file2', True, 'howdy!'), {}),
                 (copy, 'copy file1 file2 --no-binary --comment howdy!'.split(), ('file1', 'file2', False, 'howdy!'), {}),
-                (copy, 'copy file1 file2 --comment=howdy doody!'.split(), ('file1', 'file2', True, 'howdy doody!'), {}),
-                (copy, 'copy file1 file2 --no-binary --comment=howdy doody!'.split(), ('file1', 'file2', False, 'howdy doody!'), {}),
-                (copy, 'copy file1 file2 --comment howdy doody!'.split(), ('file1', 'file2', True, 'howdy doody!'), {}),
-                (copy, 'copy file1 file2 --no-binary --comment howdy doody!'.split(), ('file1', 'file2', False, 'howdy doody!'), {}),
+                (copy, 'copy file1 file2 --comment "howdy doody!"'.split(), ('file1', 'file2', True, 'howdy doody!'), {}),
+                (copy, 'copy file1 file2 --comment="howdy doody!"'.split(), ('file1', 'file2', True, 'howdy doody!'), {}),
+                (copy, 'copy file1 file2 --no-binary --comment="howdy doody!"'.split(), ('file1', 'file2', False, 'howdy doody!'), {}),
+                (copy, 'copy file1 file2 --comment "howdy doody!"'.split(), ('file1', 'file2', True, 'howdy doody!'), {}),
+                (copy, 'copy file1 file2 --no-binary --comment "howdy doody!"'.split(), ('file1', 'file2', False, 'howdy doody!'), {}),
                 ):
             self.assertEqual(usage(func, params), (args, kwds))
             for key in func.__annotations__.keys():

@@ -24,56 +24,45 @@ from enum import Enum
 from path import Path
 from syslog import syslog
 
-"-flags -f --flag -o=foo --option4=bar param1 param2 ..."
-
 """
-(help, kind, abbrev, type, choices, metavar)
+(help, kind, abbrev, type, choices, usage_name)
 
   - help --> the help message
 
   - kind --> what kind of parameter
     - flag       --> simple boolean
     - option     --> option_name value
-    - keyword    --> key=value syntax (no dashes, key can be any
-                     valid Python identifier)
-    - required   --> just like it says (default)
+    - multi      --> option_name value option_name value
+    - required   --> required_name value
 
   - abbrev is a one-character string (defaults to first letter of
     argument)
 
   - type is a callable that converts the arguments to any Python
-    type; by default there is no conversion and type=None 
+    type; by default there is no conversion and type is effectively str
 
   - choices is a discrete sequence of values used to restrict the
     number of the valid options; by default there are no restrictions
     (i.e. choices=None)
 
-  - metavar is used as the name of the parameter in the help message
+  - usage_name is used as the name of the parameter in the help message
 """
-
-# TODO - understand this
-# metavar has two meanings. For a required argument it is used to change the
-# argument name in the usage message (and only there). By default the metavar is
-# None and the name in the usage message is the same as the argument name. For an
-# option the metavar is used differently in the usage message, which has now the
-# form [--option-name METAVAR]. If the metavar is None, then it is equal to the
-# uppercased name of the argument, unless the argument has a default: then it is
-# equal to the stringified form of the default.
 
 # data
 __all__ = (
     'Command', 'Script', 'Run',
     'InputFile', 'Bool',
-    'FLAG', 'OPTION', 'KEYWORD', 'REQUIRED',
+    'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'REQUIRED',
     'ScriptionError',
     )
 
-version = 0, 45, 2
+version = 0, 50, 0
 
 try:
     bytes
 except NameError:
     bytes = str
+
 
 class DocEnum(Enum):
     """compares equal to all cased versions of its name
@@ -109,13 +98,18 @@ class DocEnum(Enum):
     def __ne__(self, other):
         return not self == other
 
+    @classmethod
+    def export_to(cls, namespace):
+        namespace.update(cls.__members__)
+
 
 class SpecKind(DocEnum):
-    FLAG = "True/False setting"
-    OPTION = "variable setting"
-    KEYWORD = "global setting (useful for @Command scripts)"
-    REQUIRED = "required setting"
-globals().update(SpecKind.__members__)
+    REQUIRED = "required value"
+    OPTION = "single value per name"
+    MULTI = "multiple values per name (list form)"
+    FLAG = "boolean value per name"
+    KEYWORD = 'unknown options'
+SpecKind.export_to(globals())
 
 class ExecutionError(Exception):
     "errors raised by Execute"
@@ -309,7 +303,7 @@ class ScriptionError(Exception):
 class Spec(tuple):
     """tuple with named attributes for representing a command-line paramter
 
-    help, kind, abbrev, type, choices, metavar
+    help, kind, abbrev, type, choices, usage_name
     """
 
     __slots__= ()
@@ -344,7 +338,7 @@ class Spec(tuple):
     def choices(self):
         return self[4]
     @property
-    def metavar(self):
+    def usage_name(self):
         return self[5]
 
 class Command(object):
@@ -402,7 +396,7 @@ def usage(func, param_line_args):
     positional = []
     for i, name in enumerate(params + vararg + keywordarg):
         spec = annotations.get(name, '')
-        help, kind, abbrev, type, choices, metavar = Spec(spec)
+        help, kind, abbrev, type, choices, usage_name = Spec(spec)
         if name in keywordarg:
             kind = 'keyword'
         if kind == 'required' and name not in vararg + keywordarg:
@@ -414,11 +408,24 @@ def usage(func, param_line_args):
                 abbrev = name[0]
         elif kind == 'option':
             positional.append(None)
+            if not abbrev:
+                abbrev = name[0]
+        elif kind == 'multi':
+            positional.append([])
+            if not abbrev:
+                abbrev = name[0]
         elif kind == 'keyword':
             pass
+        else:
+            raise ValueError('unknown kind: %r' % kind)
         if abbrev in annotations:
             raise ScriptionError('duplicate abbreviations: %r' % abbrev, ' '.join(param_line_args))
-        spec = Spec(help, kind, abbrev, type, choices, metavar)
+        if usage_name is None:
+            if kind == 'required':
+                usage_name = name
+            else:
+                usage_name = '...'
+        spec = Spec(help, kind, abbrev, type, choices, usage_name)
         annotations[i] = spec
         annotations[name] = spec
         indices[name] = i
@@ -450,16 +457,16 @@ def usage(func, param_line_args):
     print_params = []
     for param in params:
         if annotations[param].kind == 'flag':
-            print_params.append('--' + param)
+            print_params.append('--%s' % param)
         elif annotations[param].kind == 'option':
-            print_params.append('--' + param + ' ...')
+            print_params.append('--%s %s' % (param, annotations[param].usage_name))
         else:
-            print_params.append(param)
+            print_params.append(annotations[param].usage_name)
     usage = ["usage:", program] + print_params
     if vararg:
         usage.append("[%s [%s [...]]]" % (vararg[0], vararg[0]))
     if keywordarg:
-        usage.append("[%s=value [%s=value [...]]]" % (keywordarg[0], keywordarg[0]))
+        usage.append("[name1=value1 [name2=value2 [...]]]")
     usage = ['', ' '.join(usage), '']
     if func.__doc__:
         usage.extend(['    ' + func.__doc__.strip(), ''])
@@ -468,19 +475,19 @@ def usage(func, param_line_args):
         if posi is empty:
             posi = ''
         else:
-            posi = 'default: ' + repr(posi)
+            posi = '[default: ' + repr(posi) + ']'
         annote = annotations[name]
         choices = ''
         if annote.choices:
             choices = '[ %s ]' % ' | '.join(annote.choices)
         usage.append('    %-15s %s %s %s' % (
-            annote.metavar or name,
+            annote.usage_name,
             annote.help,
             posi,
             choices,
             ))
     for name in (vararg + keywordarg):
-        usage.append('    %-15s %s' % (annotations[name].metavar or name, annotations[name].help))
+        usage.append('    %-15s %s' % (name, annotations[name].help))
 
     func.__usage__ = '\n'.join(usage)
     args = []
@@ -491,18 +498,21 @@ def usage(func, param_line_args):
     rest = []
     doubledash = False
     for item in param_line_args[1:] + [None]:
-        # required arguments /should/ be kept together
-        # once an option is found all text until the next option/flag/variable
-        # is part of that option
         original_item = item
         if value is not None:
             if item is None or item.startswith('-') or '=' in item:
                 raise ScriptionError('%s has no value' % last_item)
+            value.append(item)
+            if value[0][0] == '"':
+                if value[-1][-1] != '"':
+                    continue
+            value = annote.type(' '.join(value).strip('"'))
+            if isinstance(positional[index], list):
+                positional[index].append(value)
             else:
-                value = annote.type(item)
                 positional[index] = value
-                value = None
-                continue
+            value = None
+            continue
         if item is None:
             break
         if doubledash:
@@ -528,12 +538,23 @@ def usage(func, param_line_args):
                     value = None
                     continue
                 else:
+                    print annotations
                     raise ScriptionError('%s not valid' % original_item, ' '.join(param_line_args))
             index = indices[item]
             annote = annotations[item]
-            if annote.kind == 'option' and value in (True, False):
-                value = ''
-                last_item = item
+            if annote.kind in ('multi', 'option'):
+                if value in (True, False):
+                    value = []
+                    last_item = item
+                elif value[0] == '"':
+                    value = [value]
+                else:
+                    value = annote.type(value)
+                    if annote.kind == 'option':
+                        positional[index] = value
+                    else:
+                        positional[index].append(value)
+                    value = None
             elif annote.kind == 'flag':
                 value = annote.type(value)
                 positional[index] = value
