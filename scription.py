@@ -56,7 +56,7 @@ __all__ = (
     'ScriptionError',
     )
 
-version = 0, 50, 1
+version = 0, 50, 3
 
 try:
     bytes
@@ -421,10 +421,7 @@ def usage(func, param_line_args):
         if abbrev in annotations:
             raise ScriptionError('duplicate abbreviations: %r' % abbrev, ' '.join(param_line_args))
         if usage_name is None:
-            if kind == 'required':
-                usage_name = name
-            else:
-                usage_name = '...'
+            usage_name = name.upper()
         spec = Spec(help, kind, abbrev, type, choices, usage_name)
         annotations[i] = spec
         annotations[name] = spec
@@ -456,12 +453,15 @@ def usage(func, param_line_args):
     program = param_line_args[0]
     print_params = []
     for param in params:
+        example = annotations[param].usage_name
         if annotations[param].kind == 'flag':
             print_params.append('--%s' % param)
         elif annotations[param].kind == 'option':
-            print_params.append('--%s %s' % (param, annotations[param].usage_name))
+            print_params.append('--%s %s' % (param, example))
+        elif annotations[param].kind == 'multi':
+            print_params.append('--%s %s [--%s ...]' % (param, example, param))
         else:
-            print_params.append(annotations[param].usage_name)
+            print_params.append(example)
     usage = ["usage:", program] + print_params
     if vararg:
         usage.append("[%s [%s [...]]]" % (vararg[0], vararg[0]))
