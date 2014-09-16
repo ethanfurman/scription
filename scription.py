@@ -8,6 +8,7 @@ global script variables:  i.e. debug=True (python expression)
 
 import email
 import inspect
+import logging
 import os
 import pty
 import resource
@@ -21,6 +22,7 @@ import termios
 import time
 import traceback
 from enum import Enum
+from functools import partial
 from path import Path
 from syslog import syslog
 
@@ -63,6 +65,29 @@ try:
 except NameError:
     bytes = str
 
+class NullHandler(logging.Handler):
+    """
+    This handler does nothing. It's intended to be used to avoid the
+    "No handlers could be found for logger XXX" one-off warning. This is
+    important for library code, which may contain code to log events. If a user
+    of the library does not configure logging, the one-off warning might be
+    produced; to avoid this, the library developer simply needs to instantiate
+    a NullHandler and add it to the top-level logger of the library module or
+    package.
+    
+    Taken from 2.7 lib.
+    """
+    def handle(self, record):
+        """Stub."""
+
+    def emit(self, record):
+        """Stub."""
+
+    def createLock(self):
+        self.lock = None
+
+logger = logging.getLogger('scription')
+logger.addHandler(NullHandler())
 
 class DocEnum(Enum):
     """compares equal to all cased versions of its name
@@ -240,12 +265,12 @@ def log_exception(tb=None):
         exc, err, tb = sys.exc_info()
         lines = traceback.format_list(traceback.extract_tb(tb))
         lines.append('%s: %s\n' % (exc.__name__, err))
-        syslog('Traceback (most recent call last):')
+        logger.critical('Traceback (most recent call last):')
     else:
         lines = tb.split('\\n')
     for line in lines:
         for ln in line.rstrip().split('\n'):
-            syslog(ln)
+            logger.critical(ln)
     return lines
 
 def mail(server, port, message):
@@ -340,6 +365,16 @@ class Spec(tuple):
     @property
     def usage_name(self):
         return self[5]
+
+
+class Alias(object):
+    "adds aliases for the function"
+    def __init__(self, *aliases):
+        self.aliases = aliases
+    def __call__(self, func):
+        for alias in self.aliases:
+            Command.subcommands[alias] = func
+        return func
 
 class Command(object):
     "adds __annotations__ to decorated function, and adds func to Command.subcommands"
@@ -597,14 +632,12 @@ def usage(func, param_line_args):
         raise ScriptionError('\n04 - %s values are required\n' % vararg[0])
     return tuple(positional + args), kwargs
 
-def Run(logger=None):
+def Run():
     "parses command-line and compares with either func or, if None, Script.command"
     module = None
     debug = Script.settings.get('SCRIPTION_DEBUG')
     try:
         prog_name = Path(sys.argv[0]).filename
-        if logger:
-            logger.openlog(str(prog_name.filename), logger.LOG_PID)
         if debug:
             print(prog_name.filename)
         if Script.command and Command.subcommands:
@@ -641,18 +674,14 @@ def Run(logger=None):
         args, kwargs = usage(func, param_line)
         func.func_globals.update(Script.settings)
         result = func(*args, **kwargs)
-        if logger:
-            logger.syslog('done')
-            logger.closelog()
         return result
     except Exception:
         exc = sys.exc_info()[1]
         if debug:
             print exc
-        if logger:
-            result = log_exception()
-            if module:
-                module['exception_lines'] = result
+        result = log_exception()
+        if module:
+            module['exception_lines'] = result
         if isinstance(exc, ScriptionError):
             raise SystemExit(str(exc))
         raise
