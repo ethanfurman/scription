@@ -58,7 +58,7 @@ __all__ = (
     'ScriptionError',
     )
 
-version = 0, 50, 4
+version = 0, 50, 5
 
 try:
     bytes
@@ -430,7 +430,9 @@ def usage(func, param_line_args):
     max_pos = 0
     positional = []
     for i, name in enumerate(params + vararg + keywordarg):
-        spec = annotations.get(name, '')
+        spec = annotations.get(name, None)
+        if spec is None:
+            raise ScriptionError('%s not annotated' % name)
         help, kind, abbrev, type, choices, usage_name = Spec(spec)
         if name in keywordarg:
             kind = 'keyword'
