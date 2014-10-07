@@ -52,7 +52,7 @@ from syslog import syslog
 
 # data
 __all__ = (
-    'Command', 'Script', 'Run',
+    'Command', 'Script', 'Run', 'Spec',
     'InputFile', 'Bool',
     'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'REQUIRED',
     'ScriptionError',
@@ -134,6 +134,7 @@ class SpecKind(DocEnum):
     MULTI = "multiple values per name (list form)"
     FLAG = "boolean value per name"
     KEYWORD = 'unknown options'
+
 SpecKind.export_to(globals())
 
 class ExecutionError(Exception):
@@ -332,12 +333,12 @@ class Spec(tuple):
     """
 
     __slots__= ()
-    def __new__(cls, *args):
-        if not args or isinstance(args[0], (str, unicode)):
-            pass
+    def __new__(cls, help=None, kind=None, abbrev=None, type=None, choices=None, usage=None, remove=None):
+        if isinstance(help, tuple):
+            args = help
         else:
-            args = args[0]
-        args = list(args) + [None] * (6 - len(args))
+            args = (help, kind, abbrev, type, choices, usage, remove)
+        args = list(args) + [None] * (7 - len(args))
         if not args[0]:
             args[0] = ''
         if not args[1]:
@@ -365,6 +366,9 @@ class Spec(tuple):
     @property
     def usage_name(self):
         return self[5]
+    @property
+    def remove(self):
+        return self[6]
 
 
 class Alias(object):
@@ -429,11 +433,12 @@ def usage(func, param_line_args):
     indices = {}
     max_pos = 0
     positional = []
+    to_be_removed = []
     for i, name in enumerate(params + vararg + keywordarg):
         spec = annotations.get(name, None)
         if spec is None:
             raise ScriptionError('%s not annotated' % name)
-        help, kind, abbrev, type, choices, usage_name = Spec(spec)
+        help, kind, abbrev, type, choices, usage_name, remove = Spec(spec)
         if name in keywordarg:
             kind = 'keyword'
         if kind == 'required' and name not in vararg + keywordarg:
@@ -459,7 +464,7 @@ def usage(func, param_line_args):
             raise ScriptionError('duplicate abbreviations: %r' % abbrev, ' '.join(param_line_args))
         if usage_name is None:
             usage_name = name.upper()
-        spec = Spec(help, kind, abbrev, type, choices, usage_name)
+        spec = Spec(help, kind, abbrev, type, choices, usage_name, remove)
         annotations[i] = spec
         annotations[name] = spec
         indices[name] = i
@@ -534,11 +539,13 @@ def usage(func, param_line_args):
     value = None
     rest = []
     doubledash = False
-    for item in param_line_args[1:] + [None]:
+    for offset, item in enumerate(param_line_args[1:] + [None]):
+        offset += 1
         original_item = item
         if value is not None:
             if item is None or item.startswith('-') or '=' in item:
                 raise ScriptionError('%s has no value' % last_item)
+            to_be_removed.append(offset)
             value.append(item)
             if value[0][0] == '"':
                 if value[-1][-1] != '"':
@@ -569,6 +576,7 @@ def usage(func, param_line_args):
                 item = item[3:]
             elif '=' in item:
                 item, value = item.split('=', 1)
+            item = item.replace('-','_')
             if item not in annotations:
                 if item in Script.settings or item in ('SCRIPTION_DEBUG', ):
                     Script.settings[item] = value
@@ -578,6 +586,8 @@ def usage(func, param_line_args):
                     raise ScriptionError('%s not valid' % original_item, ' '.join(param_line_args))
             index = indices[item]
             annote = annotations[item]
+            if annote.remove:
+                to_be_removed.append(offset)
             if annote.kind in ('multi', 'option'):
                 if value in (True, False):
                     value = []
@@ -597,6 +607,7 @@ def usage(func, param_line_args):
                 value = None
         elif '=' in item:
             item, value = item.split('=')
+            item = item.replace('-','_')
             if item in params:
                 raise ScriptionError('%s must be specified as a %s' % (item, annotations[item].kind))
             item, value = keywordarg_type(item, value)
@@ -632,6 +643,8 @@ def usage(func, param_line_args):
         raise ScriptionError("\n03 - don't know what to do with %s" % ', '.join(['%s=%s' % (k, v) for k, v in kwargs.items()]))
     elif vararg and annotations[vararg[0]].kind == 'required' and not args:
         raise ScriptionError('\n04 - %s values are required\n' % vararg[0])
+    # remove any command line args that shouldn't be passed on
+    sys.argv[:] = [arg for (i, arg) in enumerate(sys.argv) if i not in to_be_removed]
     return tuple(positional + args), kwargs
 
 def Run():
