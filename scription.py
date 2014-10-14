@@ -439,9 +439,10 @@ def usage(func, param_line_args):
         if spec is None:
             raise ScriptionError('%s not annotated' % name)
         help, kind, abbrev, type, choices, usage_name, remove = Spec(spec)
-        if name in keywordarg:
-            kind = 'keyword'
-        if kind == 'required' and name not in vararg + keywordarg:
+        if name in vararg + keywordarg:
+            if kind is None:
+                kind = 'option'
+        elif kind == 'required':
             max_pos += 1
             positional.append(empty)
         elif kind == 'flag':
@@ -456,8 +457,6 @@ def usage(func, param_line_args):
             positional.append(tuple())
             if not abbrev:
                 abbrev = name[0]
-        elif kind == 'keyword':
-            pass
         else:
             raise ValueError('unknown kind: %r' % kind)
         if abbrev in annotations:
