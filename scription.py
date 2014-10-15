@@ -320,6 +320,15 @@ def pocket(value=None, _pocket=[]):
         _pocket[:] = [value]
     return _pocket[0]
 
+class empty(object):
+    def __nonzero__(self):
+        return False
+    def __repr__(self):
+        return '<empty>'
+    def __str__(self):
+        return ''
+empty = empty()
+
 class ScriptionError(Exception):
     "raised for errors"
     def __init__(self, msg=None, command_line=None):
@@ -333,18 +342,18 @@ class Spec(tuple):
     """
 
     __slots__= ()
-    def __new__(cls, help=None, kind=None, abbrev=None, type=None, choices=None, usage=None, remove=None):
+    def __new__(cls, help=empty, kind=empty, abbrev=empty, type=empty, choices=empty, usage=empty, remove=False):
         if isinstance(help, tuple):
             args = help
         else:
             args = (help, kind, abbrev, type, choices, usage, remove)
-        args = list(args) + [None] * (7 - len(args))
+        args = list(args) + [empty] * (7 - len(args))
         if not args[0]:
             args[0] = ''
         if not args[1]:
             args[1] = 'required'
-        if not args[3]:
-            args[3] = lambda x: x
+        # if not args[3]:
+        #     args[3] = lambda x: x
         if not args[4]:
             args[4] = []
         return tuple.__new__(cls, args)
@@ -416,12 +425,29 @@ def _add_annotations(func, annotations):
         raise ScriptionError("names %r not in %s's signature" % (errors, func.__name__))
     func.__annotations__ = annotations
 
-class empty(object):
-    def __nonzero__(self):
-        return False
-    def __repr__(self):
-        return '<empty>'
-empty = empty()
+def _split_on_comma(text):
+    if ',' not in text:
+        return [text]
+    elif '\\,' not in text:
+        return text.split(',')
+    else:
+        values = []
+        new_value = []
+        last_ch = None
+        for ch in text+',':
+            if last_ch == '\\':
+                new_value.append(ch)
+            elif ch == '\\':
+                pass
+            elif ch == ',':
+                values.append(''.join(new_value))
+                new_value = []
+            else:
+                new_value.append(ch)
+            last_ch = ch
+        if new_value:
+            raise ScriptionError('trailing "\" in argument %r' % text)
+        return values
 
 def usage(func, param_line_args):
     params, vararg, keywordarg, defaults = inspect.getargspec(func)
@@ -440,34 +466,38 @@ def usage(func, param_line_args):
             raise ScriptionError('%s not annotated' % name)
         help, kind, abbrev, type, choices, usage_name, remove = Spec(spec)
         if name in vararg + keywordarg:
-            if kind is None:
+            if kind is empty:
                 kind = 'option'
         elif kind == 'required':
             max_pos += 1
             positional.append(empty)
         elif kind == 'flag':
             positional.append(False)
-            if not abbrev:
+            if abbrev is empty:
                 abbrev = name[0]
         elif kind == 'option':
             positional.append(None)
-            if not abbrev:
+            if abbrev is empty:
                 abbrev = name[0]
         elif kind == 'multi':
-            positional.append(tuple())
-            if not abbrev:
+            if abbrev is empty:
                 abbrev = name[0]
+            if type is empty:
+                type = tuple
+            positional.append(type())
         else:
             raise ValueError('unknown kind: %r' % kind)
+        if type is empty:
+            type = lambda x: x
         if abbrev in annotations:
             raise ScriptionError('duplicate abbreviations: %r' % abbrev, ' '.join(param_line_args))
-        if usage_name is None:
+        if usage_name is empty:
             usage_name = name.upper()
         spec = Spec(help, kind, abbrev, type, choices, usage_name, remove)
         annotations[i] = spec
         annotations[name] = spec
         indices[name] = i
-        if abbrev is not None:
+        if abbrev not in (None, empty):
             annotations[abbrev] = spec
             indices[abbrev] = i
     if defaults:
@@ -549,11 +579,16 @@ def usage(func, param_line_args):
             if value[0][0] == '"':
                 if value[-1][-1] != '"':
                     continue
-            value = annote.type(' '.join(value).strip('"'))
-            if isinstance(positional[index], tuple):
-                positional[index] += (value,)
+                value = ' '.join(value).strip('"')
             else:
+                [value] = value
+            if annote.kind == 'option':
+                value = annote.type(value)
                 positional[index] = value
+            elif annote.kind == 'multi':
+                positional[index] = positional[index] + annote.type(_split_on_comma(value))
+            else:
+                raise ScriptionError('Error: kind %r not in (multi, option)' % annote.kind)
             value = None
             continue
         if item is None:
@@ -594,11 +629,11 @@ def usage(func, param_line_args):
                 elif value[0] == '"':
                     value = [value]
                 else:
-                    value = annote.type(value)
                     if annote.kind == 'option':
-                        positional[index] = value
+                        positional[index] = annote.type(value)
                     else:
-                        positional[index] += (value,)
+                        # value could be a list of comma-separated values
+                        positional[index] = positional[index] + annote.type(_split_on_comma(value))
                     value = None
             elif annote.kind == 'flag':
                 value = annote.type(value)
