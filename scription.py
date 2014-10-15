@@ -58,7 +58,7 @@ __all__ = (
     'ScriptionError',
     )
 
-version = 0, 50, 6
+version = 0, 50, 7
 
 try:
     bytes
