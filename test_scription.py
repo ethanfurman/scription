@@ -35,6 +35,68 @@ class TestCommandlineProcessing(TestCase):
                 if key not in ('huh', ):
                     del func.__annotations__[key]
 
+    def test_multi_with_comma(self):
+        @Script(
+                huh=('misc options', 'multi'),
+                )
+        def tester(huh):
+            pass
+        for func, params, args, kwds in (
+                (
+                    tester,
+                    'tester --huh=one,two,three'.split(),
+                    (('one', 'two', 'three'), ),
+                    {},
+                ),
+                (
+                    tester,
+                    'tester --huh one,two,three'.split(),
+                    (('one', 'two', 'three'), ),
+                    {},
+                ),
+                (
+                    tester,
+                    'tester -h one,two -h three,four'.split(),
+                    (('one', 'two', 'three', 'four'), ),
+                    {},
+                ),
+                ):
+            self.assertEqual(usage(func, params), (args, kwds))
+            for key in func.__annotations__.keys():
+                if key not in ('huh', ):
+                    del func.__annotations__[key]
+
+    def test_multi_with_comma_and_quotes(self):
+        @Script(
+                huh=('misc options', 'multi'),
+                )
+        def tester(huh):
+            pass
+        for func, params, args, kwds in (
+                (
+                    tester,
+                    'tester --huh="one,two,three four"'.split(),
+                    (('one', 'two', 'three four'), ),
+                    {},
+                ),
+                (
+                    tester,
+                    'tester --huh "one,two nine,three"'.split(),
+                    (('one', 'two nine', 'three'), ),
+                    {},
+                ),
+                (
+                    tester,
+                    'tester -h one,two -h "three,four teen"'.split(),
+                    (('one', 'two', 'three', 'four teen'), ),
+                    {},
+                ),
+                ):
+            self.assertEqual(usage(func, params), (args, kwds))
+            for key in func.__annotations__.keys():
+                if key not in ('huh', ):
+                    del func.__annotations__[key]
+
     def test_multi_with_option(self):
         @Script(
                 huh=('misc options', 'multi'),
