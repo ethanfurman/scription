@@ -352,8 +352,8 @@ class Spec(tuple):
             args[0] = ''
         if not args[1]:
             args[1] = 'required'
-        # if not args[3]:
-        #     args[3] = lambda x: x
+        if not args[3]:
+            args[3] = _identity
         if not args[4]:
             args[4] = []
         return tuple.__new__(cls, args)
@@ -425,6 +425,12 @@ def _add_annotations(func, annotations):
         raise ScriptionError("names %r not in %s's signature" % (errors, func.__name__))
     func.__annotations__ = annotations
 
+def _identity(*args):
+    if len(args) == 1:
+        return args[0]
+    return args
+    
+
 def _split_on_comma(text):
     if ',' not in text:
         return [text]
@@ -460,6 +466,7 @@ def usage(func, param_line_args):
     max_pos = 0
     positional = []
     to_be_removed = []
+    multi_options = []
     for i, name in enumerate(params + vararg + keywordarg):
         spec = annotations.get(name, None)
         if spec is None:
@@ -482,13 +489,10 @@ def usage(func, param_line_args):
         elif kind == 'multi':
             if abbrev is empty:
                 abbrev = name[0]
-            if type is empty:
-                type = tuple
-            positional.append(type())
+            multi_options.append(len(positional))
+            positional.append(tuple())
         else:
             raise ValueError('unknown kind: %r' % kind)
-        if type is empty:
-            type = lambda x: x
         if abbrev in annotations:
             raise ScriptionError('duplicate abbreviations: %r' % abbrev, ' '.join(param_line_args))
         if usage_name is empty:
@@ -503,18 +507,19 @@ def usage(func, param_line_args):
     if defaults:
         new_defaults = []
         for name, dflt in zip(reversed(params), reversed(defaults)):
-            if isinstance(dflt, (str, unicode)):
-                new_defaults.append(annotations[name].type(dflt))
-            else:
-                new_defaults.append(dflt)
+            new_defaults.append(annotations[name].type(dflt))
         defaults = list(reversed(new_defaults))
         positional[-len(defaults):] = defaults
+    # if any MULTI parameters have default values, wrap them in a list
+    for i in multi_options:
+        if not isinstance(positional[i], tuple):
+            positional[i] = (positional[i], )
     if not vararg or annotations[vararg[0]].type is None:
-        vararg_type = lambda x: x
+        vararg_type = _identity
     else:
         vararg_type = annotations[vararg[0]].type
-    if not keywordarg or annotations[keywordarg[0]].type is None:
-        keywordarg_type = lambda k, v: (k, v)
+    if not keywordarg: #or annotations[keywordarg[0]].type is None:
+        keywordarg_type = _identity #lambda k, v: (k, v)
     else:
         kywd_func = annotations[keywordarg[0]].type
         if isinstance(kywd_func, tuple):
@@ -586,7 +591,7 @@ def usage(func, param_line_args):
                 value = annote.type(value)
                 positional[index] = value
             elif annote.kind == 'multi':
-                positional[index] = positional[index] + annote.type(_split_on_comma(value))
+                positional[index] = positional[index] + tuple([annote.type(a) for a in _split_on_comma(value)])
             else:
                 raise ScriptionError('Error: kind %r not in (multi, option)' % annote.kind)
             value = None
@@ -623,6 +628,10 @@ def usage(func, param_line_args):
             if annote.remove:
                 to_be_removed.append(offset)
             if annote.kind in ('multi', 'option'):
+                if annote.kind == 'multi':
+                    if index in multi_options:
+                        multi_options.remove(index)
+                        positional[index] = tuple()
                 if value in (True, False):
                     value = []
                     last_item = item
@@ -633,7 +642,7 @@ def usage(func, param_line_args):
                         positional[index] = annote.type(value)
                     else:
                         # value could be a list of comma-separated values
-                        positional[index] = positional[index] + annote.type(_split_on_comma(value))
+                        positional[index] = positional[index] + tuple([annote.type(a) for a in _split_on_comma(value)])
                     value = None
             elif annote.kind == 'flag':
                 value = annote.type(value)
