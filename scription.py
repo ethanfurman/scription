@@ -157,9 +157,9 @@ class Execute(object):
         if password is None:
             # use subprocess instead
             process = Popen(args, stdout=PIPE, stderr=PIPE)
-            self.stdout = process.stdout.read().strip()
+            self.stdout = process.stdout.read().rstrip()
             self.returncode = 0
-            self.stderr = process.stderr.read().strip()
+            self.stderr = process.stderr.read().rstrip()
             if self.stderr:
                 self.returncode = -1
             self.closed = True
@@ -210,7 +210,7 @@ class Execute(object):
         while pocket(self.read(1024)):
             output.append(pocket())
             time.sleep(0.1)
-        self.stdout = ''.join(output)
+        self.stdout = ''.join(output).rstrip()
         self.close()
 
     def close(self, force=True):
@@ -353,6 +353,22 @@ class empty(object):
     def __str__(self):
         return ''
 empty = empty()
+
+class user_ids(object):
+    def __init__(self, uid, gid):
+        self.target_uid = uid
+        self.target_gid = gid
+        self.current_uid = os.getuid()
+        self.current_gid = os.getgid()
+        self.effective_uid = os.geteuid()
+        self.effective_gid = os.getegid()
+    def __enter__(self):
+        os.setregid(self.current_gid, self.target_gid)
+        os.setreuid(self.current_uid, self.target_uid)
+    def __exit__(self, *args):
+        os.setregid(self.current_gid, self.effective_gid)
+        os.setreuid(self.current_uid, self.effective_uid)
+
 
 class ScriptionError(Exception):
     "raised for errors"
