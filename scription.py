@@ -24,10 +24,11 @@ import traceback
 from enum import Enum
 from functools import partial
 from path import Path
+from subprocess import Popen, PIPE, STDOUT
 from syslog import syslog
 
 """
-(help, kind, abbrev, type, choices, usage_name)
+(help, kind, abbrev, type, choices, usage_name, remove)
 
   - help --> the help message
 
@@ -48,6 +49,8 @@ from syslog import syslog
     (i.e. choices=None)
 
   - usage_name is used as the name of the parameter in the help message
+
+  - remove determines if this argument is removed from sys.argv
 """
 
 # data
@@ -141,10 +144,26 @@ class ExecutionError(Exception):
     "errors raised by Execute"
 
 class Execute(object):
-    "runs command in forked process"
+    """
+    if password specified, runs command in forked process, otherwise runs in subprocess
+    """
 
-    def __init__(self, args, bufsize=-1, cwd=None, password=None, **kwds):
+    def __init__(self, args, bufsize=-1, cwd=None, password=None, timeout=None):
         self.env = None
+        if isinstance(args, basestring):
+            args = args.split()
+        if password is None:
+            # use subprocess instead
+            process = Popen(args, stdout=PIPE, stderr=PIPE)
+            self.stdout = process.stdout.read().strip()
+            self.returncode = 0
+            self.stderr = process.stderr.read().strip()
+            if self.error:
+                self.returncode = -1
+            self.closed = True
+            self.terminated = True
+            self.signal = None
+            return
         self.pid, self.child_fd = pty.fork()
         if self.pid == 0: # child process
             self.child_fd = sys.stdout.fileno()
@@ -174,6 +193,7 @@ class Execute(object):
         submission_received = True
         # loop to read output
         time.sleep(0.25)
+        last_comms = time.time()
         while self.is_alive():
             if not self.get_echo() and password and submission_received:
                 self.write(password + '\r\n')
@@ -181,7 +201,10 @@ class Execute(object):
             while pocket(self.read(1024)):
                 output.append(pocket())
                 submission_received = True
+                last_comms = time.time()
             time.sleep(0.1)
+            if timeout and time.time() - last_comms > timeout:
+                self.close()
         while pocket(self.read(1024)):
             output.append(pocket())
             time.sleep(0.1)
@@ -547,13 +570,13 @@ def usage(func, param_line_args):
     if func.__doc__:
         usage.extend(['    ' + func.__doc__.strip(), ''])
     for i, name in enumerate(params):
+        annote = annotations[name]
+        choices = ''
         posi = positional[i]
-        if posi is empty:
+        if posi is empty or posi is None or '[default: ' in annote.help:
             posi = ''
         else:
             posi = '[default: ' + repr(posi) + ']'
-        annote = annotations[name]
-        choices = ''
         if annote.choices:
             choices = '[ %s ]' % ' | '.join(annote.choices)
         usage.append('    %-15s %s %s %s' % (
