@@ -55,10 +55,10 @@ from syslog import syslog
 
 # data
 __all__ = (
-    'Command', 'Script', 'Run', 'Spec',
-    'InputFile', 'Bool',
+    'Alias', 'Command', 'Script', 'Run', 'Spec',
+    'Bool','InputFile', 'OutputFile',
     'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'REQUIRED',
-    'ScriptionError',
+    'ScriptionError', 'ExecuteError', 'Execute',
     )
 
 version = 0, 51, 0
@@ -140,8 +140,10 @@ class SpecKind(DocEnum):
 
 SpecKind.export_to(globals())
 
-class ExecutionError(Exception):
+class ExecuteError(Exception):
     "errors raised by Execute"
+# deprecated
+ExecutionError = ExecuteError
 
 class Execute(object):
     """
@@ -158,7 +160,7 @@ class Execute(object):
             self.stdout = process.stdout.read().strip()
             self.returncode = 0
             self.stderr = process.stderr.read().strip()
-            if self.error:
+            if self.stderr:
                 self.returncode = -1
             self.closed = True
             self.terminated = True
@@ -767,13 +769,16 @@ def Run():
             raise SystemExit(str(exc))
         raise
 
-def InputFile(arg):
-    return open(arg)
-
 def Bool(arg):
     if arg in (True, False):
         return arg
     return arg.lower() in "true t yes y 1 on".split()
+
+def InputFile(arg):
+    return open(arg)
+
+def OutputFile(arg):
+    return open(arg, 'w')
 
 
 # from scription.api import *
