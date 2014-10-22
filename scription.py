@@ -355,19 +355,30 @@ class empty(object):
 empty = empty()
 
 class user_ids(object):
+    """
+    maintains root as one of the ids
+    """
     def __init__(self, uid, gid):
         self.target_uid = uid
         self.target_gid = gid
-        self.current_uid = os.getuid()
-        self.current_gid = os.getgid()
-        self.effective_uid = os.geteuid()
-        self.effective_gid = os.getegid()
+        uid = os.getuid()
+        gid = os.getgid()
+        euid = os.geteuid()
+        egid = os.getegid()
+        if uid:
+            self.current_uid = uid
+        else:
+            self.current_uid = euid
+        if gid:
+            self.current_gid = gid
+        else:
+            self.current_gid = egid
     def __enter__(self):
-        os.setregid(self.current_gid, self.target_gid)
-        os.setreuid(self.current_uid, self.target_uid)
+        os.setregid(0, self.target_gid)
+        os.setreuid(0, self.target_uid)
     def __exit__(self, *args):
-        os.setregid(self.current_gid, self.effective_gid)
-        os.setreuid(self.current_uid, self.effective_uid)
+        os.setregid(self.current_gid, 0)
+        os.setreuid(self.current_uid, 0)
 
 
 class ScriptionError(Exception):
