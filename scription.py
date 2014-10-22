@@ -374,11 +374,15 @@ class user_ids(object):
         else:
             self.current_gid = egid
     def __enter__(self):
+        os.seteuid(0)
+        os.setegid(0)
         os.setregid(0, self.target_gid)
         os.setreuid(0, self.target_uid)
     def __exit__(self, *args):
-        os.setregid(self.current_gid, 0)
+        os.seteuid(0)
+        os.setegid(0)
         os.setreuid(self.current_uid, 0)
+        os.setregid(self.current_gid, 0)
 
 
 class ScriptionError(Exception):
