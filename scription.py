@@ -156,7 +156,7 @@ class Execute(object):
             args = args.split()
         if password is None:
             # use subprocess instead
-            process = Popen(args, stdout=PIPE, stderr=PIPE)
+            process = Popen(args, stdout=PIPE, stderr=PIPE, cwd=cwd)
             self.stdout = process.stdout.read().rstrip()
             self.returncode = 0
             self.stderr = process.stderr.read().rstrip()
