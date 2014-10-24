@@ -9,7 +9,7 @@ Scription -- simple script parameter parser
 """
 
 setup( name='scription',
-       version= '0.52.0',
+       version= '0.53.0',
        license='BSD License',
        description='simple script parameter parser',
        long_description=long_desc,

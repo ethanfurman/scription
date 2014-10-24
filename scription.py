@@ -63,7 +63,7 @@ __all__ = (
     'get_response', 'user_ids',
     )
 
-version = 0, 52, 0
+version = 0, 53, 0
 
 try:
     bytes
