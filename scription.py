@@ -13,6 +13,7 @@ import os
 import pty
 import resource
 import select
+import shlex
 import signal
 import smtplib
 import socket
@@ -59,6 +60,7 @@ __all__ = (
     'Bool','InputFile', 'OutputFile',
     'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'REQUIRED',
     'ScriptionError', 'ExecuteError', 'Execute',
+    'get_response', 'user_ids',
     )
 
 version = 0, 52, 0
@@ -153,7 +155,7 @@ class Execute(object):
     def __init__(self, args, bufsize=-1, cwd=None, password=None, timeout=None):
         self.env = None
         if isinstance(args, basestring):
-            args = args.split()
+            args = shlex.split(args)
         if password is None:
             # use subprocess instead
             process = Popen(args, stdout=PIPE, stderr=PIPE, cwd=cwd)
@@ -184,7 +186,7 @@ class Execute(object):
                 else:
                     os.execvp(args[0], args)
             except Exception, exc:
-                print("%s:  %s" % (exc.__class__.__name__, ' - '.join([str(a) for a in exc.args])))
+                print "%s:  %s" % (exc.__class__.__name__, ' - '.join([str(a) for a in exc.args]))
                 os._exit(-1)
         # parent process
         self.returncode = None
@@ -285,6 +287,71 @@ class Execute(object):
             data = data.encode('utf-8')
         os.write(self.child_fd, data)
 
+def get_response(
+        question,
+        validate=None,
+        type=None,
+        retry='bad response, please try again',
+        ):
+    if '[' not in question and question.rstrip().endswith('?'):
+        # yes/no question
+        if type is None:
+            type = lambda ans:ans.lower() in ('y', 'yes', 't', 'true')
+        if validate is None:
+            validate = lambda ans: ans.lower() in ('y', 'yes', 'n', 'no', 't', 'true', 'f', 'false')
+    elif '[' not in question:
+        # answer can be anything
+        if type is None:
+            type = str
+        if validate is None:
+            validate = lambda ans: type(ans.strip())
+    else:
+        # responses are embedded in question between '[]'
+        actual_question = []
+        allowed_responses = {}
+        current_response = []
+        current_word = []
+        in_response = False
+        capture_word = False
+        for ch in question:
+            if ch == '[':
+                in_response = True
+                capture_word = True
+            elif ch == ']':
+                in_response = False
+                response = ''.join(current_response).lower()
+                allowed_responses[response] = response
+                current_response = []
+            elif ch not in ('abcdefghijklmnopqrstuvwxyz_ABCDEFGHIJKLMNOPQRSTUVWXYZ'):
+                if capture_word:
+                    allowed_responses[response] = ''.join(current_word)
+                capture_word = False
+                current_word = []
+            actual_question.append(ch)
+            if ch not in '[]':
+                if in_response:
+                    current_response.append(ch.lower())
+                if capture_word:
+                    current_word.append(ch)
+        if in_response:
+            raise ScriptionError('question missing closing "]"')
+        question = ''.join(actual_question)
+        if type is None:
+            type = lambda ans: allowed_responses[ans.strip().lower()]
+        else:
+            old_type = type
+            type = lambda ans: old_type(allowed_responses[ans.strip().lower()])
+        if validate is None:
+            validate = lambda ans: ans.strip().lower() in allowed_responses
+    if not question[-1:] in (' ','\n', ''):
+        question += ' '
+    # setup is done, ask question and get answer
+    while 'answer is unacceptable':
+        answer = raw_input(question)
+        if validate(answer):
+            break
+        print retry
+    return type(answer)
 
 def log_exception(tb=None):
     if tb is None:
@@ -361,18 +428,8 @@ class user_ids(object):
     def __init__(self, uid, gid):
         self.target_uid = uid
         self.target_gid = gid
-        uid = os.getuid()
-        gid = os.getgid()
-        euid = os.geteuid()
-        egid = os.getegid()
-        if uid:
-            self.current_uid = uid
-        else:
-            self.current_uid = euid
-        if gid:
-            self.current_gid = gid
-        else:
-            self.current_gid = egid
+        self.saved_uids = os.getuid(), os.geteuid()
+        self.saved_gids = os.getgid(), os.getegid()
     def __enter__(self):
         os.seteuid(0)
         os.setegid(0)
@@ -381,8 +438,8 @@ class user_ids(object):
     def __exit__(self, *args):
         os.seteuid(0)
         os.setegid(0)
-        os.setreuid(self.current_uid, 0)
-        os.setregid(self.current_gid, 0)
+        os.setregid(*self.saved_gids)
+        os.setreuid(*self.saved_uids)
 
 
 class ScriptionError(Exception):
@@ -753,7 +810,7 @@ def Run():
     try:
         prog_name = Path(sys.argv[0]).filename
         if debug:
-            print(prog_name.filename)
+            print prog_name.filename
         if Script.command and Command.subcommands:
             raise ScriptionError("scription does not support both Script and Command in the same file")
         if Script.command is None and not Command.subcommands:
