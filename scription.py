@@ -383,7 +383,13 @@ class IniFile(object):
     _bool = bool
     _float = float
     _int = int
-    _namespace = type('settings', (object, ), {'__getitem__': lambda obj, name: obj.__dict__[name]})
+
+    class _namespace(object):
+        def __getitem__(self, name):
+            try:
+                return self.__dict__[name]
+            except KeyError:
+                raise IniError("'settings' has nothing named %r" % name)
 
     def __init__(self, filename, section=None):
         # if section, only return defaults merged with section
@@ -423,7 +429,7 @@ class IniFile(object):
     def __getattr__(self, name):
         if name in self._settings.__dict__:
             return getattr(self._settings, name)
-        raise AttributeError("'settings' has no section/default named %r" % name)
+        raise IniError("'settings' has no section/default named %r" % name)
 
     def __getitem__(self, name):
         return self._settings[name]
