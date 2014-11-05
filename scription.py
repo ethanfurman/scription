@@ -220,6 +220,7 @@ class Execute(object):
             output.append(pocket())
             time.sleep(0.1)
         self.stdout = ''.join(output).rstrip()
+        self.stderr = ''
         self.close()
 
     def close(self, force=True):
