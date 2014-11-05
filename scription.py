@@ -391,8 +391,10 @@ class IniFile(object):
             except KeyError:
                 raise IniError("'settings' has nothing named %r" % name)
 
-    def __init__(self, filename, section=None):
+    def __init__(self, filename, section=None, export_to=None):
         # if section, only return defaults merged with section
+        # if export_to, it should be a mapping, and will be populated
+        # with the settings
         if section:
             section = section.lower()
         target_section = section
@@ -425,6 +427,10 @@ class IniFile(object):
                     else:
                         setattr(settings, name, value)
                         defaults[name] = value
+        if export_to is not None:
+            for name, value in settings.__dict__.items():
+                if name[0] != '_':
+                    export_to[name] = value
 
     def __getattr__(self, name):
         if name in self._settings.__dict__:
