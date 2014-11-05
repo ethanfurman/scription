@@ -9,7 +9,7 @@ Scription -- simple script parameter parser
 """
 
 setup( name='scription',
-       version= '0.53.0',
+       version= '0.7.0',
        license='BSD License',
        description='simple script parameter parser',
        long_description=long_desc,
@@ -18,7 +18,7 @@ setup( name='scription',
        author='Ethan Furman',
        author_email='ethan@stoneleaf.us',
        classifiers=[
-            'Development Status :: 3 - Alpha',
+            'Development Status :: 4 - Beta',
             'Intended Audience :: Developers',
             'License :: OSI Approved :: BSD License',
             'Programming Language :: Python',
@@ -27,6 +27,7 @@ setup( name='scription',
             'Programming Language :: Python :: 2.5',
             'Programming Language :: Python :: 2.6',
             'Programming Language :: Python :: 2.7',
+            'Programming Language :: Python :: 3',
             ],
     )
 

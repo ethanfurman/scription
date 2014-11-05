@@ -13,6 +13,7 @@ import inspect
 import logging
 import os
 import pty
+import re
 import resource
 import select
 import shlex
@@ -58,13 +59,13 @@ from syslog import syslog
 # data
 __all__ = (
     'Alias', 'Command', 'Script', 'Run', 'Spec',
-    'Bool','InputFile', 'OutputFile',
+    'Bool','InputFile', 'OutputFile', 'IniFile',
     'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'REQUIRED',
     'ScriptionError', 'ExecuteError', 'Execute',
     'get_response', 'user_ids',
     )
 
-version = 0, 6, 0
+version = 0, 7, 0
 
 module = globals()
 
@@ -360,6 +361,146 @@ def get_response(
             break
         print(retry)
     return type(answer)
+
+class IniError(ValueError):
+    """
+    used to signify errors in the ini file
+    """
+
+class IniFile(object):
+    """
+    read and make available the settings of an ini file, converting
+    the values as str, int, float, date, time, datetime based on:
+      - presence of quotes
+      - presenc of colons and/or hyphens
+      - presence of period
+    """
+    _str = str
+    _path = str
+    _date = datetime.date
+    _time = datetime.time
+    _datetime = datetime.datetime
+    _bool = bool
+    _float = float
+    _int = int
+    _namespace = type('settings', (object, ), {'__getitem__': lambda obj, name: obj.__dict__[name]})
+
+    def __init__(self, filename, section=None):
+        # if section, only return defaults merged with section
+        if section:
+            section = section.lower()
+        target_section = section
+        defaults = {}
+        settings = self._settings = self._namespace()
+        with open(filename) as fh:
+            section = None
+            for line in fh:
+                line = line.strip()
+                if not line or line.startswith(('#',';')):
+                    continue
+                if line[0] + line[-1] == '[]':
+                    # section header
+                    section = self._verify_section_header(line[1:-1])
+                    if target_section is None:
+                        new_section = self._namespace()
+                        for key, value in defaults.items():
+                            setattr(new_section, key, value)
+                        setattr(settings, section, new_section)
+                else:
+                    # setting
+                    name, value = line.split('=', 1)
+                    name = self._verify_name(name)
+                    value = self._verify_value(value)
+                    if section:
+                        if target_section is None:
+                            setattr(new_section, name, value)
+                        elif target_section == section:
+                            setattr(settings, name, value)
+                    else:
+                        setattr(settings, name, value)
+                        defaults[name] = value
+
+    def __getattr__(self, name):
+        if name in self._settings.__dict__:
+            return getattr(self._settings, name)
+        raise AttributeError("'settings' has no section/default named %r" % name)
+
+    def __getitem__(self, name):
+        return self._settings[name]
+
+    def _verify_name(self, name):
+        name = name.strip().lower()
+        if not name[0].isalpha():
+            raise IniError('names must start with a letter')
+        if re.sub('\w*', '', name):
+            # illegal characters in name
+            raise IniError('names can only contain letters, digits, and the underscore [%r]' % name)
+        return name
+
+    def _verify_section_header(self, section):
+        section = section.strip().lower()
+        if not section[0].isalpha():
+            raise IniError('names must start with a letter')
+        if re.sub('\w*', '', section):
+            # illegal characters in section
+            raise IniError('names can only contain letters, digits, and the underscore [%r]' % section)
+        if section in self.__dict__:
+            # section already exists
+            raise IniError('section %r is a duplicate, or already exists as a default value' % section)
+        return section
+
+    def _verify_value(self, value):
+        # quotes indicate a string
+        # / or \ indicates a path
+        # : or - indicates time, date, datetime
+        # . indicates float
+        # True/False indicates True/False
+        # anything else is fed through int()
+        value = value.strip()
+        if value[0] in ('"', "'"):
+            if value[0] != value[-1]:
+                raise IniError('string must be quoted at both ends [%r]' % value)
+            start, end = 1, -1
+            if value[:3] in ('"""', "'''"):
+                if value[:3] != value[-3:] or len(value) < 6:
+                    raise IniError('invalid string value: %r' % value)
+                start, end = 3, -3
+            return self._str(value[start:end])
+        elif '/' in value or '\\' in value:
+            return self._path(value)
+        elif ':' in value and '-' in value:
+            # datetime
+            try:
+                date = map(int, value[:10].split('-'))
+                time = map(int, value[11:].split(':'))
+                return self._datetime(*(date+time))
+            except ValueError:
+                raise IniError('invalid datetime value: %r' % value)
+        elif '-' in value:
+            # date
+            try:
+                date = map(int, value.split('-'))
+                return self._date(date)
+            except ValueError:
+                raise IniError('invalid date value: %r' % value)
+        elif ':' in value:
+            # time
+            try:
+                time = map(int, value.split(':'))
+                return self._time(*time)
+            except ValueError:
+                raise IniError('invalid time value: %r' % value)
+        elif '.' in value:
+            try:
+                value = self._float(value)
+            except ValueError:
+                raise IniError('invalid float value: %r' % value)
+        elif value.lower() == 'true':
+            return self._bool(True)
+        elif value.lower() == 'false':
+            return self._bool(False)
+        else:
+            return self._int(value)
 
 
 
