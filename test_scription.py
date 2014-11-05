@@ -23,9 +23,9 @@ class TestCommandlineProcessing(TestCase):
                 ( tester, 'tester -h file1 -h file2'.split(), (('file1', 'file2'),), {},),
                 ):
             self.assertEqual(usage(func, params), (args, kwds))
-            for key in func.__annotations__.keys():
+            for key in list(func.__scription__.keys()):
                 if key not in ('huh', ):
-                    del func.__annotations__[key]
+                    del func.__scription__[key]
 
     def test_multi_with_comma(self):
         @Script(
@@ -39,9 +39,9 @@ class TestCommandlineProcessing(TestCase):
                 ( tester, 'tester -h one,two -h three,four'.split(), (('one', 'two', 'three', 'four'), ), {},),
                 ):
             self.assertEqual(usage(func, params), (args, kwds))
-            for key in func.__annotations__.keys():
+            for key in list(func.__scription__.keys()):
                 if key not in ('huh', ):
-                    del func.__annotations__[key]
+                    del func.__scription__[key]
 
     def test_multi_with_comma_and_quotes(self):
         @Script(
@@ -55,9 +55,9 @@ class TestCommandlineProcessing(TestCase):
                 ( tester, 'tester -h one,two -h "three,four teen"'.split(), (('one', 'two', 'three', 'four teen'), ), {},),
                 ):
             self.assertEqual(usage(func, params), (args, kwds))
-            for key in func.__annotations__.keys():
+            for key in list(func.__scription__.keys()):
                 if key not in ('huh', ):
-                    del func.__annotations__[key]
+                    del func.__scription__[key]
 
     def test_multi_with_option(self):
         @Script(
@@ -73,9 +73,9 @@ class TestCommandlineProcessing(TestCase):
                 ( tester, 'tester -h file1 -h file2 -w frizzle'.split(), (('file1', 'file2'), 'frizzle'), {},),
                 ):
             self.assertEqual(usage(func, params), (args, kwds))
-            for key in func.__annotations__.keys():
+            for key in list(func.__scription__.keys()):
                 if key not in ('huh', 'wow'):
-                    del func.__annotations__[key]
+                    del func.__scription__[key]
 
     def test_positional_only(self):
         @Script(
@@ -102,9 +102,9 @@ class TestCommandlineProcessing(TestCase):
                 (copy, 'copy file1 file2 -b'.split(), ('file1', 'file2', True), {}),
                 ):
             self.assertEqual(usage(func, params), (args, kwds))
-            for key in func.__annotations__.keys():
+            for key in list(func.__scription__.keys()):
                 if key not in ('file1','file2','binary'):
-                    del func.__annotations__[key]
+                    del func.__scription__[key]
 
     def test_positional_with_var(self):
         @Script(
@@ -122,9 +122,9 @@ class TestCommandlineProcessing(TestCase):
                 (copy, 'copy file1 file2 --comment "howdy doody!"'.split(), ('file1', 'file2', 'howdy doody!'), {}),
                 ):
             self.assertEqual(usage(func, params), (args, kwds))
-            for key in func.__annotations__.keys():
+            for key in list(func.__scription__.keys()):
                 if key not in ('file1','file2','comment'):
-                    del func.__annotations__[key]
+                    del func.__scription__[key]
 
     def test_positional_with_flag_and_var(self):
         @Script(
@@ -150,9 +150,9 @@ class TestCommandlineProcessing(TestCase):
                 (copy, 'copy file1 file2 --no-binary --comment "howdy doody!"'.split(), ('file1', 'file2', False, 'howdy doody!'), {}),
                 ):
             self.assertEqual(usage(func, params), (args, kwds))
-            for key in func.__annotations__.keys():
+            for key in list(func.__scription__.keys()):
                 if key not in ('file1','file2','binary','comment'):
-                    del func.__annotations__[key]
+                    del func.__scription__[key]
 
     def test_type(self):
         @Script(
@@ -172,9 +172,9 @@ class TestCommandlineProcessing(TestCase):
             self.assertTrue(isinstance(usage_args[0], int))
             self.assertTrue(isinstance(usage_args[1], str))
             self.assertTrue(all([isinstance(p, Path) for p in usage_args[2]]))
-            for key in func.__annotations__.keys():
+            for key in list(func.__scription__.keys()):
                 if key not in ('one','two','three'):
-                    del func.__annotations__[key]
+                    del func.__scription__[key]
 
 
 

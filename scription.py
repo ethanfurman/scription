@@ -1,3 +1,4 @@
+from __future__ import print_function
 """
 intelligently parses command lines
 
@@ -6,6 +7,7 @@ options: other specified value (e.g. user name)
 global script variables:  i.e. debug=True (python expression)
 """
 
+import datetime
 import email
 import inspect
 import logging
@@ -24,7 +26,6 @@ import time
 import traceback
 from enum import Enum
 from functools import partial
-from path import Path
 from subprocess import Popen, PIPE, STDOUT
 from syslog import syslog
 
@@ -63,12 +64,17 @@ __all__ = (
     'get_response', 'user_ids',
     )
 
-version = 0, 53, 0
+version = 0, 6, 0
 
-try:
-    bytes
-except NameError:
+module = globals()
+
+py_ver = sys.version_info[:2]
+
+if py_ver < (3, 0):
     bytes = str
+else:
+    raw_input = input
+    basestring = str
 
 class NullHandler(logging.Handler):
     """
@@ -113,13 +119,13 @@ class DocEnum(Enum):
         """
         # first, fix _value_
         self._value_ = self._name_.lower()
-        if len(args) == 1 and isinstance(args[0], (str, unicode)):
+        if len(args) == 1 and isinstance(args[0], basestring):
             self.__doc__ = args[0]
         elif args:
             raise TypeError('%s not dealt with -- need custom __init__' % (args,))
 
     def __eq__(self, other):
-        if isinstance(other, (str, unicode)):
+        if isinstance(other, basestring):
             return self._value_ == other.lower()
         elif not isinstance(other, self.__class__):
             return NotImplemented
@@ -140,7 +146,7 @@ class SpecKind(DocEnum):
     FLAG = "boolean value per name"
     KEYWORD = 'unknown options'
 
-SpecKind.export_to(globals())
+SpecKind.export_to(module)
 
 class ExecuteError(Exception):
     "errors raised by Execute"
@@ -185,8 +191,9 @@ class Execute(object):
                     os.execvpe(args[0], args, self.env)
                 else:
                     os.execvp(args[0], args)
-            except Exception, exc:
-                print "%s:  %s" % (exc.__class__.__name__, ' - '.join([str(a) for a in exc.args]))
+            except Exception:
+                exc = sys.exc_info()[1]
+                print("%s:  %s" % (exc.__class__.__name__, ' - '.join([str(a) for a in exc.args])))
                 os._exit(-1)
         # parent process
         self.returncode = None
@@ -350,8 +357,10 @@ def get_response(
         answer = raw_input(question)
         if validate(answer):
             break
-        print retry
+        print(retry)
     return type(answer)
+
+
 
 def log_exception(tb=None):
     if tb is None:
@@ -375,14 +384,16 @@ def mail(server, port, message):
     sender = message['From']
     try:
         smtp = smtplib.SMTP(server, port)
-    except socket.error, exc:
+    except socket.error:
+        exc = sys.exc_info()[1]
         send_errs = {}
         for rec in receiver:
             send_errs[rec] = (server, exc.args)
     else:
         try:
             send_errs = smtp.sendmail(sender, receiver, message.as_string())
-        except smtplib.SMTPRecipientsRefused, exc:
+        except smtplib.SMTPRecipientsRefused:
+            exc = sys.exc_info()[1]
             send_errs = {}
             for user, detail in exc.recipients.items():
                 send_errs[user] = (server, detail)
@@ -394,12 +405,14 @@ def mail(server, port, message):
             try:
                 server = 'mail.' + user.split('@')[1]
                 smtp = smtplib.SMTP(server, 25)
-            except socket.error, exc:
+            except socket.error:
+                exc = sys.exc_info()[1]
                 errs[user] = [send_errs[user], (server, exc.args)]
             else:
                 try:
                     smtp.sendmail(sender, [user], message.as_string())
-                except smtplib.SMTPRecipientsRefused, exc:
+                except smtplib.SMTPRecipientsRefused:
+                    exc = sys.exc_info()[1]
                     errs[user] = [send_errs[user], (server, exc.recipients[user])]
                 finally:
                     smtp.quit()
@@ -415,6 +428,7 @@ def pocket(value=None, _pocket=[]):
 class empty(object):
     def __nonzero__(self):
         return False
+    __bool__ = __nonzero__
     def __repr__(self):
         return '<empty>'
     def __str__(self):
@@ -503,7 +517,7 @@ class Alias(object):
         return func
 
 class Command(object):
-    "adds __annotations__ to decorated function, and adds func to Command.subcommands"
+    "adds __scription__ to decorated function, and adds func to Command.subcommands"
     subcommands = {}
     def __init__(self, **annotations):
         self.annotations = annotations
@@ -513,7 +527,7 @@ class Command(object):
         return func
 
 class Script(object):
-    "adds __annotations__ to decorated function, and stores func in Script.command"
+    "adds __scription__ to decorated function, and stores func in Script.command"
     command = None
     settings = {}
     def __init__(self, **annotations):
@@ -536,7 +550,7 @@ def _add_annotations(func, annotations):
             errors.append(spec)
     if errors:  
         raise ScriptionError("names %r not in %s's signature" % (errors, func.__name__))
-    func.__annotations__ = annotations
+    func.__scription__ = annotations
 
 def _identity(*args):
     if len(args) == 1:
@@ -574,7 +588,7 @@ def usage(func, param_line_args):
     vararg = [vararg] if vararg else []
     keywordarg = [keywordarg] if keywordarg else []
     defaults = list(defaults) if defaults else []
-    annotations = getattr(func, '__annotations__', {})
+    annotations = getattr(func, '__scription__', {})
     indices = {}
     max_pos = 0
     positional = []
@@ -668,6 +682,7 @@ def usage(func, param_line_args):
         else:
             posi = '[default: ' + repr(posi) + ']'
         if annote.choices:
+            print(type(annote.choices))
             choices = '[ %s ]' % ' | '.join(annote.choices)
         usage.append('    %-15s %s %s %s' % (
             annote.usage_name,
@@ -789,7 +804,7 @@ def usage(func, param_line_args):
     elif rest:
         args = rest
     if print_help:
-        print func.__usage__
+        print(func.__usage__)
         sys.exit()
     if not all([p is not empty for p in positional]):
         raise ScriptionError('\n01 - Invalid command line:  %s' % ' '.join(param_line_args))
@@ -808,9 +823,10 @@ def Run():
     module = None
     debug = Script.settings.get('SCRIPTION_DEBUG')
     try:
-        prog_name = Path(sys.argv[0]).filename
+        # prog_name = Path(sys.argv[0]).filename
+        prog_name = os.path.split(sys.argv[0])[1]
         if debug:
-            print prog_name.filename
+            print(prog_name.filename)
         if Script.command and Command.subcommands:
             raise ScriptionError("scription does not support both Script and Command in the same file")
         if Script.command is None and not Command.subcommands:
@@ -849,7 +865,7 @@ def Run():
     except Exception:
         exc = sys.exc_info()[1]
         if debug:
-            print exc
+            print(exc)
         result = log_exception()
         if module:
             module['exception_lines'] = result
