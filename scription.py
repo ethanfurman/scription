@@ -71,6 +71,7 @@ __all__ = (
 version = 0, 70, 6
 
 module = globals()
+script_module = None
 
 py_ver = sys.version_info[:2]
 
@@ -681,6 +682,8 @@ class Command(object):
     def __init__(self, **annotations):
         self.annotations = annotations
     def __call__(self, func):
+        global script_module
+        script_module = _func_globals(func)
         _add_annotations(func, self.annotations)
         Command.subcommands[func.__name__] = func
         return func
@@ -694,6 +697,8 @@ class Script(object):
         if not Script.settings:
             Script.settings = annotations
     def __call__(self, func):
+        global script_module
+        script_module = _func_globals(func)
         if Script.settings == self.annotations:
             Script.settings = {}
         _add_annotations(func, self.annotations)
@@ -983,9 +988,13 @@ def usage(func, param_line_args):
     sys.argv[:] = [arg for (i, arg) in enumerate(sys.argv) if i not in to_be_removed]
     return tuple(positional + args), kwargs
 
+def Main():
+    "calls Run() only if the script is being run as __main__"
+    if script_module['__name__'] == '__main__':
+        return Run()
+
 def Run():
     "parses command-line and compares with either func or, if None, Script.command"
-    module = None
     debug = Script.settings.get('SCRIPTION_DEBUG')
     try:
         # prog_name = Path(sys.argv[0]).filename
@@ -1003,13 +1012,11 @@ def Run():
             else:
                 func = Command.subcommands.get(func_name[0])
             if func is not None:
-                module = _func_globals(func)
                 prog_name = func_name[0]
                 param_line = [prog_name] + sys.argv[2:]
             else:
                 func = Command.subcommands.get(prog_name, None)
                 if func is not None:
-                    module = _func_globals(func)
                     param_line = [prog_name] + sys.argv[1:]
                 else:
                     for name, func in sorted(Command.subcommands.items()):
@@ -1022,7 +1029,6 @@ def Run():
         else:
             param_line = sys.argv[:]
             func = Script.command
-            module = _func_globals(func)
         args, kwargs = usage(func, param_line)
         _func_globals(func).update(Script.settings)
         result = func(*args, **kwargs)
@@ -1032,8 +1038,7 @@ def Run():
         if debug:
             print(exc)
         result = log_exception()
-        if module:
-            module['exception_lines'] = result
+        script_module['exception_lines'] = result
         if isinstance(exc, ScriptionError):
             raise SystemExit(str(exc))
         raise
