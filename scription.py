@@ -7,22 +7,25 @@ options: other specified value (e.g. user name)
 global script variables:  i.e. debug=True (python expression)
 """
 
+import sys
+is_win = sys.platform.startswith('win')
+if not is_win:
+    import pty
+    import resource
+    import signal
+    import termios
+
 import datetime
 import email
 import inspect
 import logging
 import os
-import pty
 import re
-import resource
 import select
 import shlex
-import signal
 import smtplib
 import socket
-import sys
 import tempfile
-import termios
 import time
 import traceback
 from enum import Enum
@@ -175,6 +178,8 @@ class Execute(object):
             self.terminated = True
             self.signal = None
             return
+        if is_win:
+            raise OSError("password support for Execute not currently implemented for Windows")
         self.pid, self.child_fd = pty.fork()
         if self.pid == 0: # child process
             self.child_fd = sys.stdout.fileno()
