@@ -706,6 +706,12 @@ def _add_annotations(func, annotations):
         raise ScriptionError("names %r not in %s's signature" % (errors, func.__name__))
     func.__scription__ = annotations
 
+def _func_globals(func):
+    if py_ver < (3, 0):
+        return func.func_globals
+    else:
+        return func.__globals__
+
 def _identity(*args):
     if len(args) == 1:
         return args[0]
@@ -992,13 +998,13 @@ def Run():
             else:
                 func = Command.subcommands.get(func_name[0])
             if func is not None:
-                module = func.func_globals
+                module = _func_globals(func)
                 prog_name = func_name[0]
                 param_line = [prog_name] + sys.argv[2:]
             else:
                 func = Command.subcommands.get(prog_name, None)
                 if func is not None:
-                    module = func.func_globals
+                    module = _func_globals(func)
                     param_line = [prog_name] + sys.argv[1:]
                 else:
                     for name, func in sorted(Command.subcommands.items()):
@@ -1011,9 +1017,9 @@ def Run():
         else:
             param_line = sys.argv[:]
             func = Script.command
-            module = func.func_globals
+            module = _func_globals(func)
         args, kwargs = usage(func, param_line)
-        func.func_globals.update(Script.settings)
+        _func_globals(func).update(Script.settings)
         result = func(*args, **kwargs)
         return result
     except Exception:
