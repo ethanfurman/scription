@@ -68,7 +68,7 @@ __all__ = (
     'get_response', 'user_ids',
     )
 
-version = 0, 70, 5
+version = 0, 70, 6
 
 module = globals()
 
