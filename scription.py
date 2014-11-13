@@ -1,4 +1,3 @@
-from __future__ import print_function
 """
 intelligently parses command lines
 
@@ -69,7 +68,7 @@ __all__ = (
     'get_response', 'user_ids',
     )
 
-version = 0, 70, 8
+version = 0, 70, 81
 
 module = globals()
 script_module = None
