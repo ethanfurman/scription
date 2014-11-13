@@ -1000,10 +1000,7 @@ def usage(func, param_line_args):
 
 def Main():
     "calls Run() only if the script is being run as __main__"
-    if module.get('HAS_BEEN_RUN'):
-        return
     if script_module['__name__'] == '__main__':
-        module['HAS_BEEN_RUN'] = True
         return Run()
 
 def Run():
