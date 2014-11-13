@@ -68,7 +68,7 @@ __all__ = (
     'get_response', 'user_ids',
     )
 
-version = 0, 70, 81
+version = 0, 70, 82
 
 module = globals()
 script_module = None
@@ -1000,11 +1000,17 @@ def usage(func, param_line_args):
 
 def Main():
     "calls Run() only if the script is being run as __main__"
+    if module.get('HAS_BEEN_RUN'):
+        return
     if script_module['__name__'] == '__main__':
+        module['HAS_BEEN_RUN'] = True
         return Run()
 
 def Run():
     "parses command-line and compares with either func or, if None, Script.command"
+    if module.get('HAS_BEEN_RUN'):
+        return
+    module['HAS_BEEN_RUN'] = True
     debug = Script.settings.get('SCRIPTION_DEBUG')
     try:
         # prog_name = Path(sys.argv[0]).filename
