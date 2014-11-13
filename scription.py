@@ -15,6 +15,7 @@ if not is_win:
     import signal
     import termios
 
+import atexit
 import datetime
 import email
 import inspect
@@ -74,6 +75,7 @@ module = globals()
 script_module = None
 
 py_ver = sys.version_info[:2]
+registered = False
 
 if py_ver < (3, 0):
     bytes = str
@@ -686,6 +688,9 @@ class Command(object):
         script_module = _func_globals(func)
         _add_annotations(func, self.annotations)
         Command.subcommands[func.__name__] = func
+        if not module['registered']:
+            atexit.register(Main)
+            module['registered'] = True
         return func
 
 class Script(object):
@@ -703,6 +708,9 @@ class Script(object):
             Script.settings = {}
         _add_annotations(func, self.annotations)
         Script.command = staticmethod(func)
+        if not module['registered']:
+            atexit.register(Main)
+            module['registered'] = True
         return func
 
 def _add_annotations(func, annotations):
