@@ -408,7 +408,8 @@ class IniFile(object):
         target_section = section
         defaults = {}
         settings = self._settings = self._namespace()
-        with open(filename) as fh:
+        fh = open(filename)
+        try:
             section = None
             for line in fh:
                 line = line.strip()
@@ -435,6 +436,8 @@ class IniFile(object):
                     else:
                         setattr(settings, name, value)
                         defaults[name] = value
+        finally:
+            fh.close()
         if export_to is not None:
             for name, value in settings.__dict__.items():
                 if name[0] != '_':
