@@ -891,7 +891,7 @@ def _help(func):
         usage.append("[%s [%s [...]]]" % (vararg[0], vararg[0]))
     if keywordarg:
         usage.append("[name1=value1 [name2=value2 [...]]]")
-    usage = ['', ' '.join(usage), '']
+    usage = [' '.join(usage), '']
     if func.__doc__:
         usage.extend(['    ' + func.__doc__.strip(), ''])
     for name in params:
@@ -978,8 +978,8 @@ def _usage(func, param_line_args):
     script_annotations = Script.settings
     var_arg_spec = kwd_arg_spec = None
     if Script.command:
-        var_arg_spec = Script.command._var_arg
-        kwd_arg_spec = Script.command._kwd_arg
+        var_arg_spec = getattr(Script.command, '_var_arg', None)
+        kwd_arg_spec = getattr(Script.command, '_kwd_arg', None)
     if func._var_arg:
         var_arg_spec = func._var_arg
     if func._kwd_arg:
@@ -1076,8 +1076,8 @@ def _usage(func, param_line_args):
                 var_arg_spec._cli_value += (var_arg_spec.type(item), )
     exc = None
     if print_help:
-        print('%s: usage -->' % program, program, func.__usage__)
-        sys.exit()
+        print('%s %s' % (program, func.__usage__))
+        os._exit(-1)
     for setting in set(func.__scription__.values()):
         if setting.kind == 'required':
             setting.value
@@ -1145,10 +1145,9 @@ def Run():
             if func is not None:
                 param_line = [prog_name] + sys.argv[1:]
             else:
-                module['HAS_BEEN_RUN'] = True
                 for name, func in sorted(Command.subcommands.items()):
-                    print("\n%s %s" % (name, func.__usage__[1:]))
-                sys.exit(-1)
+                    print("\n%s %s" % (name, func.__usage__))
+                os._exit(-1)
         main, sub = _usage(func, param_line)
         main_cmd = Script.command
         subcommand = _run_once(func, sub)
