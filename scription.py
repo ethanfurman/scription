@@ -714,7 +714,7 @@ class Command(object):
         global script_module
         if script_module is None:
             script_module = _func_globals(func)
-            script_module['script_module'] = _namespace(script_module)
+            script_module['module'] = _namespace(script_module)
         func.names = list(self.annotations.keys())
         _add_annotations(func, self.annotations)
         Command.subcommands[func.__name__] = func
@@ -753,7 +753,7 @@ class Script(object):
             raise ScriptionError("Script can only be used once")
         global script_module
         script_module = _func_globals(func)
-        script_module['script_module'] = _namespace(script_module)
+        script_module['module'] = _namespace(script_module)
         _add_annotations(func, Script.settings, script=True)
         _help(func)
         Script.settings = func.__scription__
@@ -836,6 +836,7 @@ def _help(func):
             usage_name = name.upper()
         if arg_type is _identity and default is not empty:
             arg_type = type(default)
+        spec._order = i
         spec.kind = kind
         spec.abbrev = abbrev
         spec.type = arg_type
@@ -931,14 +932,19 @@ class _namespace(object):
     def __setitem__(self, name, value):
         self.__dict__[name] = value
 
-def _run_once(func, kwds):
+# def _order_arguments(arg_dict):
+#     '''
+#     returns a tuple and dict that can be fed into a function
+#     '''
+#     items = sorted(arg_dict.items(), key=lambda item: item._order)
+
+def _run_once(func, args, kwds):
     cache = []
     def later():
         global run_once
         if run_once:
             return cache[0]
         run_once = True
-        args = kwds.pop('', tuple())
         result = func(*args, **kwds)
         cache.append(result)
         return result
@@ -1090,7 +1096,8 @@ def _usage(func, param_line_args):
             if ' ' in arg:
                 new_args.extend(('"' + arg.replace('"','\\"') + '"').split())
     sys.argv[1:] = new_args
-    main = {}
+    main_args, main_kwds = [], {}
+    args, varargs, kwds = [], None, {}
     for name in Script.names:
         annote = Script.settings[name]
         value = annote.value
@@ -1098,22 +1105,33 @@ def _usage(func, param_line_args):
             script_module[name] = value
         else:
             if annote is var_arg_spec:
-                main[''] = value
+                varargs = value
             elif annote is kwd_arg_spec:
-                main.update(value)
+                kwds = value
             else:
-                main[name] = value
-    sub = {}
+                args.append(annote)
+    args = [arg.value for arg in sorted(args, key=lambda a: a._order)]
+    if varargs is not None:
+        main_args = tuple(args) + varargs
+    else:
+        main_args = tuple(args)
+    sub_args, sub_kwds = [], {}
+    args, varargs, kwds = [], None, {}
     for name in func.names:
         annote = func.__scription__[name]
         value = annote.value
         if annote is var_arg_spec:
-            sub[''] = value
+            varargs = value
         elif annote is kwd_arg_spec:
-            sub.update(value)
+            kwds = value
         else:
-            sub[name] = value
-    return main, sub
+            args.append(annote)
+    args = [arg.value for arg in sorted(args, key=lambda a: a._order)]
+    if varargs is not None:
+        sub_args = tuple(args) + varargs
+    else:
+        sub_args = tuple(args)
+    return main_args, main_kwds, sub_args, sub_kwds
 
 def Main():
     "calls Run() only if the script is being run as __main__"
@@ -1148,13 +1166,12 @@ def Run():
                 for name, func in sorted(Command.subcommands.items()):
                     print("\n%s %s" % (name, func.__usage__))
                 os._exit(-1)
-        main, sub = _usage(func, param_line)
+        main_args, main_kwds, sub_args, sub_kwds = _usage(func, param_line)
         main_cmd = Script.command
-        subcommand = _run_once(func, sub)
+        subcommand = _run_once(func, sub_args, sub_kwds)
         if main_cmd:
             script_module['script_command'] = subcommand
-            varargs = main.pop('', tuple())
-            main_cmd(*varargs, **main)
+            main_cmd(*main_args, **main_kwds)
             return subcommand()
         else:
             # no Script command, only subcommand

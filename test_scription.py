@@ -13,14 +13,21 @@ print('Scription', version)
 
 def test_func_parsing(obj, func, tests, test_type=False):
     try:
-        for params, main, sub in tests:
-            res_main, res_sub = _usage(func, params)
-            obj.assertEqual((res_main, res_sub), (main, sub))
+        for params, main_args, main_kwds, sub_args, sub_kwds in tests:
+            res_main_args, res_main_kwds, res_sub_args, res_sub_kwds = _usage(func, params)
+            obj.assertEqual(res_main_args, main_args)
+            obj.assertEqual(res_main_kwds, main_kwds)
+            obj.assertEqual(res_sub_args, sub_args)
+            obj.assertEqual(res_sub_kwds, sub_kwds)
             if test_type:
-                for rk, rv in res_main.items():
-                    obj.assertTrue(type(rv) is type(main[rk]))
-                for rk, rv in res_sub.items():
-                    obj.assertTrue(type(rv) is type(sub[rk]))
+                for rval, val in zip(res_main_args, main_args):
+                    obj.assertTrue(type(rval) is type(val))
+                for rkey, rval in res_main_kwds.items():
+                    obj.assertTrue(type(rval) is type(main_kwds[rkey]))
+                for rval, val in zip(res_sub_args, sub_args):
+                    obj.assertTrue(type(rval) is type(val))
+                for rkey, rval in res_sub_kwds.items():
+                    obj.assertTrue(type(rval) is type(sub_kwds[rkey]))
 
             for spec in set(func.__scription__.values()):
                 spec._cli_value = empty
@@ -38,8 +45,8 @@ class TestCommandlineProcessing(TestCase):
         def tester(huh):
             pass
         tests = (
-                ( 'tester -h file1'.split(), {}, {'huh':('file1', )} ),
-                ( 'tester -h file1 -h file2'.split(), {}, {'huh':('file1', 'file2')} ),
+                ( 'tester -h file1'.split(), (), {}, (('file1', ), ), {} ),
+                ( 'tester -h file1 -h file2'.split(), (), {}, (('file1', 'file2'), ), {} ),
                 )
         test_func_parsing(self, tester, tests)
 
@@ -50,9 +57,9 @@ class TestCommandlineProcessing(TestCase):
         def tester(huh):
             pass
         tests = (
-                ( 'tester --huh=one,two,three'.split(), {}, {'huh':('one', 'two', 'three')} ),
-                ( 'tester --huh one,two,three'.split(), {}, {'huh':('one', 'two', 'three')} ),
-                ( 'tester -h one,two -h three,four'.split(), {}, {'huh':('one', 'two', 'three', 'four')} ),
+                ( 'tester --huh=one,two,three'.split(), (), {}, (('one', 'two', 'three'), ), {} ),
+                ( 'tester --huh one,two,three'.split(), (), {}, (('one', 'two', 'three'), ), {} ),
+                ( 'tester -h one,two -h three,four'.split(), (), {}, (('one', 'two', 'three', 'four'), ), {} ),
                 )
         test_func_parsing(self, tester, tests)
 
@@ -63,9 +70,9 @@ class TestCommandlineProcessing(TestCase):
         def tester(huh):
             pass
         tests = (
-                ( 'tester --huh="one,two,three four"'.split(), {}, {'huh':('one', 'two', 'three four')}),
-                ( 'tester --huh "one,two nine,three"'.split(), {}, {'huh':('one', 'two nine', 'three')}),
-                ( 'tester -h one,two -h "three,four teen"'.split(), {}, {'huh':('one', 'two', 'three', 'four teen')}),
+                ( 'tester --huh="one,two,three four"'.split(), (), {}, (('one', 'two', 'three four'), ), {}),
+                ( 'tester --huh "one,two nine,three"'.split(), (), {}, (('one', 'two nine', 'three'), ), {}),
+                ( 'tester -h one,two -h "three,four teen"'.split(), (), {}, (('one', 'two', 'three', 'four teen'), ), {}),
                 )
         test_func_parsing(self, tester, tests)
 
@@ -77,10 +84,10 @@ class TestCommandlineProcessing(TestCase):
         def tester(huh, wow):
             pass
         tests = (
-                ( 'tester -h file1'.split(), {}, {'huh':('file1', ), 'wow':None} ),
-                ( 'tester -h file1 -w google'.split(), {}, {'huh':('file1', ), 'wow':'google'} ),
-                ( 'tester -h file1 -h file2'.split(), {}, {'huh':('file1', 'file2'), 'wow':None} ),
-                ( 'tester -h file1 -h file2 -w frizzle'.split(), {}, {'huh':('file1', 'file2'), 'wow':'frizzle'} ),
+                ( 'tester -h file1'.split(), (), {}, (('file1', ), None), {} ),
+                ( 'tester -h file1 -w google'.split(), (), {}, (('file1', ), 'google'), {} ),
+                ( 'tester -h file1 -h file2'.split(), (), {}, (('file1', 'file2'), None), {} ),
+                ( 'tester -h file1 -h file2 -w frizzle'.split(), (), {}, (('file1', 'file2'), 'frizzle'), {} ),
                 )
         test_func_parsing(self, tester, tests)
 
@@ -92,7 +99,7 @@ class TestCommandlineProcessing(TestCase):
         def copy(file1, file2):
             pass
         tests = (
-                ('copy file1 file2'.split(), {}, {'file1':'file1', 'file2':'file2'} ),
+                ('copy file1 file2'.split(), (), {}, ('file1', 'file2'), {} ),
                 )
         test_func_parsing(self, copy, tests)
 
@@ -105,8 +112,8 @@ class TestCommandlineProcessing(TestCase):
         def copy(file1, file2, binary):
             pass
         tests = (
-                ('copy file1 file2'.split(), {}, {'file1':'file1', 'file2':'file2', 'binary':False} ),
-                ('copy file1 file2 -b'.split(), {}, {'file1':'file1', 'file2':'file2', 'binary':True} ),
+                ('copy file1 file2'.split(), (), {}, ('file1', 'file2', False), {} ),
+                ('copy file1 file2 -b'.split(), (), {}, ('file1', 'file2', True), {} ),
                 )
         test_func_parsing(self, copy, tests)
 
@@ -119,11 +126,11 @@ class TestCommandlineProcessing(TestCase):
         def copy(file1, file2, comment):
             pass
         tests = (
-                ('copy file1 file2'.split(), {}, {'file1':'file1', 'file2':'file2', 'comment':None} ),
-                ('copy file1 file2 --comment=howdy!'.split(), {}, {'file1':'file1', 'file2':'file2', 'comment': 'howdy!'} ),
-                ('copy file1 file2 --comment howdy!'.split(), {}, {'file1':'file1', 'file2':'file2', 'comment': 'howdy!'} ),
-                ('copy file1 file2 --comment="howdy doody!"'.split(), {}, {'file1':'file1', 'file2':'file2', 'comment':'howdy doody!'} ),
-                ('copy file1 file2 --comment "howdy doody!"'.split(), {}, {'file1':'file1', 'file2':'file2', 'comment':'howdy doody!'} ),
+                ('copy file1 file2'.split(), (), {}, ('file1', 'file2', None), {} ),
+                ('copy file1 file2 --comment=howdy!'.split(), (), {}, ('file1', 'file2',  'howdy!'), {} ),
+                ('copy file1 file2 --comment howdy!'.split(), (), {}, ('file1', 'file2',  'howdy!'), {} ),
+                ('copy file1 file2 --comment="howdy doody!"'.split(), (), {}, ('file1', 'file2', 'howdy doody!'), {} ),
+                ('copy file1 file2 --comment "howdy doody!"'.split(), (), {}, ('file1', 'file2', 'howdy doody!'), {} ),
                 )
         test_func_parsing(self, copy, tests)
 
@@ -137,18 +144,18 @@ class TestCommandlineProcessing(TestCase):
         def copy(file1, file2, binary=True, comment=''):
             pass
         tests = (
-                ('copy file1 file2'.split(), {}, {'file1':'file1', 'file2':'file2', 'binary':True, 'comment':''} ),
-                ('copy file1 file2 --no-binary'.split(), {}, {'file1':'file1', 'file2':'file2', 'binary':False, 'comment':''} ),
-                ('copy file1 file2 --comment howdy!'.split(), {}, {'file1':'file1', 'file2':'file2', 'binary':True, 'comment':'howdy!'} ),
-                ('copy file1 file2 --comment=howdy!'.split(), {}, {'file1':'file1', 'file2':'file2', 'binary':True, 'comment':'howdy!'} ),
-                ('copy file1 file2 --no-binary --comment=howdy!'.split(), {}, {'file1':'file1', 'file2':'file2', 'binary':False, 'comment':'howdy!'} ),
-                ('copy file1 file2 --comment howdy!'.split(), {}, {'file1':'file1', 'file2':'file2', 'binary':True, 'comment':'howdy!'} ),
-                ('copy file1 file2 --no-binary --comment howdy!'.split(), {}, {'file1':'file1', 'file2':'file2', 'binary':False, 'comment':'howdy!'} ),
-                ('copy file1 file2 --comment "howdy doody!"'.split(), {}, {'file1':'file1', 'file2':'file2', 'binary':True, 'comment':'howdy doody!'} ),
-                ('copy file1 file2 --comment="howdy doody!"'.split(), {}, {'file1':'file1', 'file2':'file2', 'binary':True, 'comment':'howdy doody!'} ),
-                ('copy file1 file2 --no-binary --comment="howdy doody!"'.split(), {}, {'file1':'file1', 'file2':'file2', 'binary':False, 'comment':'howdy doody!'} ),
-                ('copy file1 file2 --comment "howdy doody!"'.split(), {}, {'file1':'file1', 'file2':'file2', 'binary':True, 'comment':'howdy doody!'} ),
-                ('copy file1 file2 --no-binary --comment "howdy doody!"'.split(), {}, {'file1':'file1', 'file2':'file2', 'binary':False, 'comment':'howdy doody!'} ),
+                ('copy file1 file2'.split(), (), {}, ('file1', 'file2', True, ''), {} ),
+                ('copy file1 file2 --no-binary'.split(), (), {}, ('file1', 'file2', False, ''), {} ),
+                ('copy file1 file2 --comment howdy!'.split(), (), {}, ('file1', 'file2', True, 'howdy!'), {} ),
+                ('copy file1 file2 --comment=howdy!'.split(), (), {}, ('file1', 'file2', True, 'howdy!'), {} ),
+                ('copy file1 file2 --no-binary --comment=howdy!'.split(), (), {}, ('file1', 'file2', False, 'howdy!'), {} ),
+                ('copy file1 file2 --comment howdy!'.split(), (), {}, ('file1', 'file2', True, 'howdy!'), {} ),
+                ('copy file1 file2 --no-binary --comment howdy!'.split(), (), {}, ('file1', 'file2', False, 'howdy!'), {} ),
+                ('copy file1 file2 --comment "howdy doody!"'.split(), (), {}, ('file1', 'file2', True, 'howdy doody!'), {} ),
+                ('copy file1 file2 --comment="howdy doody!"'.split(), (), {}, ('file1', 'file2', True, 'howdy doody!'), {} ),
+                ('copy file1 file2 --no-binary --comment="howdy doody!"'.split(), (), {}, ('file1', 'file2', False, 'howdy doody!'), {} ),
+                ('copy file1 file2 --comment "howdy doody!"'.split(), (), {}, ('file1', 'file2', True, 'howdy doody!'), {} ),
+                ('copy file1 file2 --no-binary --comment "howdy doody!"'.split(), (), {}, ('file1', 'file2', False, 'howdy doody!'), {} ),
                 )
         test_func_parsing(self, copy, tests)
 
@@ -161,9 +168,9 @@ class TestCommandlineProcessing(TestCase):
         def tester(one='1', two=2, three='/some/path/to/nowhere'):
             pass
         tests = (
-                (['tester'], {}, {'one':1, 'two':'2', 'three':(Path('/some/path/to/nowhere'), )} ),
-                ('tester 3 -t 4 --three /somewhere/over/the/rainbow'.split(), {}, {'one':3, 'two':'4', 'three':(Path('/somewhere/over/the/rainbow'), )} ),
-                ('tester 5 -t 6 --three=/yellow/brick/road.txt'.split(), {}, {'one':5, 'two':'6', 'three':(Path('/yellow/brick/road.txt'), )} ),
+                (['tester'], (), {}, (1, '2', (Path('/some/path/to/nowhere'), )), {} ),
+                ('tester 3 -t 4 --three /somewhere/over/the/rainbow'.split(), (), {}, (3, '4', (Path('/somewhere/over/the/rainbow'), )), {} ),
+                ('tester 5 -t 6 --three=/yellow/brick/road.txt'.split(), (), {}, (5, '6', (Path('/yellow/brick/road.txt'), )), {} ),
                 )
         test_func_parsing(self, tester, tests, test_type=True)
 
@@ -174,10 +181,10 @@ class TestCommandlineProcessing(TestCase):
         def whoa(this):
             pass
         tests = (
-                (['whoa'], {}, {'this':None}),
-                ('whoa --debug'.split(), {}, {'this':None}),
-                ('whoa --debug -t bukooz'.split(), {}, {'this':'bukooz'}),
-                ('whoa -t fletcha'.split(), {}, {'this':'fletcha'}),
+                (['whoa'], (), {}, (None, ), {}),
+                ('whoa --debug'.split(), (), {}, (None, ), {}),
+                ('whoa --debug -t bukooz'.split(), (), {}, ('bukooz', ), {}),
+                ('whoa -t fletcha'.split(), (), {}, ('fletcha', ), {}),
                 )
         test_func_parsing(self, whoa, tests)
 
@@ -194,9 +201,9 @@ class TestCommandlineProcessing(TestCase):
         def query(database):
             pass
         tests = (
-                ('query blahblah'.split(), {'password':None}, {'database':'blahblah'}),
-                ('query booboo --password banana'.split(), {'password':'banana'}, {'database':'booboo'}),
-                ('query beebee --password banana --debug'.split(), {'password':'banana'}, {'database':'beebee'}),
+                ('query blahblah'.split(), (None, ), {}, ('blahblah', ), {}),
+                ('query booboo --password banana'.split(), ('banana', ), {}, ('booboo', ), {}),
+                ('query beebee --password banana --debug'.split(), ('banana', ), {}, ('beebee', ), {}),
                 )
         test_func_parsing(self, query, tests)
 
@@ -207,11 +214,27 @@ class TestCommandlineProcessing(TestCase):
         def rm(*files):
             pass
         tests = (
-                ('rm this.txt'.split(), {}, {'':('this.txt', )} ),
-                ('rm those.txt that.doc'.split(), {}, {'':('those.txt', 'that.doc')} ),
+                ('rm this.txt'.split(), (), {}, ('this.txt', ), {} ),
+                ('rm those.txt that.doc'.split(), (), {}, ('those.txt', 'that.doc'), {} ),
                 )
         test_func_parsing(self, rm, tests)
 
+    def test_varargs_with_regular_args(self):
+        @Command(
+                these=('some of these please', ),
+                those=('maybe those', 'flag', ),
+                them=('most important!', 'required'),
+                )
+        def sassy(these, those, *them):
+            pass
+        tests = (
+                ('sassy biscuit and gravy'.split(), (), {}, ('biscuit', False, 'and' ,'gravy'), {}),
+                ('sassy --those biscuit and gravy'.split(), (), {}, ('biscuit', True, 'and' ,'gravy'), {}),
+                ('sassy biscuit --those and gravy'.split(), (), {}, ('biscuit', True, 'and' ,'gravy'), {}),
+                ('sassy biscuit and --those gravy'.split(), (), {}, ('biscuit', True, 'and' ,'gravy'), {}),
+                ('sassy biscuit and gravy --those'.split(), (), {}, ('biscuit', True, 'and' ,'gravy'), {}),
+                )
+        test_func_parsing(self, sassy, tests)
 
 if __name__ == '__main__':
     scription.HAS_BEEN_RUN = True
