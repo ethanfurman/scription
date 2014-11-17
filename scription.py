@@ -75,6 +75,7 @@ script_module = None
 
 py_ver = sys.version_info[:2]
 registered = False
+run_once = False
 
 if py_ver < (3, 0):
     bytes = str
@@ -391,13 +392,6 @@ class IniFile(object):
     _float = float
     _int = int
 
-    class _namespace(object):
-        def __getitem__(self, name):
-            try:
-                return self.__dict__[name]
-            except KeyError:
-                raise IniError("'settings' has nothing named %r" % name)
-
     def __init__(self, filename, section=None, export_to=None):
         # if section, only return defaults merged with section
         # if export_to, it should be a mapping, and will be populated
@@ -406,7 +400,7 @@ class IniFile(object):
             section = section.lower()
         target_section = section
         defaults = {}
-        settings = self._settings = self._namespace()
+        settings = self._settings = _namespace()
         fh = open(filename)
         try:
             section = None
@@ -418,7 +412,7 @@ class IniFile(object):
                     # section header
                     section = self._verify_section_header(line[1:-1])
                     if target_section is None:
-                        new_section = self._namespace()
+                        new_section = _namespace()
                         for key, value in defaults.items():
                             setattr(new_section, key, value)
                         setattr(settings, section, new_section)
@@ -449,6 +443,14 @@ class IniFile(object):
 
     def __getitem__(self, name):
         return self._settings[name]
+
+    def __setattr__(self, name, value):
+        if name in ('_settings', '_str', '_path', '_date', '_time', '_datetime', '_bool', '_float', '_int'):
+            object.__setattr__(self, name, value)
+        self._settings[name] = value
+
+    def __setitem__(self, name, value):
+        self._settings[name] = value
 
     def _verify_name(self, name):
         name = name.strip().lower()
@@ -590,6 +592,9 @@ def pocket(value=None, _pocket=[]):
     return _pocket[0]
 
 class empty(object):
+    def __add__(self, other):
+        # adding emptiness to something else is just something else
+        return other
     def __nonzero__(self):
         return False
     __bool__ = __nonzero__
@@ -626,50 +631,65 @@ class ScriptionError(Exception):
         super(ScriptionError, self).__init__(msg)
         self.command_line = command_line
 
-class Spec(tuple):
+class Spec(object):
     """tuple with named attributes for representing a command-line paramter
 
-    help, kind, abbrev, type, choices, usage_name
+    help, kind, abbrev, type, choices, usage_name, remove, default
     """
 
-    __slots__= ()
-    def __new__(cls, help=empty, kind=empty, abbrev=empty, type=empty, choices=empty, usage=empty, remove=False):
+    def __init__(self, help=empty, kind=empty, abbrev=empty, type=empty, choices=empty, usage=empty, remove=False, default=empty):
+        if isinstance(help, Spec):
+            self.__dict__.update(help.__dict__)
+            return
         if isinstance(help, tuple):
-            args = help
-        else:
-            args = (help, kind, abbrev, type, choices, usage, remove)
-        args = list(args) + [empty] * (7 - len(args))
-        if not args[0]:
-            args[0] = ''
-        if not args[1]:
-            args[1] = 'required'
-        if not args[3]:
-            args[3] = _identity
-        if not args[4]:
-            args[4] = []
-        return tuple.__new__(cls, args)
-    @property
-    def help(self):
-        return self[0]
-    @property
-    def kind(self):
-        return self[1]
-    @property
-    def abbrev(self):
-        return self[2]
-    @property
-    def type(self):
-        return self[3]
-    @property
-    def choices(self):
-        return self[4]
-    @property
-    def usage_name(self):
-        return self[5]
-    @property
-    def remove(self):
-        return self[6]
+            args = list(help) + [empty] * (8 - len(help))
+            help, kind, abbrev, type, choices, usage, remove, default = args
+        if not help:
+            help = ''
+        if not kind:
+            kind = 'required'
+        if not type:
+            type = _identity
+        if not choices:
+            choices = []
+        arg_type_default = empty
+        if kind not in ('required', 'option', 'multi', 'flag'):
+            raise ScriptionError('unknown parameter kind: %r' % kind)
+        if kind == 'flag':
+            arg_type_default = False
+        elif kind == 'option':
+            arg_type_default = None
+        elif kind == 'multi':
+            arg_type_default = tuple()
+            if default and not isinstance(default, tuple):
+                default = (default, )
+        self.help = help
+        self.kind = kind
+        self.abbrev = abbrev
+        self.type = type
+        self.choices = choices
+        self.usage = usage
+        self.remove = remove
+        self._cli_value = empty
+        self._script_default = default
+        self._type_default = arg_type_default
+        self._global = False
 
+    def __iter__(self):
+        return iter((self.help, self.kind, self.abbrev, self.type, self.choices, self.usage, self.remove, self._script_default))
+
+    @property
+    def value(self):
+        if self._cli_value is not empty:
+            value = self._cli_value
+        elif self._script_default is not empty:
+            value = self._script_default
+        elif self._type_default is not empty:
+            value = self._type_default
+        else:
+            raise ScriptionError('Spec object has no value (<%r, %r, %r, %r, %r, %r>)' %
+                    (self.help, self.kind, self.abbrev, self.type, self.choices, self._type_default))
+        return value
 
 class Alias(object):
     "adds aliases for the function"
@@ -684,59 +704,243 @@ class Command(object):
     "adds __scription__ to decorated function, and adds func to Command.subcommands"
     subcommands = {}
     def __init__(self, **annotations):
+        for name, annotation in annotations.items():
+            spec = Spec(annotation)
+            annotations[name] = spec
         self.annotations = annotations
     def __call__(self, func):
         global script_module
-        script_module = _func_globals(func)
+        if script_module is None:
+            script_module = _func_globals(func)
+            script_module['script_module'] = _namespace(script_module)
+        func.names = list(self.annotations.keys())
         _add_annotations(func, self.annotations)
         Command.subcommands[func.__name__] = func
         if not module['registered']:
             atexit.register(Main)
             module['registered'] = True
+        _help(func)
         return func
 
 class Script(object):
     "adds __scription__ to decorated function, and stores func in Script.command"
     command = None
     settings = {}
-    def __init__(self, **annotations):
-        self.annotations = annotations
-        if not Script.settings:
-            Script.settings = annotations
+    names = []
+    def __init__(self, **settings):
+        if Script.command is not None:
+            raise ScriptionError("Script can only be used once")
+        for name, annotation in settings.items():
+            if isinstance(annotation, (Spec, tuple)):
+                spec = Spec(annotation)
+                if spec.kind == 'required':
+                    # TODO:  allow this
+                    raise ScriptionError('REQUIRED not (yet) allowed for Script')
+            else:
+                if isinstance(annotation, bool):
+                    kind = 'flag'
+                else:
+                    kind = 'option'
+                spec = Spec('', kind, None, type(annotation), default=annotation)
+                spec._global = True
+            settings[name] = spec
+        Script.settings = settings
+        Script.names = list(settings.keys())
     def __call__(self, func):
+        if Script.command is not None:
+            raise ScriptionError("Script can only be used once")
         global script_module
         script_module = _func_globals(func)
-        if Script.settings == self.annotations:
-            Script.settings = {}
-        _add_annotations(func, self.annotations)
+        script_module['script_module'] = _namespace(script_module)
+        _add_annotations(func, Script.settings, script=True)
+        _help(func)
+        Script.settings = func.__scription__
         Script.command = staticmethod(func)
         if not module['registered']:
             atexit.register(Main)
             module['registered'] = True
         return func
 
-def _add_annotations(func, annotations):
+def _add_annotations(func, annotations, script=False):
+    '''
+    add annotations as __scription__ to func
+    '''
     params, varargs, keywords, defaults = inspect.getargspec(func)
     names = params + [varargs, keywords]
     errors = []
     for spec in annotations:
         if spec not in names:
-            errors.append(spec)
+            if not script:
+                errors.append(spec)
     if errors:  
         raise ScriptionError("names %r not in %s's signature" % (errors, func.__name__))
     func.__scription__ = annotations
 
 def _func_globals(func):
+    '''
+    return the function's globals
+    '''
     if py_ver < (3, 0):
         return func.func_globals
     else:
         return func.__globals__
 
+def _help(func):
+    '''
+    create help from __scription__ annotations
+    '''
+    params, vararg, keywordarg, defaults = inspect.getargspec(func)
+    params = func.params = list(params)
+    vararg = func.vararg = [vararg] if vararg else []
+    keywordarg = func.keywordarg = [keywordarg] if keywordarg else []
+    vararg_type = _identity
+    keywordarg_type = _identity
+    annotations = func.__scription__
+    pos = None
+    max_pos = 0
+    for i, name in enumerate(params + vararg + keywordarg):
+        spec = annotations.get(name, None)
+        pos = None
+        if spec is None:
+            raise ScriptionError('%s not annotated' % name)
+        help, kind, abbrev, arg_type, choices, usage_name, remove, default = spec
+        arg_type_default = empty
+        if name in vararg + keywordarg:
+            if kind is empty:
+                kind = 'option'
+        elif kind == 'required':
+            pos = max_pos
+            max_pos += 1
+        elif kind == 'flag':
+            arg_type_default = False
+            if abbrev is empty:
+                abbrev = name[0]
+        elif kind == 'option':
+            arg_type_default = None
+            if abbrev is empty:
+                abbrev = name[0]
+        elif kind == 'multi':
+            arg_type_default = tuple()
+            if abbrev is empty:
+                abbrev = name[0]
+            if default and not isinstance(default, tuple):
+                default = (default, )
+        else:
+            raise ValueError('unknown kind: %r' % kind)
+        if abbrev in annotations:
+            raise ScriptionError('duplicate abbreviations: %r' % abbrev)
+        if usage_name is empty:
+            usage_name = name.upper()
+        if arg_type is _identity and default is not empty:
+            arg_type = type(default)
+        # spec = Spec(help, kind, abbrev, arg_type, choices, usage_name, remove, default)
+        spec.kind = kind
+        spec.abbrev = abbrev
+        spec.type = arg_type
+        spec.usage = usage_name
+        spec._script_default = default
+        spec._type_default = arg_type_default
+        if pos != max_pos:
+            annotations[i] = spec
+        annotations[name] = spec
+        func._var_arg = func._kwd_arg = None
+        if vararg:
+            func._var_arg = annotations[vararg[0]]
+        if keywordarg:
+            func._kwd_arg = annotations[keywordarg[0]]
+        if abbrev not in (None, empty):
+            annotations[abbrev] = spec
+    if defaults:
+        for name, dflt in zip(reversed(params), reversed(defaults)):
+            annote = annotations[name]
+            if annote._script_default:
+                # default specified in two places
+                raise ScriptionError('default value for %s specified in Spec and in header (%r, %r)' %
+                        (name, annote._script_default, dflt))
+            if annote.kind != 'multi':
+                annote._script_default = annote.type(dflt)
+            else:
+                if not isinstance(dflt, tuple):
+                    dflt = (dflt, )
+                new_dflt = []
+                for d in dflt:
+                    new_dflt.append(annote.type(d))
+                annote._script_default = tuple(new_dflt)
+    if vararg:
+        vararg_type = annotations[vararg[0]].type
+    if keywordarg:
+        kywd_func = annotations[keywordarg[0]].type
+        if isinstance(kywd_func, tuple):
+            keywordarg_type = lambda k, v: (kywd_func[0](k), kywd_func[1](v))
+        else:
+            keywordarg_type = lambda k, v: (k, kywd_func(v))
+    print_params = []
+    for param in params:
+        example = annotations[param].usage
+        if annotations[param].kind == 'flag':
+            print_params.append('--%s' % param)
+        elif annotations[param].kind == 'option':
+            print_params.append('--%s %s' % (param, example))
+        elif annotations[param].kind == 'multi':
+            print_params.append('--%s %s [--%s ...]' % (param, example, param))
+        else:
+            print_params.append(example)
+    usage = print_params
+    if vararg:
+        usage.append("[%s [%s [...]]]" % (vararg[0], vararg[0]))
+    if keywordarg:
+        usage.append("[name1=value1 [name2=value2 [...]]]")
+    usage = ['', ' '.join(usage), '']
+    if func.__doc__:
+        usage.extend(['    ' + func.__doc__.strip(), ''])
+    for name in params:
+        annote = annotations[name]
+        choices = ''
+        if annote._script_default is empty or annote._script_default is None or '[default: ' in annote.help:
+            posi = ''
+        else:
+            posi = '[default: ' + repr(annote._script_default) + ']'
+        if annote.choices:
+            choices = '[ %s ]' % ' | '.join(annote.choices)
+        usage.append('    %-15s %s %s %s' % (
+            annote.usage,
+            annote.help,
+            posi,
+            choices,
+            ))
+    for name in (vararg + keywordarg):
+        usage.append('    %-15s %s' % (name, annotations[name].help))
+    func.max_pos = max_pos
+    func.__usage__ = '\n'.join(usage)
+
 def _identity(*args):
     if len(args) == 1:
         return args[0]
     return args
-    
+
+class _namespace(object):
+    def __init__(self, wrapped_dict=None):
+        if wrapped_dict is not None:
+            self.__dict__ = wrapped_dict
+    def __getitem__(self, name):
+        try:
+            return self.__dict__[name]
+        except KeyError:
+            raise ScriptionError("namespace object has nothing named %r" % name)
+    def __setitem__(self, name, value):
+        self.__dict__[name] = value
+
+def _run_once(func, kwds):
+    cache = []
+    def later():
+        global run_once
+        if run_once:
+            return cache[0]
+        run_once = True
+        result = func(**kwds)
+        cache.append(result)
+        return result
+    return later
 
 def _split_on_comma(text):
     if ',' not in text:
@@ -759,147 +963,44 @@ def _split_on_comma(text):
                 new_value.append(ch)
             last_ch = ch
         if new_value:
-            raise ScriptionError('trailing "\" in argument %r' % text)
+            raise ScriptionError('trailing "\\" in argument %r' % text)
         return values
 
-def usage(func, param_line_args):
-    params, vararg, keywordarg, defaults = inspect.getargspec(func)
-    params = list(params)
-    vararg = [vararg] if vararg else []
-    keywordarg = [keywordarg] if keywordarg else []
-    defaults = list(defaults) if defaults else []
-    annotations = getattr(func, '__scription__', {})
-    indices = {}
-    max_pos = 0
-    positional = []
-    to_be_removed = []
-    multi_options = []
-    for i, name in enumerate(params + vararg + keywordarg):
-        spec = annotations.get(name, None)
-        if spec is None:
-            raise ScriptionError('%s not annotated' % name)
-        help, kind, abbrev, type, choices, usage_name, remove = Spec(spec)
-        if name in vararg + keywordarg:
-            if kind is empty:
-                kind = 'option'
-        elif kind == 'required':
-            max_pos += 1
-            positional.append(empty)
-        elif kind == 'flag':
-            positional.append(False)
-            if abbrev is empty:
-                abbrev = name[0]
-        elif kind == 'option':
-            positional.append(None)
-            if abbrev is empty:
-                abbrev = name[0]
-        elif kind == 'multi':
-            if abbrev is empty:
-                abbrev = name[0]
-            multi_options.append(len(positional))
-            positional.append(tuple())
-        else:
-            raise ValueError('unknown kind: %r' % kind)
-        if abbrev in annotations:
-            raise ScriptionError('duplicate abbreviations: %r' % abbrev, ' '.join(param_line_args))
-        if usage_name is empty:
-            usage_name = name.upper()
-        spec = Spec(help, kind, abbrev, type, choices, usage_name, remove)
-        annotations[i] = spec
-        annotations[name] = spec
-        indices[name] = i
-        if abbrev not in (None, empty):
-            annotations[abbrev] = spec
-            indices[abbrev] = i
-    if defaults:
-        new_defaults = []
-        for name, dflt in zip(reversed(params), reversed(defaults)):
-            new_defaults.append(annotations[name].type(dflt))
-        defaults = list(reversed(new_defaults))
-        positional[-len(defaults):] = defaults
-    # if any MULTI parameters have default values, wrap them in a list
-    for i in multi_options:
-        if not isinstance(positional[i], tuple):
-            positional[i] = (positional[i], )
-    if not vararg or annotations[vararg[0]].type is None:
-        vararg_type = _identity
-    else:
-        vararg_type = annotations[vararg[0]].type
-    if not keywordarg: #or annotations[keywordarg[0]].type is None:
-        keywordarg_type = _identity #lambda k, v: (k, v)
-    else:
-        kywd_func = annotations[keywordarg[0]].type
-        if isinstance(kywd_func, tuple):
-            keywordarg_type = lambda k, v: (kywd_func[0](k), kywd_func[1](v))
-        else:
-            keywordarg_type = lambda k, v: (k, kywd_func(v))
+def _usage(func, param_line_args):
     program = param_line_args[0]
-    print_params = []
-    for param in params:
-        example = annotations[param].usage_name
-        if annotations[param].kind == 'flag':
-            print_params.append('--%s' % param)
-        elif annotations[param].kind == 'option':
-            print_params.append('--%s %s' % (param, example))
-        elif annotations[param].kind == 'multi':
-            print_params.append('--%s %s [--%s ...]' % (param, example, param))
-        else:
-            print_params.append(example)
-    usage = ["usage:", program] + print_params
-    if vararg:
-        usage.append("[%s [%s [...]]]" % (vararg[0], vararg[0]))
-    if keywordarg:
-        usage.append("[name1=value1 [name2=value2 [...]]]")
-    usage = ['', ' '.join(usage), '']
-    if func.__doc__:
-        usage.extend(['    ' + func.__doc__.strip(), ''])
-    for i, name in enumerate(params):
-        annote = annotations[name]
-        choices = ''
-        posi = positional[i]
-        if posi is empty or posi is None or '[default: ' in annote.help:
-            posi = ''
-        else:
-            posi = '[default: ' + repr(posi) + ']'
-        if annote.choices:
-            print(type(annote.choices))
-            choices = '[ %s ]' % ' | '.join(annote.choices)
-        usage.append('    %-15s %s %s %s' % (
-            annote.usage_name,
-            annote.help,
-            posi,
-            choices,
-            ))
-    for name in (vararg + keywordarg):
-        usage.append('    %-15s %s' % (name, annotations[name].help))
-
-    func.__usage__ = '\n'.join(usage)
     args = []
     kwargs = {}
     pos = 0
+    max_pos = func.max_pos
     print_help = False
     value = None
     rest = []
     doubledash = False
-    for offset, item in enumerate(param_line_args[1:] + [None]):
+    annotations = func.__scription__
+    script_annotations = Script.settings
+    var_arg_spec = kwd_arg_spec = None
+    if Script.command:
+        var_arg_spec = Script.command._var_arg
+        kwd_arg_spec = Script.command._kwd_arg
+    if func._var_arg:
+        var_arg_spec = func._var_arg
+    if func._kwd_arg:
+        kwd_arg_spec = func._kwd_arg
+    to_be_removed = []
+    param_line_args = shlex.split(' '.join(param_line_args[1:]))
+    for offset, item in enumerate(param_line_args + [None]):
         offset += 1
         original_item = item
         if value is not None:
             if item is None or item.startswith('-') or '=' in item:
                 raise ScriptionError('%s has no value' % last_item)
-            to_be_removed.append(offset)
-            value.append(item)
-            if value[0][0] == '"':
-                if value[-1][-1] != '"':
-                    continue
-                value = ' '.join(value).strip('"')
-            else:
-                [value] = value
+            if annote.remove:
+                to_be_removed.append(offset)
+            value = item
             if annote.kind == 'option':
-                value = annote.type(value)
-                positional[index] = value
+                annote._cli_value = annote.type(value)
             elif annote.kind == 'multi':
-                positional[index] = positional[index] + tuple([annote.type(a) for a in _split_on_comma(value)])
+                annote._cli_value += tuple([annote.type(a) for a in _split_on_comma(value)])
             else:
                 raise ScriptionError('Error: kind %r not in (multi, option)' % annote.kind)
             value = None
@@ -913,6 +1014,7 @@ def usage(func, param_line_args):
             doubledash = True
             continue
         if item.startswith('-'):
+            # (multi)option or flag
             if item.lower() == '--help':
                 print_help = True
                 continue
@@ -924,59 +1026,60 @@ def usage(func, param_line_args):
             elif '=' in item:
                 item, value = item.split('=', 1)
             item = item.replace('-','_')
-            if item not in annotations:
-                if item in Script.settings or item in ('SCRIPTION_DEBUG', ):
-                    Script.settings[item] = value
-                    value = None
-                    continue
-                else:
-                    raise ScriptionError('%s not valid' % original_item, ' '.join(param_line_args))
-            index = indices[item]
-            annote = annotations[item]
+            if item in annotations:
+                annote = annotations[item]
+            elif item in script_annotations:
+                annote = script_annotations[item]
+            elif item in ('SCRIPTION_DEBUG', ):
+                Script.settings[item] = value
+                value = None
+                continue
+            else:
+                raise ScriptionError('%s not valid' % original_item, ' '.join(param_line_args))
             if annote.remove:
                 to_be_removed.append(offset)
             if annote.kind in ('multi', 'option'):
-                if annote.kind == 'multi':
-                    if index in multi_options:
-                        multi_options.remove(index)
-                        positional[index] = tuple()
                 if value in (True, False):
                     value = []
                     last_item = item
-                elif value[0] == '"':
-                    value = [value]
                 else:
                     if annote.kind == 'option':
-                        positional[index] = annote.type(value)
+                        annote._cli_value = annote.type(value)
                     else:
                         # value could be a list of comma-separated values
-                        positional[index] = positional[index] + tuple([annote.type(a) for a in _split_on_comma(value)])
+                        annote._cli_value += tuple([annote.type(a) for a in _split_on_comma(value)])
                     value = None
             elif annote.kind == 'flag':
                 value = annote.type(value)
-                positional[index] = value
+                annote._cli_value = value
                 value = None
         elif '=' in item:
+            # no lead dash, keyword args
+            if kwd_arg_spec is None:
+                raise ScriptionError("don't know what to do with %r" % item)
             item, value = item.split('=')
             item = item.replace('-','_')
             if item in params:
                 raise ScriptionError('%s must be specified as a %s' % (item, annotations[item].kind))
-            item, value = keywordarg_type(item, value)
+            item, value = kwd_arg_spec.type(item, value)
             if not isinstance(item, str):
                 raise ScriptionError('keyword names must be strings', ' '.join(param_line_args))
             kwargs[item] = value
             value = None
         else:
+            # positional (required?) argument
             if pos < max_pos:
                 annote = annotations[pos]
                 # check for choices membership before transforming into a type
                 if annote.choices and item not in annote.choices:
                     raise ScriptionError('%r not in [ %s ]' % (item, ' | '.join(annote.choices)))
                 item = annote.type(item)
-                positional[pos] = item
+                annote._cli_value = item
                 pos += 1
             else:
-                item = vararg_type(item)
+                if var_arg_spec is None:
+                    raise ScriptionError("don't know what to do with %r" % item)
+                item = var_arg_spec.type(item)
                 args.append(item)
     exc = None
     if args and rest:
@@ -984,19 +1087,44 @@ def usage(func, param_line_args):
     elif rest:
         args = rest
     if print_help:
-        print(func.__usage__)
+        print('%s: usage -->' % program, program, func.__usage__)
         sys.exit()
-    if not all([p is not empty for p in positional]):
-        raise ScriptionError('\n01 - Invalid command line:  %s' % ' '.join(param_line_args))
-    if args and not vararg:
-        raise ScriptionError("\n02 - don't know what to do with %s" % ', '.join(args))
-    elif kwargs and not keywordarg:
-        raise ScriptionError("\n03 - don't know what to do with %s" % ', '.join(['%s=%s' % (k, v) for k, v in kwargs.items()]))
-    elif vararg and annotations[vararg[0]].kind == 'required' and not args:
-        raise ScriptionError('\n04 - %s values are required\n' % vararg[0])
+    # if pos < max_pos:
+    for setting in set(func.__scription__.values()):
+        if setting.kind == 'required':
+            setting.value
+        # raise ScriptionError('\n01 - Invalid command line:  %r' % ' '.join(param_line_args))
+    if args and not _var_arg_spec:
+        raise ScriptionError("\n02 - don't know what to do with %r" % ', '.join(args))
+    elif args:
+        var_arg_spec._cli_value = args
+    if kwargs and not kwd_arg_spec:
+        raise ScriptionError("\n03 - don't know what to do with %r" % ', '.join(['%s=%s' % (k, v) for k, v in kwargs.items()]))
+    elif kwargs:
+        kwd_arg_spec._cli_value = kwangs
+    if var_arg_spec and var_arg_spec.kind == 'required' and not args:
+        raise ScriptionError('\n04 - %r values are required\n' % vararg[0])
     # remove any command line args that shouldn't be passed on
-    sys.argv[:] = [arg for (i, arg) in enumerate(sys.argv) if i not in to_be_removed]
-    return tuple(positional + args), kwargs
+    new_args = []
+    for i, arg in enumerate(param_line_args):
+        if i not in to_be_removed:
+            if ' ' in arg:
+                new_args.extend(('"' + arg.replace('"','\\"') + '"').split())
+    sys.argv[1:] = new_args
+    main = {}
+    for name in Script.names:
+        annote = Script.settings[name]
+        value = annote.value
+        if annote._global:
+            script_module[name] = value
+        else:
+            main[name] = value
+    sub = {}
+    for name in func.names:
+        annote = func.__scription__[name]
+        value = annote.value
+        sub[name] = value
+    return main, sub
 
 def Main():
     "calls Run() only if the script is being run as __main__"
@@ -1010,42 +1138,42 @@ def Run():
     module['HAS_BEEN_RUN'] = True
     debug = Script.settings.get('SCRIPTION_DEBUG')
     try:
-        # prog_name = Path(sys.argv[0]).filename
         prog_name = os.path.split(sys.argv[0])[1]
         if debug:
             print(prog_name.filename)
-        if Script.command and Command.subcommands:
-            raise ScriptionError("scription does not support both Script and Command in the same file")
-        if Script.command is None and not Command.subcommands:
-            raise ScriptionError("either Script or Command must be specified")
-        if Command.subcommands:
-            func_name = sys.argv[1:2]
-            if not func_name:
-                func = None
-            else:
-                func = Command.subcommands.get(func_name[0])
-            if func is not None:
-                prog_name = func_name[0]
-                param_line = [prog_name] + sys.argv[2:]
-            else:
-                func = Command.subcommands.get(prog_name, None)
-                if func is not None:
-                    param_line = [prog_name] + sys.argv[1:]
-                else:
-                    for name, func in sorted(Command.subcommands.items()):
-                        try:
-                            usage(func, [name, '--help'])
-                        except SystemExit:
-                            print
-                            continue
-                    sys.exit(-1)
+        if not Command.subcommands:
+            raise ScriptionError("no Commands defined in script")
+        func_name = sys.argv[1:2]
+        if not func_name:
+            func = None
         else:
-            param_line = sys.argv[:]
-            func = Script.command
-        args, kwargs = usage(func, param_line)
-        _func_globals(func).update(Script.settings)
-        result = func(*args, **kwargs)
-        return result
+            func = Command.subcommands.get(func_name[0])
+        if func is not None:
+            prog_name = func_name[0]
+            param_line = [prog_name] + sys.argv[2:]
+        else:
+            func = Command.subcommands.get(prog_name, None)
+            if func is not None:
+                param_line = [prog_name] + sys.argv[1:]
+            else:
+                for name, func in sorted(Command.subcommands.items()):
+                    print func.__usage__
+                    # try:
+                    #     _usage(func, [name, '--help'])
+                    # except SystemExit:
+                    #     print
+                    #     continue
+                sys.exit(-1)
+        main, sub = _usage(func, param_line)
+        main_cmd = Script.command
+        # script_module.update(Script.settings)
+        if main_cmd:
+            script_module['script_command'] = subcommand = _run_once(_func, sub)
+            main_cmd(**main)
+            return subcommand()
+        else:
+            # no Script command, only subcommand
+            return func(**sub)
     except Exception:
         exc = sys.exc_info()[1]
         if debug:
