@@ -663,6 +663,8 @@ class Spec(object):
             arg_type_default = tuple()
             if default and not isinstance(default, tuple):
                 default = (default, )
+            if type is _identity:
+                type = str
         self.help = help
         self.kind = kind
         self.abbrev = abbrev
@@ -804,23 +806,24 @@ def _help(func):
         if spec is None:
             raise ScriptionError('%s not annotated' % name)
         help, kind, abbrev, arg_type, choices, usage_name, remove, default = spec
-        arg_type_default = empty
-        if name in vararg + keywordarg:
+        if name in vararg:
+            spec._type_default = tuple()
+            if kind is empty:
+                kind = 'multi'
+        elif name in keywordarg:
+            spec._type_default = dict()
             if kind is empty:
                 kind = 'option'
         elif kind == 'required':
             pos = max_pos
             max_pos += 1
         elif kind == 'flag':
-            arg_type_default = False
             if abbrev is empty:
                 abbrev = name[0]
         elif kind == 'option':
-            arg_type_default = None
             if abbrev is empty:
                 abbrev = name[0]
         elif kind == 'multi':
-            arg_type_default = tuple()
             if abbrev is empty:
                 abbrev = name[0]
             if default and not isinstance(default, tuple):
@@ -833,13 +836,11 @@ def _help(func):
             usage_name = name.upper()
         if arg_type is _identity and default is not empty:
             arg_type = type(default)
-        # spec = Spec(help, kind, abbrev, arg_type, choices, usage_name, remove, default)
         spec.kind = kind
         spec.abbrev = abbrev
         spec.type = arg_type
         spec.usage = usage_name
         spec._script_default = default
-        spec._type_default = arg_type_default
         if pos != max_pos:
             annotations[i] = spec
         annotations[name] = spec
@@ -937,7 +938,8 @@ def _run_once(func, kwds):
         if run_once:
             return cache[0]
         run_once = True
-        result = func(**kwds)
+        args = kwds.pop('', tuple())
+        result = func(*args, **kwds)
         cache.append(result)
         return result
     return later
@@ -968,14 +970,10 @@ def _split_on_comma(text):
 
 def _usage(func, param_line_args):
     program = param_line_args[0]
-    args = []
-    kwargs = {}
     pos = 0
     max_pos = func.max_pos
     print_help = False
     value = None
-    rest = []
-    doubledash = False
     annotations = func.__scription__
     script_annotations = Script.settings
     var_arg_spec = kwd_arg_spec = None
@@ -986,6 +984,8 @@ def _usage(func, param_line_args):
         var_arg_spec = func._var_arg
     if func._kwd_arg:
         kwd_arg_spec = func._kwd_arg
+    if kwd_arg_spec:
+        kwd_arg_spec._cli_value = {}
     to_be_removed = []
     param_line_args = shlex.split(' '.join(param_line_args[1:]))
     for offset, item in enumerate(param_line_args + [None]):
@@ -1007,12 +1007,6 @@ def _usage(func, param_line_args):
             continue
         if item is None:
             break
-        if doubledash:
-            rest.append(item)
-            continue
-        if item == '--':
-            doubledash = True
-            continue
         if item.startswith('-'):
             # (multi)option or flag
             if item.lower() == '--help':
@@ -1064,7 +1058,7 @@ def _usage(func, param_line_args):
             item, value = kwd_arg_spec.type(item, value)
             if not isinstance(item, str):
                 raise ScriptionError('keyword names must be strings', ' '.join(param_line_args))
-            kwargs[item] = value
+            kwd_arg_spec._cli_value[item] = value
             value = None
         else:
             # positional (required?) argument
@@ -1079,31 +1073,16 @@ def _usage(func, param_line_args):
             else:
                 if var_arg_spec is None:
                     raise ScriptionError("don't know what to do with %r" % item)
-                item = var_arg_spec.type(item)
-                args.append(item)
+                var_arg_spec._cli_value += (var_arg_spec.type(item), )
     exc = None
-    if args and rest:
-        raise ScriptionError('-- should be used to separate %s arguments from the rest' % program)
-    elif rest:
-        args = rest
     if print_help:
         print('%s: usage -->' % program, program, func.__usage__)
         sys.exit()
-    # if pos < max_pos:
     for setting in set(func.__scription__.values()):
         if setting.kind == 'required':
             setting.value
-        # raise ScriptionError('\n01 - Invalid command line:  %r' % ' '.join(param_line_args))
-    if args and not _var_arg_spec:
-        raise ScriptionError("\n02 - don't know what to do with %r" % ', '.join(args))
-    elif args:
-        var_arg_spec._cli_value = args
-    if kwargs and not kwd_arg_spec:
-        raise ScriptionError("\n03 - don't know what to do with %r" % ', '.join(['%s=%s' % (k, v) for k, v in kwargs.items()]))
-    elif kwargs:
-        kwd_arg_spec._cli_value = kwangs
-    if var_arg_spec and var_arg_spec.kind == 'required' and not args:
-        raise ScriptionError('\n04 - %r values are required\n' % vararg[0])
+    if var_arg_spec and var_arg_spec.kind == 'required':
+        var_arg_spec.value
     # remove any command line args that shouldn't be passed on
     new_args = []
     for i, arg in enumerate(param_line_args):
@@ -1118,12 +1097,22 @@ def _usage(func, param_line_args):
         if annote._global:
             script_module[name] = value
         else:
-            main[name] = value
+            if annote is var_arg_spec:
+                main[''] = value
+            elif annote is kwd_arg_spec:
+                main.update(value)
+            else:
+                main[name] = value
     sub = {}
     for name in func.names:
         annote = func.__scription__[name]
         value = annote.value
-        sub[name] = value
+        if annote is var_arg_spec:
+            sub[''] = value
+        elif annote is kwd_arg_spec:
+            sub.update(value)
+        else:
+            sub[name] = value
     return main, sub
 
 def Main():
@@ -1156,32 +1145,29 @@ def Run():
             if func is not None:
                 param_line = [prog_name] + sys.argv[1:]
             else:
+                module['HAS_BEEN_RUN'] = True
                 for name, func in sorted(Command.subcommands.items()):
-                    print func.__usage__
-                    # try:
-                    #     _usage(func, [name, '--help'])
-                    # except SystemExit:
-                    #     print
-                    #     continue
+                    print("\n%s %s" % (name, func.__usage__[1:]))
                 sys.exit(-1)
         main, sub = _usage(func, param_line)
         main_cmd = Script.command
-        # script_module.update(Script.settings)
+        subcommand = _run_once(func, sub)
         if main_cmd:
-            script_module['script_command'] = subcommand = _run_once(_func, sub)
-            main_cmd(**main)
+            script_module['script_command'] = subcommand
+            varargs = main.pop('', tuple())
+            main_cmd(*varargs, **main)
             return subcommand()
         else:
             # no Script command, only subcommand
-            return func(**sub)
+            return subcommand()
     except Exception:
         exc = sys.exc_info()[1]
         if debug:
             print(exc)
         result = log_exception()
         script_module['exception_lines'] = result
-        if isinstance(exc, ScriptionError):
-            raise SystemExit(str(exc))
+        # if isinstance(exc, ScriptionError):
+        #     raise SystemExit(str(exc))
         raise
 
 def Bool(arg):

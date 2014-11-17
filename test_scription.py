@@ -2,9 +2,7 @@ from scription import Script, Command, Run, Spec, InputFile, Bool, _usage, versi
 from scription import *
 from path import Path
 from unittest import TestCase, main
-import atexit
-
-atexit.register = lambda func: True
+import scription
 
 print('Scription', version)
 
@@ -14,20 +12,22 @@ print('Scription', version)
 #    print jobstep, blah, stuff
 
 def test_func_parsing(obj, func, tests, test_type=False):
-    for params, main, sub in tests:
-        res_main, res_sub = _usage(func, params)
-        obj.assertEqual((res_main, res_sub), (main, sub))
-        if test_type:
-            for rk, rv in res_main.items():
-                obj.assertTrue(type(rv) is type(main[rk]))
-            for rk, rv in res_sub.items():
-                obj.assertTrue(type(rv) is type(sub[rk]))
+    try:
+        for params, main, sub in tests:
+            res_main, res_sub = _usage(func, params)
+            obj.assertEqual((res_main, res_sub), (main, sub))
+            if test_type:
+                for rk, rv in res_main.items():
+                    obj.assertTrue(type(rv) is type(main[rk]))
+                for rk, rv in res_sub.items():
+                    obj.assertTrue(type(rv) is type(sub[rk]))
 
-        for spec in set(func.__scription__.values()):
-            spec._cli_value = empty
-    Script.command = None
-    Script.settings = {}
-    Script.names = []
+            for spec in set(func.__scription__.values()):
+                spec._cli_value = empty
+    finally:
+        Script.command = None
+        Script.settings = {}
+        Script.names = []
 
 class TestCommandlineProcessing(TestCase):
 
@@ -200,6 +200,19 @@ class TestCommandlineProcessing(TestCase):
                 )
         test_func_parsing(self, query, tests)
 
+    def test_varargs(self):
+        @Command(
+                files=('files to destroy', 'required', None),
+                )
+        def rm(*files):
+            pass
+        tests = (
+                ('rm this.txt'.split(), {}, {'':('this.txt', )} ),
+                ('rm those.txt that.doc'.split(), {}, {'':('those.txt', 'that.doc')} ),
+                )
+        test_func_parsing(self, rm, tests)
+
 
 if __name__ == '__main__':
+    scription.HAS_BEEN_RUN = True
     main()
