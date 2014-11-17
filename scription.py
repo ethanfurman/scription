@@ -844,13 +844,13 @@ def _help(func):
         if pos != max_pos:
             annotations[i] = spec
         annotations[name] = spec
+        if abbrev not in (None, empty):
+            annotations[abbrev] = spec
     func._var_arg = func._kwd_arg = None
     if vararg:
         func._var_arg = annotations[vararg[0]]
     if keywordarg:
         func._kwd_arg = annotations[keywordarg[0]]
-    if abbrev not in (None, empty):
-        annotations[abbrev] = spec
     if defaults:
         for name, dflt in zip(reversed(params), reversed(defaults)):
             annote = annotations[name]
