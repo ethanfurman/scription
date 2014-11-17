@@ -1165,8 +1165,8 @@ def Run():
             print(exc)
         result = log_exception()
         script_module['exception_lines'] = result
-        # if isinstance(exc, ScriptionError):
-        #     raise SystemExit(str(exc))
+        if isinstance(exc, ScriptionError):
+            raise SystemExit(str(exc))
         raise
 
 def Bool(arg):
