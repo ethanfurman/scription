@@ -68,7 +68,7 @@ __all__ = (
     'get_response', 'user_ids',
     )
 
-version = 0, 71, 0
+version = 0, 71, 1
 
 module = globals()
 script_module = None
@@ -931,12 +931,6 @@ class _namespace(object):
             raise ScriptionError("namespace object has nothing named %r" % name)
     def __setitem__(self, name, value):
         self.__dict__[name] = value
-
-# def _order_arguments(arg_dict):
-#     '''
-#     returns a tuple and dict that can be fed into a function
-#     '''
-#     items = sorted(arg_dict.items(), key=lambda item: item._order)
 
 def _run_once(func, args, kwds):
     cache = []
