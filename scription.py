@@ -14,7 +14,6 @@ if not is_win:
     import signal
     import termios
 
-import atexit
 import datetime
 import email
 import inspect
@@ -62,7 +61,8 @@ from syslog import syslog
 # data
 __all__ = (
     'Alias', 'Command', 'Script', 'Run', 'Spec',
-    'Bool','InputFile', 'OutputFile', 'IniFile',
+    'Bool','InputFile', 'OutputFile',
+    'IniError', 'IniFile', 'OrmError', 'OrmFile',
     'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'REQUIRED',
     'ScriptionError', 'ExecuteError', 'Execute',
     'get_response', 'user_ids',
@@ -370,17 +370,20 @@ def get_response(
         print(retry)
     return type(answer)
 
-class IniError(ValueError):
+class OrmError(ValueError):
     """
-    used to signify errors in the ini file
+    used to signify errors in the ORM file
     """
 
-class IniFile(object):
+class OrmFile(object):
     """
-    read and make available the settings of an ini file, converting
-    the values as str, int, float, date, time, datetime based on:
+    lightweight ORM for scalar values
+
+    read and make available the settings of a configuration file,
+    converting the values as str, int, float, date, time, or
+    datetime based on:
       - presence of quotes
-      - presenc of colons and/or hyphens
+      - presence of colons and/or hyphens
       - presence of period
     """
     _str = str
@@ -525,7 +528,9 @@ class IniFile(object):
             return self._bool(False)
         else:
             return self._int(value)
-
+# deprecated, will remove at some point
+IniError = OrmError
+IniFile = OrmFile
 
 
 def log_exception(tb=None):
@@ -718,9 +723,6 @@ class Command(object):
         func.names = list(self.annotations.keys())
         _add_annotations(func, self.annotations)
         Command.subcommands[func.__name__] = func
-        if not module['registered']:
-            atexit.register(Main)
-            module['registered'] = True
         _help(func)
         return func
 
@@ -758,9 +760,6 @@ class Script(object):
         _help(func)
         Script.settings = func.__scription__
         Script.command = staticmethod(func)
-        if not module['registered']:
-            atexit.register(Main)
-            module['registered'] = True
         return func
 
 def _add_annotations(func, annotations, script=False):
