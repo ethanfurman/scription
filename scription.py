@@ -1165,10 +1165,7 @@ def Run():
         if main_cmd:
             script_module['script_command'] = subcommand
             main_cmd(*main_args, **main_kwds)
-            return subcommand()
-        else:
-            # no Script command, only subcommand
-            return subcommand()
+        return subcommand()
     except Exception:
         exc = sys.exc_info()[1]
         if debug:
