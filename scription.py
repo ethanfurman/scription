@@ -9,7 +9,7 @@ global script variables:  i.e. debug=True (python expression)
 import sys
 is_win = sys.platform.startswith('win')
 if not is_win:
-    import pty
+    from pty import fork
     import resource
     import signal
     import termios
@@ -60,7 +60,7 @@ from syslog import syslog
 
 # data
 __all__ = (
-    'Alias', 'Command', 'Script', 'Run', 'Spec',
+    'Alias', 'Command', 'Script', 'Main', 'Run', 'Spec',
     'Bool','InputFile', 'OutputFile',
     'IniError', 'IniFile', 'OrmError', 'OrmFile',
     'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'REQUIRED',
@@ -162,52 +162,63 @@ ExecutionError = ExecuteError
 
 class Execute(object):
     """
-    if password specified, runs command in forked process, otherwise runs in subprocess
+    if pty is True runs command in a forked process, otherwise runs in a subprocess
     """
 
-    def __init__(self, args, bufsize=-1, cwd=None, password=None, timeout=None):
+    def __init__(self, args, bufsize=-1, cwd=None, password=None, timeout=None, pty=False):
         self.env = None
         if isinstance(args, basestring):
             args = shlex.split(args)
-        if password is None:
-            # use subprocess instead
-            process = Popen(args, stdout=PIPE, stderr=PIPE, cwd=cwd)
-            self.stdout = process.stdout.read().rstrip()
-            self.returncode = 0
-            self.stderr = process.stderr.read().rstrip()
-            if self.stderr:
-                self.returncode = -1
+        if not pty:
+            # use subprocess
+            process = Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE, cwd=cwd)
+            if password is not None:
+                if not isinstance(password, bytes):
+                    password = (password+'\n').encode('utf-8')
+                else:
+                    password += '\n'.encode('utf-8')
+            stdout, stderr = process.communicate(input=password)
+            self.stdout = stdout.rstrip().decode('utf-8')
+            self.stderr = stderr.rstrip().decode('utf-8')
+            self.returncode = process.returncode
             self.closed = True
             self.terminated = True
             self.signal = None
             return
         if is_win:
-            raise OSError("password support for Execute not currently implemented for Windows")
-        self.pid, self.child_fd = pty.fork()
+            raise OSError("pty support for Execute not currently implemented for Windows")
+        error_read, error_write = os.pipe()
+        self.pid, self.child_fd = fork()
         if self.pid == 0: # child process
+            os.close(error_read)
             self.child_fd = sys.stdout.fileno()
-            os.dup2(1, 2)
-            max_fd = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
-            for fd in range(3, max_fd):
-                try:
-                    os.close(fd)
-                except OSError:
-                    pass
-            if cwd:
-                os.chdir(cwd)
+            self.error_pipe = error_write
+            os.dup2(error_write, 2)
             try:
+                max_fd = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
+                for fd in range(3, max_fd):
+                    try:
+                        os.close(fd)
+                    except OSError:
+                        pass
+                if cwd:
+                    os.chdir(cwd)
                 if self.env:
                     os.execvpe(args[0], args, self.env)
                 else:
                     os.execvp(args[0], args)
             except Exception:
                 exc = sys.exc_info()[1]
-                print("%s:  %s" % (exc.__class__.__name__, ' - '.join([str(a) for a in exc.args])))
+                self.write_error("%s:  %s" % (exc.__class__.__name__, ' - '.join([str(a) for a in exc.args])))
                 os._exit(-1)
         # parent process
+        os.close(error_write)
+        self.error_pipe = error_read
         self.returncode = None
         self.signal = None
         output = []
+        self.stderr = []
+        self.error_available = False
         self.closed = False
         self.terminated = False
         submission_received = True
@@ -216,7 +227,8 @@ class Execute(object):
         last_comms = time.time()
         while self.is_alive():
             if not self.get_echo() and password and submission_received:
-                self.write(password + '\r\n')
+                self.write(password)
+                self.write('\r\n')
                 submission_received = False
             while pocket(self.read(1024)):
                 output.append(pocket())
@@ -228,8 +240,10 @@ class Execute(object):
         while pocket(self.read(1024)):
             output.append(pocket())
             time.sleep(0.1)
-        self.stdout = ''.join(output).rstrip()
-        self.stderr = ''
+        while self.error_available:
+            self.read_error()
+        self.stdout = ''.join(output).rstrip().replace('\r\n', '\n')
+        self.stderr = ''.join(self.stderr).rstrip().replace('\r\n', '\n')
         self.close()
 
     def close(self, force=True):
@@ -270,17 +284,33 @@ class Execute(object):
         "non-blocking read"
         if self.closed:
             raise ValueError("I/O operation on closed file.")
-        r, w, x = select.select([self.child_fd], [], [], 0)
+        r, w, x = select.select([self.child_fd, self.error_pipe], [], [], 0)
         if not r:
             return ''
+        result = None
         if self.child_fd in r:
             try:
                 result = os.read(self.child_fd, size)
             except OSError:
                 result = ''
-            return result.decode('utf-8')
-        raise ExecutionException('unknown problem with read')
+            result = result.decode('utf-8')
+        if self.error_pipe in r:
+            self.error_available = True
+        if result is not None:
+            return result
+        raise ExecuteError('unknown problem with read')
 
+    def read_error(self):
+        "only call if error output is available"
+        try:
+            result = os.read(self.error_pipe, 1024)
+        except OSError:
+            result = '<unknown error>'.encode('latin1')
+        result = result.decode('utf-8')
+        if not result:
+            self.error_available = False
+        else:
+            self.stderr.append(result)
 
     def terminate(self, force=False):
         if not self.is_alive():
@@ -303,6 +333,11 @@ class Execute(object):
         if not isinstance(data, bytes):
             data = data.encode('utf-8')
         os.write(self.child_fd, data)
+
+    def write_error(self, data):
+        if not isinstance(data, bytes):
+            data = data.encode('utf-8')
+        os.write(self.error_pipe, data)
 
 def get_response(
         question,

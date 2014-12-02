@@ -2,7 +2,14 @@ from scription import Script, Command, Run, Spec, InputFile, Bool, _usage, versi
 from scription import *
 from path import Path
 from unittest import TestCase, main
+import os
 import scription
+import shutil
+import sys
+import tempfile
+
+is_win = sys.platform.startswith('win')
+py_ver = sys.version_info[:2]
 
 print('Scription', version)
 
@@ -236,6 +243,92 @@ class TestCommandlineProcessing(TestCase):
                 )
         test_func_parsing(self, sassy, tests)
 
+class TestExecution(TestCase):
+
+    def setUp(self):
+        self.good_file = good_file_path = os.path.join(tempdir, 'good_output')
+        good_file = open(good_file_path, 'w')
+        try:
+            good_file.write("print('good output here!')")
+        finally:
+            good_file.close()
+        self.bad_file = bad_file_path = os.path.join(tempdir, 'bad_output')
+        bad_file = open(bad_file_path, 'w')
+        try:
+            bad_file.write("raise ValueError('uh-oh -- bad value!')")
+        finally:
+            bad_file.close()
+        self.mixed_file = mixed_file_name = os.path.join(tempdir, 'mixed_output')
+        mixed_file = open(mixed_file_name, 'w')
+        try:
+            mixed_file.write(
+                    "print('good night')\n"
+                    "print('sweetheart!')\n"
+                    "raise KeyError('the key is missing?')"
+                    )
+        finally:
+            mixed_file.close()
+        self.pty_password_file = password_file_name = os.path.join(tempdir, 'get_pty_pass')
+        password_file = open(password_file_name, 'w')
+        try:
+            password_file.write(
+                    "from getpass import getpass\n"
+                    "print('super secret santa soda sizzle?')\n"
+                    "password = getpass('make sure no one is watching you type!: ')\n"
+                    "print('%r?  Are you sure??' % password)"
+                    )
+        finally:
+            password_file.close()
+        self.subp_password_file = password_file_name = os.path.join(tempdir, 'get_subp_pass')
+        password_file = open(password_file_name, 'w')
+        try:
+            password_file.write(
+                    "print('super secret santa soda sizzle?')\n"
+                    "password = %sinput('make sure no one is watching you type!: ')\n"
+                    "print('%%r?  Are you sure??' %% password)"
+                    % ('', 'raw_')[py_ver < (3, 0)]
+                    )
+        finally:
+            password_file.close()
+
+    if not is_win:
+        def test_pty(self):
+            command = Execute(['/usr/bin/python', self.good_file], pty=True)
+            self.assertEqual(command.stdout, 'good output here!')
+            self.assertEqual(command.stderr, '')
+            command = Execute(['/usr/bin/python', self.bad_file], pty=True)
+            self.assertEqual(command.stdout, '')
+            self.assertTrue(command.stderr.endswith('ValueError: uh-oh -- bad value!'))
+            command = Execute(['/usr/bin/python', self.mixed_file], pty=True)
+            self.assertEqual(command.stdout, 'good night\nsweetheart!')
+            self.assertTrue(command.stderr.endswith("KeyError: 'the key is missing?'"),
+                    'Failed (actual results):\n%s' % command.stderr)
+            command = Execute(['/usr/bin/python', self.pty_password_file], pty=True, password='Salutations!')
+            self.assertEqual(command.stdout, "super secret santa soda sizzle?\nmake sure no one is watching you type!: \n'Salutations!'?  Are you sure??",
+                    'Failed (actual results):\n%r' % command.stdout)
+            self.assertEqual(command.stderr, '')
+
+    def test_subprocess(self):
+        command = Execute(['/usr/bin/python', self.good_file], pty=False)
+        self.assertEqual(command.stdout, 'good output here!')
+        self.assertEqual(command.stderr, '')
+        command = Execute(['/usr/bin/python', self.bad_file], pty=False)
+        self.assertEqual(command.stdout, '')
+        self.assertTrue(command.stderr.endswith('ValueError: uh-oh -- bad value!'))
+        command = Execute(['/usr/bin/python', self.mixed_file], pty=False)
+        self.assertEqual(command.stdout, 'good night\nsweetheart!')
+        self.assertTrue(command.stderr.endswith("KeyError: 'the key is missing?'"),
+                'Failed (actual results):\n%r' % command.stderr)
+        command = Execute(['/usr/bin/python', self.subp_password_file], pty=False, password='Salutations!')
+        self.assertTrue(command.stdout.startswith("super secret santa soda sizzle?\nmake sure no one is watching you type!: 'Salutations!'?  Are you sure??"),
+                'Failed (actual results):\n%r' % command.stdout)
+        self.assertEqual(command.stderr, '')
+
+
 if __name__ == '__main__':
     scription.HAS_BEEN_RUN = True
-    main()
+    tempdir = tempfile.mkdtemp()
+    try:
+        main()
+    finally:
+        shutil.rmtree(tempdir)
