@@ -765,7 +765,8 @@ class Command(object):
         if script_module is None:
             script_module = _func_globals(func)
             script_module['module'] = _namespace(script_module)
-        func.names = list(self.annotations.keys())
+        func.names = sorted(self.annotations.keys())
+        func.name_max = max(map(len, func.names))
         _add_annotations(func, self.annotations)
         Command.subcommands[func.__name__] = func
         _help(func)
@@ -791,10 +792,24 @@ class Script(object):
                 else:
                     kind = 'option'
                 spec = Spec('', kind, None, type(annotation), default=annotation)
-                spec._global = True
+            if spec.usage is empty:
+                spec.usage = name.upper()
             settings[name] = spec
         Script.settings = settings
-        Script.names = list(settings.keys())
+        Script.names = sorted(settings.keys())
+        Script.name_max = max(map(len, Script.names))
+        num_keys = len(Script.names)
+        for i, name in enumerate(Script.names):
+            settings[name]._order = i + num_keys
+        def psyche():
+            pass
+        _add_annotations(psyche, settings, script=True)
+        psyche.names = Script.names
+        psyche.name_max = Script.name_max
+        _help(psyche)
+        Script.__usage__ = psyche.__usage__
+        for i, name in enumerate(Script.names):
+            settings[name]._global = True
     def __call__(self, func):
         if Script.command is not None:
             raise ScriptionError("Script can only be used once")
@@ -802,8 +817,11 @@ class Script(object):
         script_module = _func_globals(func)
         script_module['module'] = _namespace(script_module)
         _add_annotations(func, Script.settings, script=True)
+        func.names = Script.names
+        func.name_max = Script.name_max
         _help(func)
         Script.settings = func.__scription__
+        Script.__usage__ = func.__usage__
         Script.command = staticmethod(func)
         return func
 
@@ -818,6 +836,8 @@ def _add_annotations(func, annotations, script=False):
         if spec not in names:
             if not script:
                 errors.append(spec)
+        else:
+            annotations[spec]._global = False
     if errors:  
         raise ScriptionError("names %r not in %s's signature" % (errors, func.__name__))
     func.__scription__ = annotations
@@ -891,6 +911,11 @@ def _help(func):
         annotations[name] = spec
         if abbrev not in (None, empty):
             annotations[abbrev] = spec
+    usage_max = 0
+    help_max = 0
+    for annote in annotations.values():
+        usage_max = max(usage_max, len(annote.usage))
+        help_max = max(help_max, len(annote.help))
     func._var_arg = func._kwd_arg = None
     if vararg:
         func._var_arg = annotations[vararg[0]]
@@ -920,8 +945,11 @@ def _help(func):
             keywordarg_type = lambda k, v: (kywd_func[0](k), kywd_func[1](v))
         else:
             keywordarg_type = lambda k, v: (k, kywd_func(v))
+    # also prepare help for global options
+    func_names = func.names
+    global_params = [n for n in func_names if n not in params+vararg+keywordarg]
     print_params = []
-    for param in params:
+    for param in global_params + params:
         example = annotations[param].usage
         if annotations[param].kind == 'flag':
             print_params.append('--%s' % param)
@@ -933,13 +961,13 @@ def _help(func):
             print_params.append(example)
     usage = print_params
     if vararg:
-        usage.append("[%s [%s [...]]]" % (vararg[0], vararg[0]))
+        usage.append("[%s [%s [...]]]" % (func._var_arg.usage, func._var_arg.usage))
     if keywordarg:
         usage.append("[name1=value1 [name2=value2 [...]]]")
     usage = [' '.join(usage), '']
     if func.__doc__:
         usage.extend(['    ' + func.__doc__.strip(), ''])
-    for name in params:
+    for name in global_params + params + vararg + keywordarg:
         annote = annotations[name]
         choices = ''
         if annote._script_default is empty or annote._script_default is None or '[default: ' in annote.help:
@@ -948,14 +976,14 @@ def _help(func):
             posi = '[default: ' + repr(annote._script_default) + ']'
         if annote.choices:
             choices = '[ %s ]' % ' | '.join(annote.choices)
-        usage.append('    %-15s %s %s %s' % (
+        usage.append('    %-*s   %-*s   %s %s' % (
+            usage_max,
             annote.usage,
+            help_max,
             annote.help,
             posi,
             choices,
             ))
-    for name in (vararg + keywordarg):
-        usage.append('    %-15s %s' % (name, annotations[name].help))
     func.max_pos = max_pos
     func.__usage__ = '\n'.join(usage)
 
@@ -1201,6 +1229,8 @@ def Run():
             if func is not None:
                 param_line = [prog_name] + sys.argv[1:]
             else:
+                if Script.command is not None:
+                    print("\nglobal options: %s" % Script.command.__usage__)
                 for name, func in sorted(Command.subcommands.items()):
                     print("\n%s %s" % (name, func.__usage__))
                 os._exit(-1)
