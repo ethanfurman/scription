@@ -430,10 +430,18 @@ class OrmFile(object):
     _float = float
     _int = int
 
-    def __init__(self, filename, section=None, export_to=None):
+    def __init__(self, filename, section=None, export_to=None, types={}):
         # if section, only return defaults merged with section
         # if export_to, it should be a mapping, and will be populated
         # with the settings
+        # if types, use those instead of the default orm types
+        for n, t in types.items():
+            if n not in (
+                    '_str', '_path', '_date', '_time', '_datetime',
+                    '_bool', '_float', '_int',
+                    ):
+                raise TypeError('invalid orm type: %r' % n)
+            setattr(self, n, t)
         if section:
             section = section.lower()
         target_section = section
@@ -485,7 +493,8 @@ class OrmFile(object):
     def __setattr__(self, name, value):
         if name in ('_settings', '_str', '_path', '_date', '_time', '_datetime', '_bool', '_float', '_int'):
             object.__setattr__(self, name, value)
-        self._settings[name] = value
+        else:
+            self._settings[name] = value
 
     def __setitem__(self, name, value):
         self._settings[name] = value
@@ -626,8 +635,9 @@ def mail(server, port, message):
         for server, (code, response) in errors:
             syslog('%s: %s --> %s: %s' % (server, user, code, response))
 
-def pocket(value=None, _pocket=[]):
-    if value is not None:
+_pocket_sentinel = object()
+def pocket(value=_pocket_sentinel, _pocket=[]):
+    if value is not _pocket_sentinel:
         _pocket[:] = [value]
     return _pocket[0]
 

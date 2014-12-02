@@ -2,6 +2,7 @@ from scription import Script, Command, Run, Spec, InputFile, Bool, _usage, versi
 from scription import *
 from path import Path
 from unittest import TestCase, main
+import datetime
 import os
 import scription
 import shutil
@@ -324,6 +325,63 @@ class TestExecution(TestCase):
                 'Failed (actual results):\n%r' % command.stdout)
         self.assertEqual(command.stderr, '')
 
+
+class TestOrm(TestCase):
+
+    def setUp(self):
+        self.orm_file = orm_file_name = os.path.join(tempdir, 'test.orm')
+        orm_file = open(orm_file_name, 'w')
+        try:
+            orm_file.write(
+                    "home = /usr/bin\n"
+                    'who = "ethan"\n'
+                    "\n"
+                    "[hg]\n"
+                    "home = /usr/local/bin\n"
+                    "when = 12:45\n"
+                    )
+        finally:
+            orm_file.close()
+
+    def test_standard(self):
+        complete = OrmFile(self.orm_file)
+        self.assertEqual(complete.home, '/usr/bin')
+        self.assertEqual(complete.who, 'ethan')
+        self.assertEqual(complete.hg.home, '/usr/local/bin')
+        self.assertEqual(complete.hg.who, 'ethan')
+        self.assertEqual(complete.hg.when, datetime.time(12, 45))
+        self.assertTrue(type(complete.home) is str)
+        self.assertTrue(type(complete.who) is str)
+        self.assertTrue(type(complete.hg.when) is datetime.time)
+        hg = OrmFile(self.orm_file, section='hg')
+        self.assertEqual(hg.home, '/usr/local/bin')
+        self.assertEqual(hg.who, 'ethan')
+        self.assertEqual(hg.when, datetime.time(12, 45))
+        self.assertTrue(type(hg.home) is str)
+        self.assertTrue(type(hg.who) is str)
+        self.assertTrue(type(hg.when) is datetime.time)
+
+    def test_custom(self):
+        class Path(str):
+            pass
+        class Time(datetime.time):
+            pass
+        complete = OrmFile(self.orm_file, types={'_path':Path, '_time':Time})
+        self.assertEqual(complete.home, '/usr/bin')
+        self.assertEqual(complete.who, 'ethan')
+        self.assertEqual(complete.hg.home, '/usr/local/bin')
+        self.assertEqual(complete.hg.who, 'ethan')
+        self.assertEqual(complete.hg.when, datetime.time(12, 45))
+        self.assertTrue(type(complete.home) is Path)
+        self.assertTrue(type(complete.hg.who) is str)
+        self.assertTrue(type(complete.hg.when) is Time)
+        hg = OrmFile(self.orm_file, section='hg', types={'_path':Path, '_time':Time})
+        self.assertEqual(hg.home, '/usr/local/bin')
+        self.assertEqual(hg.who, 'ethan')
+        self.assertEqual(hg.when, datetime.time(12, 45))
+        self.assertTrue(type(hg.home) is Path)
+        self.assertTrue(type(hg.who) is str)
+        self.assertTrue(type(hg.when) is Time)
 
 if __name__ == '__main__':
     scription.HAS_BEEN_RUN = True
