@@ -7,13 +7,20 @@ global script variables:  i.e. debug=True (python expression)
 """
 
 import sys
+py_ver = sys.version_info[:2]
 is_win = sys.platform.startswith('win')
 if not is_win:
     from pty import fork
     import resource
-    import signal
     import termios
-
+    from syslog import syslog
+    import signal
+    kill_signals = signal.SIGHUP, signal.SIGINT
+elif py_ver >= (2, 7):
+    import signal
+    kill_signals = signal.CTRL_C_EVENT, signal.CTRL_BREAK_EVENT
+else:
+    kill_signals = ()
 import datetime
 import email
 import inspect
@@ -30,7 +37,6 @@ import traceback
 from enum import Enum
 from functools import partial
 from subprocess import Popen, PIPE, STDOUT
-from syslog import syslog
 
 """
 (help, kind, abbrev, type, choices, usage_name, remove)
@@ -73,7 +79,6 @@ version = 0, 72, 0
 module = globals()
 script_module = None
 
-py_ver = sys.version_info[:2]
 registered = False
 run_once = False
 
@@ -178,8 +183,8 @@ class Execute(object):
                 else:
                     password += '\n'.encode('utf-8')
             stdout, stderr = process.communicate(input=password)
-            self.stdout = stdout.rstrip().decode('utf-8')
-            self.stderr = stderr.rstrip().decode('utf-8')
+            self.stdout = stdout.rstrip().decode('utf-8').replace('\r\n', '\n')
+            self.stderr = stderr.rstrip().decode('utf-8').replace('\r\n', '\n')
             self.returncode = process.returncode
             self.closed = True
             self.terminated = True
@@ -315,7 +320,7 @@ class Execute(object):
     def terminate(self, force=False):
         if not self.is_alive():
             return True
-        for sig in (signal.SIGHUP, signal.SIGINT):
+        for sig in kill_signals:
             os.kill(self.pid, sig)
             time.sleep(0.1)
             if not self.is_alive():
@@ -631,9 +636,10 @@ def mail(server, port, message):
                     errs[user] = [send_errs[user], (server, exc.recipients[user])]
                 finally:
                     smtp.quit()
-    for user, errors in errs.items():
-        for server, (code, response) in errors:
-            syslog('%s: %s --> %s: %s' % (server, user, code, response))
+    if not is_win:
+        for user, errors in errs.items():
+            for server, (code, response) in errors:
+                syslog('%s: %s --> %s: %s' % (server, user, code, response))
 
 _pocket_sentinel = object()
 def pocket(value=_pocket_sentinel, _pocket=[]):

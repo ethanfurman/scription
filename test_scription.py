@@ -294,33 +294,33 @@ class TestExecution(TestCase):
 
     if not is_win:
         def test_pty(self):
-            command = Execute(['/usr/bin/python', self.good_file], pty=True)
+            command = Execute([sys.executable, self.good_file], pty=True)
             self.assertEqual(command.stdout, 'good output here!')
             self.assertEqual(command.stderr, '')
-            command = Execute(['/usr/bin/python', self.bad_file], pty=True)
+            command = Execute([sys.executable, self.bad_file], pty=True)
             self.assertEqual(command.stdout, '')
             self.assertTrue(command.stderr.endswith('ValueError: uh-oh -- bad value!'))
-            command = Execute(['/usr/bin/python', self.mixed_file], pty=True)
+            command = Execute([sys.executable, self.mixed_file], pty=True)
             self.assertEqual(command.stdout, 'good night\nsweetheart!')
             self.assertTrue(command.stderr.endswith("KeyError: 'the key is missing?'"),
                     'Failed (actual results):\n%s' % command.stderr)
-            command = Execute(['/usr/bin/python', self.pty_password_file], pty=True, password='Salutations!')
+            command = Execute([sys.executable, self.pty_password_file], pty=True, password='Salutations!')
             self.assertEqual(command.stdout, "super secret santa soda sizzle?\nmake sure no one is watching you type!: \n'Salutations!'?  Are you sure??",
                     'Failed (actual results):\n%r' % command.stdout)
             self.assertEqual(command.stderr, '')
 
     def test_subprocess(self):
-        command = Execute(['/usr/bin/python', self.good_file], pty=False)
+        command = Execute([sys.executable, self.good_file], pty=False)
         self.assertEqual(command.stdout, 'good output here!')
         self.assertEqual(command.stderr, '')
-        command = Execute(['/usr/bin/python', self.bad_file], pty=False)
+        command = Execute([sys.executable, self.bad_file], pty=False)
         self.assertEqual(command.stdout, '')
         self.assertTrue(command.stderr.endswith('ValueError: uh-oh -- bad value!'))
-        command = Execute(['/usr/bin/python', self.mixed_file], pty=False)
+        command = Execute([sys.executable, self.mixed_file], pty=False)
         self.assertEqual(command.stdout, 'good night\nsweetheart!')
         self.assertTrue(command.stderr.endswith("KeyError: 'the key is missing?'"),
                 'Failed (actual results):\n%r' % command.stderr)
-        command = Execute(['/usr/bin/python', self.subp_password_file], pty=False, password='Salutations!')
+        command = Execute([sys.executable, self.subp_password_file], pty=False, password='Salutations!')
         self.assertTrue(command.stdout.startswith("super secret santa soda sizzle?\nmake sure no one is watching you type!: 'Salutations!'?  Are you sure??"),
                 'Failed (actual results):\n%r' % command.stdout)
         self.assertEqual(command.stderr, '')
