@@ -68,7 +68,7 @@ __all__ = (
     'get_response', 'user_ids',
     )
 
-version = 0, 71, 1
+version = 0, 72, 0
 
 module = globals()
 script_module = None
@@ -1261,21 +1261,3 @@ def InputFile(arg):
 
 def OutputFile(arg):
     return open(arg, 'w')
-
-
-# from scription.api import *
-
-class fake_module(object):
-
-    def __init__(self, name, *args):
-        self.name = name
-        self.__all__ = []
-        all_objects = globals()
-        for name in args:
-            self.__dict__[name] = all_objects[name]
-            self.__all__.append(name)
-
-    def register(self):
-        sys.modules["%s.%s" % (__name__, self.name)] = self
-
-fake_module('api', *__all__).register()
