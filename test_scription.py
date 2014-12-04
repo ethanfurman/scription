@@ -244,6 +244,17 @@ class TestCommandlineProcessing(TestCase):
                 )
         test_func_parsing(self, sassy, tests)
 
+    def test_kwds(self):
+        @Command(
+                hirelings=('who to boss around', ),
+                )
+        def bossy(**hirelings):
+            pass
+        tests = (
+                ('bossy larry=stupid curly=lazy moe=dumb'.split(), (), {}, (), {'larry':'stupid', 'curly':'lazy', 'moe':'dumb'}),
+                )
+        test_func_parsing(self, bossy, tests)
+
 class TestExecution(TestCase):
 
     def setUp(self):

@@ -736,6 +736,10 @@ class Spec(object):
     def __iter__(self):
         return iter((self.help, self.kind, self.abbrev, self.type, self.choices, self.usage, self.remove, self._script_default))
 
+    def __repr__(self):
+        return "Spec(help=%r, kind=%r, abbrev=%r, type=%r, choices=%r, usage=%r, remove=%r)" % (
+                self.help, self.kind, self.abbrev, self.type, self.choices, self.usage, self.remove)
+
     @property
     def value(self):
         if self._cli_value is not empty:
@@ -745,8 +749,7 @@ class Spec(object):
         elif self._type_default is not empty:
             value = self._type_default
         else:
-            raise ScriptionError('Spec object has no value (<%r, %r, %r, %r, %r, %r>)' %
-                    (self.help, self.kind, self.abbrev, self.type, self.choices, self._type_default))
+            raise ScriptionError('no value specified for %s' % self.usage)
         return value
 
 class Alias(object):
@@ -771,8 +774,6 @@ class Command(object):
         if script_module is None:
             script_module = _func_globals(func)
             script_module['module'] = _namespace(script_module)
-        func.names = sorted(self.annotations.keys())
-        func.name_max = max(map(len, func.names))
         _add_annotations(func, self.annotations)
         Command.subcommands[func.__name__] = func
         _help(func)
@@ -783,6 +784,9 @@ class Script(object):
     command = None
     settings = {}
     names = []
+    all_params = []
+    named_params = []
+    __usage__ = None
     def __init__(self, **settings):
         if Script.command is not None:
             raise ScriptionError("Script can only be used once")
@@ -803,19 +807,18 @@ class Script(object):
             settings[name] = spec
         Script.settings = settings
         Script.names = sorted(settings.keys())
-        Script.name_max = max(map(len, Script.names))
         num_keys = len(Script.names)
         for i, name in enumerate(Script.names):
             settings[name]._order = i + num_keys
         def psyche():
             pass
         _add_annotations(psyche, settings, script=True)
-        psyche.names = Script.names
-        psyche.name_max = Script.name_max
+        # psyche.names = Script.names
+        # psyche.all_params = Script.all_params
+        # psyche.named_params = Script.named_params
         _help(psyche)
+        Script.names = psyche.names
         Script.__usage__ = psyche.__usage__
-        for i, name in enumerate(Script.names):
-            settings[name]._global = True
     def __call__(self, func):
         if Script.command is not None:
             raise ScriptionError("Script can only be used once")
@@ -823,9 +826,9 @@ class Script(object):
         script_module = _func_globals(func)
         script_module['module'] = _namespace(script_module)
         _add_annotations(func, Script.settings, script=True)
-        func.names = Script.names
-        func.name_max = Script.name_max
         _help(func)
+        Script.all_params = func.all_params
+        Script.named_params = func.named_params
         Script.settings = func.__scription__
         Script.__usage__ = func.__usage__
         Script.command = staticmethod(func)
@@ -836,17 +839,25 @@ def _add_annotations(func, annotations, script=False):
     add annotations as __scription__ to func
     '''
     params, varargs, keywords, defaults = inspect.getargspec(func)
-    names = params + [varargs, keywords]
+    names = params
+    if varargs:
+        names.append(varargs)
+    if keywords:
+        names.append(keywords)
     errors = []
     for spec in annotations:
         if spec not in names:
             if not script:
                 errors.append(spec)
+            annotations[spec]._global = True
         else:
             annotations[spec]._global = False
     if errors:  
         raise ScriptionError("names %r not in %s's signature" % (errors, func.__name__))
     func.__scription__ = annotations
+    func.names = sorted(annotations.keys())
+    func.all_params = sorted(names)
+    func.named_params = sorted(params)
 
 def _func_globals(func):
     '''
@@ -952,8 +963,7 @@ def _help(func):
         else:
             keywordarg_type = lambda k, v: (k, kywd_func(v))
     # also prepare help for global options
-    func_names = func.names
-    global_params = [n for n in func_names if n not in params+vararg+keywordarg]
+    global_params = [n for n in func.names if n not in func.all_params]
     print_params = []
     for param in global_params + params:
         example = annotations[param].usage
@@ -1131,7 +1141,7 @@ def _usage(func, param_line_args):
                 raise ScriptionError("don't know what to do with %r" % item)
             item, value = item.split('=')
             item = item.replace('-','_')
-            if item in params:
+            if item in func.named_params:
                 raise ScriptionError('%s must be specified as a %s' % (item, annotations[item].kind))
             item, value = kwd_arg_spec.type(item, value)
             if not isinstance(item, str):
@@ -1144,7 +1154,7 @@ def _usage(func, param_line_args):
                 annote = annotations[pos]
                 # check for choices membership before transforming into a type
                 if annote.choices and item not in annote.choices:
-                    raise ScriptionError('%r not in [ %s ]' % (item, ' | '.join(annote.choices)))
+                    raise ScriptionError('%s: %r not in [ %s ]' % (annote.usage, item, ' | '.join(annote.choices)))
                 item = annote.type(item)
                 annote._cli_value = item
                 pos += 1
@@ -1154,6 +1164,8 @@ def _usage(func, param_line_args):
                 var_arg_spec._cli_value += (var_arg_spec.type(item), )
     exc = None
     if print_help:
+        if Script.__usage__ is not None:
+            print('global options: ' + Script.__usage__ + '\n')
         print('%s %s' % (program, func.__usage__))
         os._exit(-1)
     for setting in set(func.__scription__.values()):
@@ -1169,7 +1181,7 @@ def _usage(func, param_line_args):
                 new_args.extend(('"' + arg.replace('"','\\"') + '"').split())
     sys.argv[1:] = new_args
     main_args, main_kwds = [], {}
-    args, varargs, kwds = [], None, {}
+    args, varargs = [], None
     for name in Script.names:
         annote = Script.settings[name]
         value = annote.value
@@ -1179,7 +1191,7 @@ def _usage(func, param_line_args):
             if annote is var_arg_spec:
                 varargs = value
             elif annote is kwd_arg_spec:
-                kwds = value
+                main_kwds = value
             else:
                 args.append(annote)
     args = [arg.value for arg in sorted(args, key=lambda a: a._order)]
@@ -1188,14 +1200,14 @@ def _usage(func, param_line_args):
     else:
         main_args = tuple(args)
     sub_args, sub_kwds = [], {}
-    args, varargs, kwds = [], None, {}
-    for name in func.names:
+    args, varargs = [], None
+    for name in func.all_params:
         annote = func.__scription__[name]
         value = annote.value
         if annote is var_arg_spec:
             varargs = value
         elif annote is kwd_arg_spec:
-            kwds = value
+            sub_kwds = value
         else:
             args.append(annote)
     args = [arg.value for arg in sorted(args, key=lambda a: a._order)]
