@@ -1057,7 +1057,7 @@ def _split_on_comma(text):
         return values
 
 def _usage(func, param_line_args):
-    program = param_line_args[0]
+    program, param_line_args = param_line_args[0], param_line_args[1:]
     pos = 0
     max_pos = func.max_pos
     print_help = False
@@ -1075,7 +1075,6 @@ def _usage(func, param_line_args):
     if kwd_arg_spec:
         kwd_arg_spec._cli_value = {}
     to_be_removed = []
-    param_line_args = shlex.split(' '.join(param_line_args[1:]))
     for offset, item in enumerate(param_line_args + [None]):
         offset += 1
         original_item = item

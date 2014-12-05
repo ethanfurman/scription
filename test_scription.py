@@ -5,6 +5,7 @@ from unittest import TestCase, main
 import datetime
 import os
 import scription
+import shlex
 import shutil
 import sys
 import tempfile
@@ -78,9 +79,9 @@ class TestCommandlineProcessing(TestCase):
         def tester(huh):
             pass
         tests = (
-                ( 'tester --huh="one,two,three four"'.split(), (), {}, (('one', 'two', 'three four'), ), {}),
-                ( 'tester --huh "one,two nine,three"'.split(), (), {}, (('one', 'two nine', 'three'), ), {}),
-                ( 'tester -h one,two -h "three,four teen"'.split(), (), {}, (('one', 'two', 'three', 'four teen'), ), {}),
+                ( shlex.split('tester --huh="one,two,three four"'), (), {}, (('one', 'two', 'three four'), ), {}),
+                ( shlex.split('tester --huh "one,two nine,three"'), (), {}, (('one', 'two nine', 'three'), ), {}),
+                ( shlex.split('tester -h one,two -h "three,four teen"'), (), {}, (('one', 'two', 'three', 'four teen'), ), {}),
                 )
         test_func_parsing(self, tester, tests)
 
