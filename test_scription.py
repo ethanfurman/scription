@@ -13,7 +13,7 @@ import tempfile
 is_win = sys.platform.startswith('win')
 py_ver = sys.version_info[:2]
 
-print('Scription', version)
+print('Scription %s.%s.%s' % version)
 
 #@Script(blah=('configuration file',None,None,InputFile))
 #def main(jobstep, blah='foo', **stuff):
@@ -138,8 +138,8 @@ class TestCommandlineProcessing(TestCase):
                 ('copy file1 file2'.split(), (), {}, ('file1', 'file2', None), {} ),
                 ('copy file1 file2 --comment=howdy!'.split(), (), {}, ('file1', 'file2',  'howdy!'), {} ),
                 ('copy file1 file2 --comment howdy!'.split(), (), {}, ('file1', 'file2',  'howdy!'), {} ),
-                ('copy file1 file2 --comment="howdy doody!"'.split(), (), {}, ('file1', 'file2', 'howdy doody!'), {} ),
-                ('copy file1 file2 --comment "howdy doody!"'.split(), (), {}, ('file1', 'file2', 'howdy doody!'), {} ),
+                (shlex.split('copy file1 file2 --comment="howdy doody!"'), (), {}, ('file1', 'file2', 'howdy doody!'), {} ),
+                (shlex.split('copy file1 file2 --comment "howdy doody!"'), (), {}, ('file1', 'file2', 'howdy doody!'), {} ),
                 )
         test_func_parsing(self, copy, tests)
 
@@ -160,11 +160,11 @@ class TestCommandlineProcessing(TestCase):
                 ('copy file1 file2 --no-binary --comment=howdy!'.split(), (), {}, ('file1', 'file2', False, 'howdy!'), {} ),
                 ('copy file1 file2 --comment howdy!'.split(), (), {}, ('file1', 'file2', True, 'howdy!'), {} ),
                 ('copy file1 file2 --no-binary --comment howdy!'.split(), (), {}, ('file1', 'file2', False, 'howdy!'), {} ),
-                ('copy file1 file2 --comment "howdy doody!"'.split(), (), {}, ('file1', 'file2', True, 'howdy doody!'), {} ),
-                ('copy file1 file2 --comment="howdy doody!"'.split(), (), {}, ('file1', 'file2', True, 'howdy doody!'), {} ),
-                ('copy file1 file2 --no-binary --comment="howdy doody!"'.split(), (), {}, ('file1', 'file2', False, 'howdy doody!'), {} ),
-                ('copy file1 file2 --comment "howdy doody!"'.split(), (), {}, ('file1', 'file2', True, 'howdy doody!'), {} ),
-                ('copy file1 file2 --no-binary --comment "howdy doody!"'.split(), (), {}, ('file1', 'file2', False, 'howdy doody!'), {} ),
+                (shlex.split('copy file1 file2 --comment "howdy doody!"'), (), {}, ('file1', 'file2', True, 'howdy doody!'), {} ),
+                (shlex.split('copy file1 file2 --comment="howdy doody!"'), (), {}, ('file1', 'file2', True, 'howdy doody!'), {} ),
+                (shlex.split('copy file1 file2 --no-binary --comment="howdy doody!"'), (), {}, ('file1', 'file2', False, 'howdy doody!'), {} ),
+                (shlex.split('copy file1 file2 --comment "howdy doody!"'), (), {}, ('file1', 'file2', True, 'howdy doody!'), {} ),
+                (shlex.split('copy file1 file2 --no-binary --comment "howdy doody!"'), (), {}, ('file1', 'file2', False, 'howdy doody!'), {} ),
                 )
         test_func_parsing(self, copy, tests)
 
@@ -317,9 +317,24 @@ class TestExecution(TestCase):
             self.assertTrue(command.stderr.endswith("KeyError: 'the key is missing?'"),
                     'Failed (actual results):\n%s' % command.stderr)
             command = Execute([sys.executable, self.pty_password_file], pty=True, password='Salutations!')
-            self.assertEqual(command.stdout, "super secret santa soda sizzle?\nmake sure no one is watching you type!: \n'Salutations!'?  Are you sure??",
-                    'Failed (actual results):\n%r' % command.stdout)
-            self.assertEqual(command.stderr, '')
+            if py_ver < (3, 0):
+                self.assertEqual(
+                        command.stdout,
+                        "super secret santa soda sizzle?\nmake sure no one is watching you type!: \n'Salutations!'?  Are you sure??",
+                        'Failed (actual results):\n%r' % command.stdout)
+                self.assertEqual(
+                        command.stderr,
+                        '',
+                        )
+            else:
+                self.assertEqual(
+                        command.stdout,
+                        "super secret santa soda sizzle?\n'Salutations!'?  Are you sure??",
+                        'Failed (actual results):\n%r' % command.stdout)
+                self.assertEqual(
+                        command.stderr,
+                        'make sure no one is watching you type!:',
+                        )
 
     def test_subprocess(self):
         command = Execute([sys.executable, self.good_file], pty=False)
