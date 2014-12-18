@@ -71,10 +71,10 @@ __all__ = (
     'IniError', 'IniFile', 'OrmError', 'OrmFile',
     'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'REQUIRED',
     'ScriptionError', 'ExecuteError', 'Execute',
-    'get_response', 'user_ids',
+    'abort', 'get_response', 'help', 'mail', 'user_ids',
     )
 
-version = 0, 72, 2
+version = 0, 72, 3
 
 module = globals()
 script_module = None
@@ -87,6 +87,7 @@ if py_ver < (3, 0):
 else:
     raw_input = input
     basestring = str
+    unicode = str
 
 class NullHandler(logging.Handler):
     """
@@ -291,16 +292,16 @@ class Execute(object):
             raise ValueError("I/O operation on closed file.")
         r, w, x = select.select([self.child_fd, self.error_pipe], [], [], 0)
         if not r:
-            return ''
+            return unicode()
         result = None
         if self.child_fd in r:
             try:
-                result = os.read(self.child_fd, size)
+                result = os.read(self.child_fd, size).decode('utf-8')
             except OSError:
-                result = ''
-            result = result.decode('utf-8')
+                result = unicode()
         if self.error_pipe in r:
             self.error_available = True
+            return result or unicode()
         if result is not None:
             return result
         raise ExecuteError('unknown problem with read')
@@ -343,72 +344,6 @@ class Execute(object):
         if not isinstance(data, bytes):
             data = data.encode('utf-8')
         os.write(self.error_pipe, data)
-
-def get_response(
-        question,
-        validate=None,
-        type=None,
-        retry='bad response, please try again',
-        ):
-    if '[' not in question and question.rstrip().endswith('?'):
-        # yes/no question
-        if type is None:
-            type = lambda ans:ans.lower() in ('y', 'yes', 't', 'true')
-        if validate is None:
-            validate = lambda ans: ans.lower() in ('y', 'yes', 'n', 'no', 't', 'true', 'f', 'false')
-    elif '[' not in question:
-        # answer can be anything
-        if type is None:
-            type = str
-        if validate is None:
-            validate = lambda ans: type(ans.strip())
-    else:
-        # responses are embedded in question between '[]'
-        actual_question = []
-        allowed_responses = {}
-        current_response = []
-        current_word = []
-        in_response = False
-        capture_word = False
-        for ch in question:
-            if ch == '[':
-                in_response = True
-                capture_word = True
-            elif ch == ']':
-                in_response = False
-                response = ''.join(current_response).lower()
-                allowed_responses[response] = response
-                current_response = []
-            elif ch not in ('abcdefghijklmnopqrstuvwxyz_ABCDEFGHIJKLMNOPQRSTUVWXYZ'):
-                if capture_word:
-                    allowed_responses[response] = ''.join(current_word)
-                capture_word = False
-                current_word = []
-            actual_question.append(ch)
-            if ch not in '[]':
-                if in_response:
-                    current_response.append(ch.lower())
-                if capture_word:
-                    current_word.append(ch)
-        if in_response:
-            raise ScriptionError('question missing closing "]"')
-        question = ''.join(actual_question)
-        if type is None:
-            type = lambda ans: allowed_responses[ans.strip().lower()]
-        else:
-            old_type = type
-            type = lambda ans: old_type(allowed_responses[ans.strip().lower()])
-        if validate is None:
-            validate = lambda ans: ans.strip().lower() in allowed_responses
-    if not question[-1:] in (' ','\n', ''):
-        question += ' '
-    # setup is done, ask question and get answer
-    while 'answer is unacceptable':
-        answer = raw_input(question)
-        if validate(answer):
-            break
-        print(retry)
-    return type(answer)
 
 class OrmError(ValueError):
     """
@@ -582,6 +517,81 @@ IniError = OrmError
 IniFile = OrmFile
 
 
+def abort(msg):
+    raise SystemExit(msg)
+
+def help(msg):
+    "raises SystemExit with msg"
+    if '--help' not in msg:
+        msg += ' (use --help for more information)'
+    abort(msg)
+
+def get_response(
+        question,
+        validate=None,
+        type=None,
+        retry='bad response, please try again',
+        ):
+    if '[' not in question and question.rstrip().endswith('?'):
+        # yes/no question
+        if type is None:
+            type = lambda ans:ans.lower() in ('y', 'yes', 't', 'true')
+        if validate is None:
+            validate = lambda ans: ans.lower() in ('y', 'yes', 'n', 'no', 't', 'true', 'f', 'false')
+    elif '[' not in question:
+        # answer can be anything
+        if type is None:
+            type = str
+        if validate is None:
+            validate = lambda ans: type(ans.strip())
+    else:
+        # responses are embedded in question between '[]'
+        actual_question = []
+        allowed_responses = {}
+        current_response = []
+        current_word = []
+        in_response = False
+        capture_word = False
+        for ch in question:
+            if ch == '[':
+                in_response = True
+                capture_word = True
+            elif ch == ']':
+                in_response = False
+                response = ''.join(current_response).lower()
+                allowed_responses[response] = response
+                current_response = []
+            elif ch not in ('abcdefghijklmnopqrstuvwxyz_ABCDEFGHIJKLMNOPQRSTUVWXYZ'):
+                if capture_word:
+                    allowed_responses[response] = ''.join(current_word)
+                capture_word = False
+                current_word = []
+            actual_question.append(ch)
+            if ch not in '[]':
+                if in_response:
+                    current_response.append(ch.lower())
+                if capture_word:
+                    current_word.append(ch)
+        if in_response:
+            raise ScriptionError('question missing closing "]"')
+        question = ''.join(actual_question)
+        if type is None:
+            type = lambda ans: allowed_responses[ans.strip().lower()]
+        else:
+            old_type = type
+            type = lambda ans: old_type(allowed_responses[ans.strip().lower()])
+        if validate is None:
+            validate = lambda ans: ans.strip().lower() in allowed_responses
+    if not question[-1:] in (' ','\n', ''):
+        question += ' '
+    # setup is done, ask question and get answer
+    while 'answer is unacceptable':
+        answer = raw_input(question)
+        if validate(answer):
+            break
+        print(retry)
+    return type(answer)
+
 def log_exception(tb=None):
     if tb is None:
         exc, err, tb = sys.exc_info()
@@ -693,7 +703,10 @@ class Spec(object):
     help, kind, abbrev, type, choices, usage_name, remove, default
     """
 
-    def __init__(self, help=empty, kind=empty, abbrev=empty, type=empty, choices=empty, usage=empty, remove=False, default=empty):
+    def __init__(self,
+            help=empty, kind=empty, abbrev=empty, type=empty,
+            choices=empty, usage=empty, remove=False, default=empty,
+            ):
         if isinstance(help, Spec):
             self.__dict__.update(help.__dict__)
             return
@@ -1075,6 +1088,7 @@ def _usage(func, param_line_args):
     if kwd_arg_spec:
         kwd_arg_spec._cli_value = {}
     to_be_removed = []
+    all_to_varargs = False
     for offset, item in enumerate(param_line_args + [None]):
         offset += 1
         original_item = item
@@ -1094,6 +1108,14 @@ def _usage(func, param_line_args):
             continue
         if item is None:
             break
+        elif item == '--':
+            all_to_varargs = True
+            continue
+        if all_to_varargs:
+            if var_arg_spec is None:
+                raise ScriptionError("don't know what to do with %r" % item)
+            var_arg_spec._cli_value += (var_arg_spec.type(item), )
+            continue
         if item.startswith('-'):
             # (multi)option or flag
             if item.lower() == '--help':
