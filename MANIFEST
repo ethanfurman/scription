@@ -1,6 +1,6 @@
 setup.py
-CHANGES
-LICENSE
-README
+scription/CHANGES
+scription/LICENSE
+scription/README
 scription/__init__.py
 scription/test.py
