@@ -1,6 +1,5 @@
 from scription import Script, Command, Run, Spec, InputFile, Bool, _usage, version, empty
 from scription import *
-from path import Path
 from unittest import TestCase, main
 import datetime
 import os
@@ -169,6 +168,8 @@ class TestCommandlineProcessing(TestCase):
         test_func_parsing(self, copy, tests)
 
     def test_type(self):
+        class Path(str):
+            pass
         @Command(
                 one=Spec('integer', REQUIRED, type=int),
                 two=Spec('string', OPTION, type=str),

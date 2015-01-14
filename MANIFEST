@@ -1,4 +1,6 @@
-README
-scription.py
 setup.py
-test_scription.py
+scription/CHANGES
+scription/LICENSE
+scription/README
+scription/__init__.py
+scription/test.py

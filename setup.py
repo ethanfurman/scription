@@ -4,17 +4,15 @@ from distutils.core import setup
 long_desc="""\
 Scription -- simple script parameter parser
 ===========================================
-
-
 """
 
 setup( name='scription',
-       version= '0.72.03',
+       version= '0.73.00',
        license='BSD License',
        description='simple script parameter parser',
        long_description=long_desc,
-       py_modules=['scription'],
-       provides=['scription'],
+       packages=['scription'],
+       package_data={'scription':['CHANGES', 'LICENSE', 'README']},
        author='Ethan Furman',
        author_email='ethan@stoneleaf.us',
        classifiers=[
