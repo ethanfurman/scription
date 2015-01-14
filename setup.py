@@ -5,7 +5,7 @@ description = fh.read()
 fh.close()
 
 setup( name='scription',
-       version= '0.73.00',
+       version= '0.73.01',
        license='BSD License',
        description='simple script parameter parser',
        long_description=description,
