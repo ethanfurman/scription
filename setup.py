@@ -1,16 +1,15 @@
 from distutils.core import setup
 
-
-long_desc="""\
-Scription -- simple script parameter parser
-===========================================
-"""
+fh = open('scription/README')
+description = fh.read()
+fh.close()
 
 setup( name='scription',
        version= '0.73.00',
        license='BSD License',
        description='simple script parameter parser',
-       long_description=long_desc,
+       long_description=description,
+       url='https://bitbucket.org/stoneleaf/scription',
        packages=['scription'],
        package_data={'scription':['CHANGES', 'LICENSE', 'README']},
        author='Ethan Furman',

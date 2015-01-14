@@ -6,7 +6,7 @@ users, support for suid [1], sending email, executing sub-programs, and having
 sub-commands within a script
 
 
-decorators:
+decorators
 
   - Script:  sets global variables and/or parameters for Commands; when used as
     decorator, the decorated function will be called by Main/Run before any
@@ -19,7 +19,7 @@ decorators:
   - Alias:  registers other names for Commands (e.g. delete / remove / kill)
 
 
-functions:
+functions
 
   - Main:  if the importing module's __name__ is __main__, call Run() (this
     allows for importing the script as a module)
@@ -30,13 +30,13 @@ functions:
   Main() or Run() should be the last thing in the script
 
 
-classes:
+classes
 
   - Spec:  can be used when defining the command-line parameters (can also just
     use tuples)
 
 
-helper functions/classes:
+helper functions/classes
 
   - Execute:  class for executing other programs; uses subprocess.Popen by
     default, but if `pty=True` is specified then `pty.fork` will be used
