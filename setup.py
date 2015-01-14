@@ -1,6 +1,6 @@
 from distutils.core import setup
 
-fh = open('scription/README')
+fh = open('README')
 description = fh.read()
 fh.close()
 
@@ -11,7 +11,7 @@ setup( name='scription',
        long_description=description,
        url='https://bitbucket.org/stoneleaf/scription',
        packages=['scription'],
-       package_data={'scription':['CHANGES', 'LICENSE', 'README']},
+       package_data={'scription':['../CHANGES', '../LICENSE', '../README']},
        author='Ethan Furman',
        author_email='ethan@stoneleaf.us',
        classifiers=[
