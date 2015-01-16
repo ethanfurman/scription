@@ -803,6 +803,8 @@ class Script(object):
     def __init__(self, **settings):
         if Script.command is not None:
             raise ScriptionError("Script can only be used once")
+        if func.__name__ in Command.subcommands:
+            raise ScriptionError('%r cannot be both Command and Scription' % func.__name__)
         for name, annotation in settings.items():
             if isinstance(annotation, (Spec, tuple)):
                 spec = Spec(annotation)
@@ -826,9 +828,6 @@ class Script(object):
         def psyche():
             pass
         _add_annotations(psyche, settings, script=True)
-        # psyche.names = Script.names
-        # psyche.all_params = Script.all_params
-        # psyche.named_params = Script.named_params
         _help(psyche)
         Script.names = psyche.names
         Script.__usage__ = psyche.__usage__
@@ -1250,7 +1249,10 @@ def Run():
     module['HAS_BEEN_RUN'] = True
     debug = Script.settings.get('SCRIPTION_DEBUG')
     try:
-        prog_name = os.path.split(sys.argv[0])[1]
+        prog_path, prog_name = os.path.split(sys.argv[0])
+        if prog_name == '__main__.py':
+            # started with python -m, get actual package name for prog_name
+            prog_name = os.path.split(prog_path)[1]
         if debug:
             print(prog_name.filename)
         if not Command.subcommands:
