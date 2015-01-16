@@ -803,8 +803,6 @@ class Script(object):
     def __init__(self, **settings):
         if Script.command is not None:
             raise ScriptionError("Script can only be used once")
-        if func.__name__ in Command.subcommands:
-            raise ScriptionError('%r cannot be both Command and Scription' % func.__name__)
         for name, annotation in settings.items():
             if isinstance(annotation, (Spec, tuple)):
                 spec = Spec(annotation)
@@ -834,6 +832,8 @@ class Script(object):
     def __call__(self, func):
         if Script.command is not None:
             raise ScriptionError("Script can only be used once")
+        if func.__name__ in Command.subcommands:
+            raise ScriptionError('%r cannot be both Command and Scription' % func.__name__)
         global script_module
         script_module = _func_globals(func)
         script_module['module'] = _namespace(script_module)
