@@ -74,7 +74,7 @@ __all__ = (
     'abort', 'get_response', 'help', 'mail', 'user_ids',
     )
 
-version = 0, 73, 1
+version = 0, 73, 2
 
 module = globals()
 script_module = None
