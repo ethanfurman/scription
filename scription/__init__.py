@@ -1,3 +1,4 @@
+from __future__ import print_function
 """
 intelligently parses command lines
 
@@ -21,6 +22,10 @@ elif py_ver >= (2, 7):
     kill_signals = signal.CTRL_C_EVENT, signal.CTRL_BREAK_EVENT
 else:
     kill_signals = ()
+if py_ver < (3, 0):
+    from __builtin__ import print as _print
+else:
+    from builtins import print as _print
 import datetime
 import email
 import inspect
@@ -71,7 +76,7 @@ __all__ = (
     'IniError', 'IniFile', 'OrmError', 'OrmFile',
     'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'REQUIRED',
     'ScriptionError', 'ExecuteError', 'Execute',
-    'abort', 'get_response', 'help', 'mail', 'user_ids',
+    'abort', 'get_response', 'help', 'mail', 'user_ids', 'print',
     )
 
 version = 0, 73, 2
@@ -88,6 +93,8 @@ else:
     raw_input = input
     basestring = str
     unicode = str
+
+verbosity = 0
 
 class NullHandler(logging.Handler):
     """
@@ -158,13 +165,70 @@ class SpecKind(DocEnum):
     MULTI = "multiple values per name (list form)"
     FLAG = "boolean value per name"
     KEYWORD = 'unknown options'
-
 SpecKind.export_to(module)
+
 
 class ExecuteError(Exception):
     "errors raised by Execute"
 # deprecated
 ExecutionError = ExecuteError
+
+
+class OrmError(ValueError):
+    """
+    used to signify errors in the ORM file
+    """
+
+
+class ScriptionError(Exception):
+    "raised for errors"
+    def __init__(self, msg=None, command_line=None):
+        super(ScriptionError, self).__init__(msg)
+        self.command_line = command_line
+
+
+class empty(object):
+    def __add__(self, other):
+        # adding emptiness to something else is just something else
+        return other
+    def __nonzero__(self):
+        return False
+    __bool__ = __nonzero__
+    def __repr__(self):
+        return '<empty>'
+    def __str__(self):
+        return ''
+empty = empty()
+
+
+class Alias(object):
+    "adds aliases for the function"
+    def __init__(self, *aliases):
+        self.aliases = aliases
+    def __call__(self, func):
+        for alias in self.aliases:
+            Command.subcommands[alias] = func
+        return func
+
+
+class Command(object):
+    "adds __scription__ to decorated function, and adds func to Command.subcommands"
+    subcommands = {}
+    def __init__(self, **annotations):
+        for name, annotation in annotations.items():
+            spec = Spec(annotation)
+            annotations[name] = spec
+        self.annotations = annotations
+    def __call__(self, func):
+        global script_module
+        if script_module is None:
+            script_module = _func_globals(func)
+            script_module['module'] = _namespace(script_module)
+        _add_annotations(func, self.annotations)
+        Command.subcommands[func.__name__] = func
+        _help(func)
+        return func
+
 
 class Execute(object):
     """
@@ -236,15 +300,15 @@ class Execute(object):
                 self.write(password)
                 self.write('\r\n')
                 submission_received = False
-            while pocket(self.read(1024)):
-                output.append(pocket())
+            while _pocket(self.read(1024)):
+                output.append(_pocket())
                 submission_received = True
                 last_comms = time.time()
             time.sleep(0.1)
             if timeout and time.time() - last_comms > timeout:
                 self.close()
-        while pocket(self.read(1024)):
-            output.append(pocket())
+        while _pocket(self.read(1024)):
+            output.append(_pocket())
             time.sleep(0.1)
         while self.error_available:
             self.read_error()
@@ -345,10 +409,12 @@ class Execute(object):
             data = data.encode('utf-8')
         os.write(self.error_pipe, data)
 
-class OrmError(ValueError):
-    """
-    used to signify errors in the ORM file
-    """
+
+def Main():
+    "calls Run() only if the script is being run as __main__"
+    if script_module['__name__'] == '__main__':
+        return Run()
+
 
 class OrmFile(object):
     """
@@ -517,185 +583,111 @@ IniError = OrmError
 IniFile = OrmFile
 
 
-def abort(msg):
-    raise SystemExit(msg)
-
-def help(msg):
-    "raises SystemExit with msg"
-    if '--help' not in msg:
-        msg += ' (use --help for more information)'
-    abort(msg)
-
-def get_response(
-        question,
-        validate=None,
-        type=None,
-        retry='bad response, please try again',
-        ):
-    if '[' not in question and question.rstrip().endswith('?'):
-        # yes/no question
-        if type is None:
-            type = lambda ans:ans.lower() in ('y', 'yes', 't', 'true')
-        if validate is None:
-            validate = lambda ans: ans.lower() in ('y', 'yes', 'n', 'no', 't', 'true', 'f', 'false')
-    elif '[' not in question:
-        # answer can be anything
-        if type is None:
-            type = str
-        if validate is None:
-            validate = lambda ans: type(ans.strip())
-    else:
-        # responses are embedded in question between '[]'
-        actual_question = []
-        allowed_responses = {}
-        current_response = []
-        current_word = []
-        in_response = False
-        capture_word = False
-        for ch in question:
-            if ch == '[':
-                in_response = True
-                capture_word = True
-            elif ch == ']':
-                in_response = False
-                response = ''.join(current_response).lower()
-                allowed_responses[response] = response
-                current_response = []
-            elif ch not in ('abcdefghijklmnopqrstuvwxyz_ABCDEFGHIJKLMNOPQRSTUVWXYZ'):
-                if capture_word:
-                    allowed_responses[response] = ''.join(current_word)
-                capture_word = False
-                current_word = []
-            actual_question.append(ch)
-            if ch not in '[]':
-                if in_response:
-                    current_response.append(ch.lower())
-                if capture_word:
-                    current_word.append(ch)
-        if in_response:
-            raise ScriptionError('question missing closing "]"')
-        question = ''.join(actual_question)
-        if type is None:
-            type = lambda ans: allowed_responses[ans.strip().lower()]
-        else:
-            old_type = type
-            type = lambda ans: old_type(allowed_responses[ans.strip().lower()])
-        if validate is None:
-            validate = lambda ans: ans.strip().lower() in allowed_responses
-    if not question[-1:] in (' ','\n', ''):
-        question += ' '
-    # setup is done, ask question and get answer
-    while 'answer is unacceptable':
-        answer = raw_input(question)
-        if validate(answer):
-            break
-        print(retry)
-    return type(answer)
-
-def log_exception(tb=None):
-    if tb is None:
-        exc, err, tb = sys.exc_info()
-        lines = traceback.format_list(traceback.extract_tb(tb))
-        lines.append('%s: %s\n' % (exc.__name__, err))
-        logger.critical('Traceback (most recent call last):')
-    else:
-        lines = tb.split('\\n')
-    for line in lines:
-        for ln in line.rstrip().split('\n'):
-            logger.critical(ln)
-    return lines
-
-def mail(server, port, message):
-    """sends email.message to server:port
-    """
-    if isinstance(message, basestring):
-        message = email.message_from_string(message)
-    receiver = message.get_all('To', []) + message.get_all('Cc', []) + message.get_all('Bcc', [])
-    sender = message['From']
+def Run():
+    "parses command-line and compares with either func or, if None, Script.command"
+    if module.get('HAS_BEEN_RUN'):
+        return
+    module['HAS_BEEN_RUN'] = True
+    debug = Script.settings.get('SCRIPTION_DEBUG')
     try:
-        smtp = smtplib.SMTP(server, port)
-    except socket.error:
-        exc = sys.exc_info()[1]
-        send_errs = {}
-        for rec in receiver:
-            send_errs[rec] = (server, exc.args)
-    else:
-        try:
-            send_errs = smtp.sendmail(sender, receiver, message.as_string())
-        except smtplib.SMTPRecipientsRefused:
-            exc = sys.exc_info()[1]
-            send_errs = {}
-            for user, detail in exc.recipients.items():
-                send_errs[user] = (server, detail)
-        finally:
-            smtp.quit()
-    errs = {}
-    if send_errs:
-        for user in send_errs:
-            try:
-                server = 'mail.' + user.split('@')[1]
-                smtp = smtplib.SMTP(server, 25)
-            except socket.error:
-                exc = sys.exc_info()[1]
-                errs[user] = [send_errs[user], (server, exc.args)]
+        prog_path, prog_name = os.path.split(sys.argv[0])
+        if prog_name == '__main__.py':
+            # started with python -m, get actual package name for prog_name
+            prog_name = os.path.split(prog_path)[1]
+        if debug:
+            print(prog_name.filename)
+        if not Command.subcommands:
+            raise ScriptionError("no Commands defined in script")
+        func_name = sys.argv[1:2]
+        if not func_name:
+            func = None
+        else:
+            func = Command.subcommands.get(func_name[0])
+        if func is not None:
+            prog_name = func_name[0]
+            param_line = [prog_name] + sys.argv[2:]
+        else:
+            func = Command.subcommands.get(prog_name, None)
+            if func is not None:
+                param_line = [prog_name] + sys.argv[1:]
             else:
-                try:
-                    smtp.sendmail(sender, [user], message.as_string())
-                except smtplib.SMTPRecipientsRefused:
-                    exc = sys.exc_info()[1]
-                    errs[user] = [send_errs[user], (server, exc.recipients[user])]
-                finally:
-                    smtp.quit()
-    if not is_win:
-        for user, errors in errs.items():
-            for server, (code, response) in errors:
-                syslog('%s: %s --> %s: %s' % (server, user, code, response))
-
-_pocket_sentinel = object()
-def pocket(value=_pocket_sentinel, _pocket=[]):
-    if value is not _pocket_sentinel:
-        _pocket[:] = [value]
-    return _pocket[0]
-
-class empty(object):
-    def __add__(self, other):
-        # adding emptiness to something else is just something else
-        return other
-    def __nonzero__(self):
-        return False
-    __bool__ = __nonzero__
-    def __repr__(self):
-        return '<empty>'
-    def __str__(self):
-        return ''
-empty = empty()
-
-class user_ids(object):
-    """
-    maintains root as one of the ids
-    """
-    def __init__(self, uid, gid):
-        self.target_uid = uid
-        self.target_gid = gid
-        self.saved_uids = os.getuid(), os.geteuid()
-        self.saved_gids = os.getgid(), os.getegid()
-    def __enter__(self):
-        os.seteuid(0)
-        os.setegid(0)
-        os.setregid(0, self.target_gid)
-        os.setreuid(0, self.target_uid)
-    def __exit__(self, *args):
-        os.seteuid(0)
-        os.setegid(0)
-        os.setregid(*self.saved_gids)
-        os.setreuid(*self.saved_uids)
+                if Script.command is not None:
+                    print("\nglobal options: %s" % Script.command.__usage__)
+                for name, func in sorted(Command.subcommands.items()):
+                    print("\n%s %s" % (name, func.__usage__))
+                os._exit(-1)
+        main_args, main_kwds, sub_args, sub_kwds = _usage(func, param_line)
+        main_cmd = Script.command
+        subcommand = _run_once(func, sub_args, sub_kwds)
+        if main_cmd:
+            script_module['script_command'] = subcommand
+            main_cmd(*main_args, **main_kwds)
+        return subcommand()
+    except Exception:
+        exc = sys.exc_info()[1]
+        if debug:
+            print(exc)
+        result = log_exception()
+        script_module['exception_lines'] = result
+        if isinstance(exc, ScriptionError):
+            raise SystemExit(str(exc))
+        raise
 
 
-class ScriptionError(Exception):
-    "raised for errors"
-    def __init__(self, msg=None, command_line=None):
-        super(ScriptionError, self).__init__(msg)
-        self.command_line = command_line
+class Script(object):
+    "adds __scription__ to decorated function, and stores func in Script.command"
+    command = None
+    settings = {}
+    names = []
+    all_params = []
+    named_params = []
+    __usage__ = None
+    def __init__(self, **settings):
+        if Script.command is not None:
+            raise ScriptionError("Script can only be used once")
+        for name, annotation in settings.items():
+            if isinstance(annotation, (Spec, tuple)):
+                spec = Spec(annotation)
+                if spec.kind == 'required':
+                    # TODO:  allow this
+                    raise ScriptionError('REQUIRED not (yet) allowed for Script')
+            else:
+                if isinstance(annotation, bool):
+                    kind = 'flag'
+                else:
+                    kind = 'option'
+                spec = Spec('', kind, None, type(annotation), default=annotation)
+            if spec.usage is empty:
+                spec.usage = name.upper()
+            settings[name] = spec
+        Script.settings = settings
+        Script.names = sorted(settings.keys())
+        num_keys = len(Script.names)
+        for i, name in enumerate(Script.names):
+            settings[name]._order = i + num_keys
+        def psyche():
+            pass
+        _add_annotations(psyche, settings, script=True)
+        _help(psyche)
+        Script.names = psyche.names
+        Script.__usage__ = psyche.__usage__
+    def __call__(self, func):
+        if Script.command is not None:
+            raise ScriptionError("Script can only be used once")
+        if func.__name__ in Command.subcommands:
+            raise ScriptionError('%r cannot be both Command and Scription' % func.__name__)
+        global script_module
+        script_module = _func_globals(func)
+        script_module['module'] = _namespace(script_module)
+        _add_annotations(func, Script.settings, script=True)
+        _help(func)
+        Script.all_params = func.all_params
+        Script.named_params = func.named_params
+        Script.settings = func.__scription__
+        Script.__usage__ = func.__usage__
+        Script.command = staticmethod(func)
+        return func
+
 
 class Spec(object):
     """tuple with named attributes for representing a command-line paramter
@@ -765,86 +757,172 @@ class Spec(object):
             raise ScriptionError('no value specified for %s' % self.usage)
         return value
 
-class Alias(object):
-    "adds aliases for the function"
-    def __init__(self, *aliases):
-        self.aliases = aliases
-    def __call__(self, func):
-        for alias in self.aliases:
-            Command.subcommands[alias] = func
-        return func
 
-class Command(object):
-    "adds __scription__ to decorated function, and adds func to Command.subcommands"
-    subcommands = {}
-    def __init__(self, **annotations):
-        for name, annotation in annotations.items():
-            spec = Spec(annotation)
-            annotations[name] = spec
-        self.annotations = annotations
-    def __call__(self, func):
-        global script_module
-        if script_module is None:
-            script_module = _func_globals(func)
-            script_module['module'] = _namespace(script_module)
-        _add_annotations(func, self.annotations)
-        Command.subcommands[func.__name__] = func
-        _help(func)
-        return func
+def abort(msg):
+    "raises SystemExit with msg"
+    raise SystemExit(msg)
 
-class Script(object):
-    "adds __scription__ to decorated function, and stores func in Script.command"
-    command = None
-    settings = {}
-    names = []
-    all_params = []
-    named_params = []
-    __usage__ = None
-    def __init__(self, **settings):
-        if Script.command is not None:
-            raise ScriptionError("Script can only be used once")
-        for name, annotation in settings.items():
-            if isinstance(annotation, (Spec, tuple)):
-                spec = Spec(annotation)
-                if spec.kind == 'required':
-                    # TODO:  allow this
-                    raise ScriptionError('REQUIRED not (yet) allowed for Script')
+def get_response(
+        question,
+        validate=None,
+        type=None,
+        retry='bad response, please try again',
+        ):
+    if '[' not in question and question.rstrip().endswith('?'):
+        # yes/no question
+        if type is None:
+            type = lambda ans:ans.lower() in ('y', 'yes', 't', 'true')
+        if validate is None:
+            validate = lambda ans: ans.lower() in ('y', 'yes', 'n', 'no', 't', 'true', 'f', 'false')
+    elif '[' not in question:
+        # answer can be anything
+        if type is None:
+            type = str
+        if validate is None:
+            validate = lambda ans: type(ans.strip())
+    else:
+        # responses are embedded in question between '[]'
+        actual_question = []
+        allowed_responses = {}
+        current_response = []
+        current_word = []
+        in_response = False
+        capture_word = False
+        for ch in question:
+            if ch == '[':
+                in_response = True
+                capture_word = True
+            elif ch == ']':
+                in_response = False
+                response = ''.join(current_response).lower()
+                allowed_responses[response] = response
+                current_response = []
+            elif ch not in ('abcdefghijklmnopqrstuvwxyz_ABCDEFGHIJKLMNOPQRSTUVWXYZ'):
+                if capture_word:
+                    allowed_responses[response] = ''.join(current_word)
+                capture_word = False
+                current_word = []
+            actual_question.append(ch)
+            if ch not in '[]':
+                if in_response:
+                    current_response.append(ch.lower())
+                if capture_word:
+                    current_word.append(ch)
+        if in_response:
+            raise ScriptionError('question missing closing "]"')
+        question = ''.join(actual_question)
+        if type is None:
+            type = lambda ans: allowed_responses[ans.strip().lower()]
+        else:
+            old_type = type
+            type = lambda ans: old_type(allowed_responses[ans.strip().lower()])
+        if validate is None:
+            validate = lambda ans: ans.strip().lower() in allowed_responses
+    if not question[-1:] in (' ','\n', ''):
+        question += ' '
+    # setup is done, ask question and get answer
+    while 'answer is unacceptable':
+        answer = raw_input(question)
+        if validate(answer):
+            break
+        print(retry)
+    return type(answer)
+
+def help(msg):
+    "conditionally adds reference to --help"
+    if '--help' not in msg:
+        msg += ' (use --help for more information)'
+    abort(msg)
+
+def log_exception(tb=None):
+    if tb is None:
+        exc, err, tb = sys.exc_info()
+        lines = traceback.format_list(traceback.extract_tb(tb))
+        lines.append('%s: %s\n' % (exc.__name__, err))
+        logger.critical('Traceback (most recent call last):')
+    else:
+        lines = tb.split('\\n')
+    for line in lines:
+        for ln in line.rstrip().split('\n'):
+            logger.critical(ln)
+    return lines
+
+def mail(server, port, message):
+    """sends email.message to server:port
+    """
+    if isinstance(message, basestring):
+        message = email.message_from_string(message)
+    receiver = message.get_all('To', []) + message.get_all('Cc', []) + message.get_all('Bcc', [])
+    sender = message['From']
+    try:
+        smtp = smtplib.SMTP(server, port)
+    except socket.error:
+        exc = sys.exc_info()[1]
+        send_errs = {}
+        for rec in receiver:
+            send_errs[rec] = (server, exc.args)
+    else:
+        try:
+            send_errs = smtp.sendmail(sender, receiver, message.as_string())
+        except smtplib.SMTPRecipientsRefused:
+            exc = sys.exc_info()[1]
+            send_errs = {}
+            for user, detail in exc.recipients.items():
+                send_errs[user] = (server, detail)
+        finally:
+            smtp.quit()
+    errs = {}
+    if send_errs:
+        for user in send_errs:
+            try:
+                server = 'mail.' + user.split('@')[1]
+                smtp = smtplib.SMTP(server, 25)
+            except socket.error:
+                exc = sys.exc_info()[1]
+                errs[user] = [send_errs[user], (server, exc.args)]
             else:
-                if isinstance(annotation, bool):
-                    kind = 'flag'
-                else:
-                    kind = 'option'
-                spec = Spec('', kind, None, type(annotation), default=annotation)
-            if spec.usage is empty:
-                spec.usage = name.upper()
-            settings[name] = spec
-        Script.settings = settings
-        Script.names = sorted(settings.keys())
-        num_keys = len(Script.names)
-        for i, name in enumerate(Script.names):
-            settings[name]._order = i + num_keys
-        def psyche():
-            pass
-        _add_annotations(psyche, settings, script=True)
-        _help(psyche)
-        Script.names = psyche.names
-        Script.__usage__ = psyche.__usage__
-    def __call__(self, func):
-        if Script.command is not None:
-            raise ScriptionError("Script can only be used once")
-        if func.__name__ in Command.subcommands:
-            raise ScriptionError('%r cannot be both Command and Scription' % func.__name__)
-        global script_module
-        script_module = _func_globals(func)
-        script_module['module'] = _namespace(script_module)
-        _add_annotations(func, Script.settings, script=True)
-        _help(func)
-        Script.all_params = func.all_params
-        Script.named_params = func.named_params
-        Script.settings = func.__scription__
-        Script.__usage__ = func.__usage__
-        Script.command = staticmethod(func)
-        return func
+                try:
+                    smtp.sendmail(sender, [user], message.as_string())
+                except smtplib.SMTPRecipientsRefused:
+                    exc = sys.exc_info()[1]
+                    errs[user] = [send_errs[user], (server, exc.recipients[user])]
+                finally:
+                    smtp.quit()
+    if not is_win:
+        for user, errors in errs.items():
+            for server, (code, response) in errors:
+                syslog('%s: %s --> %s: %s' % (server, user, code, response))
+
+_pocket_sentinel = object()
+def _pocket(value=_pocket_sentinel, _pocket=[]):
+    if value is not _pocket_sentinel:
+        _pocket[:] = [value]
+    return _pocket[0]
+
+def print(sep=' ', end='\n', file=sys.stdout, verbose=None, *values):
+    if verbose and verbose > verbosity:
+        return
+    _print(*values, sep=sep, end=end, file=file)
+
+class user_ids(object):
+    """
+    maintains root as one of the ids
+    """
+    def __init__(self, uid, gid):
+        self.target_uid = uid
+        self.target_gid = gid
+        self.saved_uids = os.getuid(), os.geteuid()
+        self.saved_gids = os.getgid(), os.getegid()
+    def __enter__(self):
+        os.seteuid(0)
+        os.setegid(0)
+        os.setregid(0, self.target_gid)
+        os.setreuid(0, self.target_uid)
+    def __exit__(self, *args):
+        os.seteuid(0)
+        os.setegid(0)
+        os.setregid(*self.saved_gids)
+        os.setreuid(*self.saved_uids)
 
 def _add_annotations(func, annotations, script=False):
     '''
@@ -1236,61 +1314,6 @@ def _usage(func, param_line_args):
     else:
         sub_args = tuple(args)
     return main_args, main_kwds, sub_args, sub_kwds
-
-def Main():
-    "calls Run() only if the script is being run as __main__"
-    if script_module['__name__'] == '__main__':
-        return Run()
-
-def Run():
-    "parses command-line and compares with either func or, if None, Script.command"
-    if module.get('HAS_BEEN_RUN'):
-        return
-    module['HAS_BEEN_RUN'] = True
-    debug = Script.settings.get('SCRIPTION_DEBUG')
-    try:
-        prog_path, prog_name = os.path.split(sys.argv[0])
-        if prog_name == '__main__.py':
-            # started with python -m, get actual package name for prog_name
-            prog_name = os.path.split(prog_path)[1]
-        if debug:
-            print(prog_name.filename)
-        if not Command.subcommands:
-            raise ScriptionError("no Commands defined in script")
-        func_name = sys.argv[1:2]
-        if not func_name:
-            func = None
-        else:
-            func = Command.subcommands.get(func_name[0])
-        if func is not None:
-            prog_name = func_name[0]
-            param_line = [prog_name] + sys.argv[2:]
-        else:
-            func = Command.subcommands.get(prog_name, None)
-            if func is not None:
-                param_line = [prog_name] + sys.argv[1:]
-            else:
-                if Script.command is not None:
-                    print("\nglobal options: %s" % Script.command.__usage__)
-                for name, func in sorted(Command.subcommands.items()):
-                    print("\n%s %s" % (name, func.__usage__))
-                os._exit(-1)
-        main_args, main_kwds, sub_args, sub_kwds = _usage(func, param_line)
-        main_cmd = Script.command
-        subcommand = _run_once(func, sub_args, sub_kwds)
-        if main_cmd:
-            script_module['script_command'] = subcommand
-            main_cmd(*main_args, **main_kwds)
-        return subcommand()
-    except Exception:
-        exc = sys.exc_info()[1]
-        if debug:
-            print(exc)
-        result = log_exception()
-        script_module['exception_lines'] = result
-        if isinstance(exc, ScriptionError):
-            raise SystemExit(str(exc))
-        raise
 
 def Bool(arg):
     if arg in (True, False):

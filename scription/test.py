@@ -257,6 +257,21 @@ class TestCommandlineProcessing(TestCase):
                 )
         test_func_parsing(self, bossy, tests)
 
+    def test_short(self):
+        @Command(
+                here=('first test', FLAG),
+                there=('second test', FLAG),
+                everywhere=('third test', FLAG),
+                )
+        def blargh(here, there, everywhere):
+            pass
+        tests = (
+                ('blargh -hte'.split(), (), {}, (True, True, True), {}),
+                ('blargh -he'.split(), (), {}, (True, False, True), {}),
+                ('blargh -ht --no-everywhere'.split(), (), {}, (True, True, False), {}),
+                )
+        test_func_parsing(self, blargh, tests)
+
 class TestExecution(TestCase):
 
     def setUp(self):
