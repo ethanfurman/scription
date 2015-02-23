@@ -94,7 +94,7 @@ else:
     basestring = str
     unicode = str
 
-verbosity = 0
+verbosity = 10
 
 class NullHandler(logging.Handler):
     """
@@ -899,10 +899,13 @@ def _pocket(value=_pocket_sentinel, _pocket=[]):
         _pocket[:] = [value]
     return _pocket[0]
 
-def print(sep=' ', end='\n', file=sys.stdout, verbose=None, *values):
+def print(*values, **kwds):
+    # kwds can contain sep (' ), end ('\n'), file (sys.stdout), and
+    # verbose (None)
+    verbose = kwds.pop('verbose', None)
     if verbose and verbose > verbosity:
         return
-    _print(*values, sep=sep, end=end, file=file)
+    _print(*values, **kwds)
 
 class user_ids(object):
     """
@@ -1110,6 +1113,23 @@ class _namespace(object):
     def __setitem__(self, name, value):
         self.__dict__[name] = value
 
+def _rewrite_args(args):
+    "prog -abc heh --foo bar  -->  prog -a -b -c heh --foo bar"
+    new_args = []
+    pass_through = False
+    for arg in args:
+        if arg == '--':
+            pass_through = True
+        if pass_through:
+            new_args.append(arg)
+            continue
+        if arg.startswith('--') or not arg.startswith('-'):
+            new_args.append(arg)
+            continue
+        for ch in arg[1:]:
+            new_args.append('-%s' % ch)
+    return new_args
+
 def _run_once(func, args, kwds):
     cache = []
     def later():
@@ -1147,7 +1167,7 @@ def _split_on_comma(text):
         return values
 
 def _usage(func, param_line_args):
-    program, param_line_args = param_line_args[0], param_line_args[1:]
+    program, param_line_args = param_line_args[0], _rewrite_args(param_line_args[1:])
     pos = 0
     max_pos = func.max_pos
     print_help = False
