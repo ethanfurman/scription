@@ -70,7 +70,7 @@ from sys import stdout, stderr
   - remove determines if this argument is removed from sys.argv
 """
 
-version = 0, 74, 0
+version = 0, 74, 1
 
 # data
 __all__ = (
@@ -233,13 +233,14 @@ class Command(object):
     "adds __scription__ to decorated function, and adds func to Command.subcommands"
     subcommands = {}
     def __init__(self, **annotations):
-        debug('Command -> initializing', annotations, verbose_level=2)
+        debug('Command -> initializing', verbose_level=1)
+        debug(annotations, verbose_level=2)
         for name, annotation in annotations.items():
             spec = Spec(annotation)
             annotations[name] = spec
         self.annotations = annotations
     def __call__(self, func):
-        debug('Command -> applying to', func, verbose_level=2)
+        debug('Command -> applying to', func, verbose_level=1)
         global script_module
         if script_module is None:
             script_module = _func_globals(func)
@@ -663,7 +664,8 @@ class Script(object):
     named_params = []
     __usage__ = None
     def __init__(self, **settings):
-        debug('Script -> recording', settings, verbose_level=2)
+        debug('Script -> recording', verbose_level=1)
+        debug(settings, verbose_level=2)
         if Script.command is not None:
             raise ScriptionError("Script can only be used once")
         for name, annotation in settings.items():
@@ -693,7 +695,7 @@ class Script(object):
         Script.names = psyche.names
         Script.__usage__ = psyche.__usage__
     def __call__(self, func):
-        debug('Script -> applying to', func, verbose_level=2)
+        debug('Script -> applying to', func, verbose_level=1)
         if Script.command is not None:
             raise ScriptionError("Script can only be used once")
         if func.__name__ in Command.subcommands:
@@ -1264,7 +1266,7 @@ def _usage(func, param_line_args):
             elif '=' in item:
                 item, value = item.split('=', 1)
             item = item.replace('-','_')
-            if item.lower() == 'verbose_level':
+            if item.lower() == 'verbose':
                 try:
                     VERBOSITY = int(value)
                 except ValueError:

@@ -41,26 +41,51 @@ classes
 
 helper functions/classes
 
+  - abort: quits immediately by raising SystemExit
+
   - Execute:  class for executing other programs; uses subprocess.Popen by
     default, but if `pty=True` is specified then `pty.fork` will be used
     (handy for programs that only accept input from a pty)
 
   - get_response:  function for displaying text and getting feedback
 
+  - help: quits immediately, but adds a reference to --help in the quit message
+
+  - log_exception:  logs an exception with logging.logger
+
+  - mail: rudimentary mail sender
+
   - OrmFile:  lightweight orm -- supports str, int, float, date, time,
     datetime, bool, and path (which defaults to str); custom data types can
     also be specified
 
+  - print: wrapper around print that adds a 'verbose_level' keyword (default: 1);
+    default verbosity is 0 (so print does nothing), but can be increased using
+    -v, -vv, --verbose, or --verbose=2 (in Python 2 the script must use
+    'from __future__ import print_function' to use scription's print)
+
   - user_ids:  context manager useful for suid scripts -- all actions taken
     within the context are run as the user/group specified
 
+
+features
+
+  - 'module' is a namespace inserted into the script
+
+  - 'script_command' is the Command selected from the command line (useful when
+    one needs to call the subcommand directly from a main() function)
+
+  - extra parameters defined by Script are global, and can be accessed from any
+    function or Command
+
+  - builtin options are:  --help (-h), --verbose (-v or -vv)
 
 
 [1] I use the suid-python program, available at http://selliott.org/python/suid-python.c
 '''
 
 setup( name='scription',
-       version= '0.73.02',
+       version= '0.74.01',
        license='BSD License',
        description='simple script parameter parser',
        long_description=description,

@@ -38,7 +38,7 @@ def test_func_parsing(obj, func, tests, test_type=False):
             if have_gubed:
                 obj.assertTrue(gubed)
             if verbose:
-                obj.assertEqual(scription.verbosity, verbose)
+                obj.assertEqual(scription.VERBOSITY, verbose)
             if test_type:
                 for rval, val in zip(res_main_args, main_args):
                     obj.assertTrue(type(rval) is type(val))
@@ -50,7 +50,7 @@ def test_func_parsing(obj, func, tests, test_type=False):
                     obj.assertTrue(type(rval) is type(sub_kwds[rkey]))
 
             gubed = False
-            scription.verbosity = 0
+            scription.VERBOSITY = 0
             for spec in set(func.__scription__.values()):
                 spec._cli_value = empty
     finally:
