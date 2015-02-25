@@ -11,7 +11,7 @@ import tempfile
 
 is_win = sys.platform.startswith('win')
 py_ver = sys.version_info[:2]
-
+gubed = False
 print('Scription %s.%s.%s' % version)
 
 #@Script(blah=('configuration file',None,None,InputFile))
@@ -20,13 +20,25 @@ print('Scription %s.%s.%s' % version)
 #    print jobstep, blah, stuff
 
 def test_func_parsing(obj, func, tests, test_type=False):
+    global gubed
     try:
         for params, main_args, main_kwds, sub_args, sub_kwds in tests:
+            have_gubed = verbose = False
+            if '--gubed' in params:
+                have_gubed = True
+            if '-v' in params or '--verbose' in params or '--verbose=1' in params:
+                verbose = 1
+            elif '-vv' in params or '--verbose=2' in params:
+                verbose = 2
             res_main_args, res_main_kwds, res_sub_args, res_sub_kwds = _usage(func, params)
             obj.assertEqual(res_main_args, main_args)
             obj.assertEqual(res_main_kwds, main_kwds)
             obj.assertEqual(res_sub_args, sub_args)
             obj.assertEqual(res_sub_kwds, sub_kwds)
+            if have_gubed:
+                obj.assertTrue(gubed)
+            if verbose:
+                obj.assertEqual(scription.verbosity, verbose)
             if test_type:
                 for rval, val in zip(res_main_args, main_args):
                     obj.assertTrue(type(rval) is type(val))
@@ -37,6 +49,8 @@ def test_func_parsing(obj, func, tests, test_type=False):
                 for rkey, rval in res_sub_kwds.items():
                     obj.assertTrue(type(rval) is type(sub_kwds[rkey]))
 
+            gubed = False
+            scription.verbosity = 0
             for spec in set(func.__scription__.values()):
                 spec._cli_value = empty
     finally:
@@ -185,22 +199,22 @@ class TestCommandlineProcessing(TestCase):
         test_func_parsing(self, tester, tests, test_type=True)
 
     def test_main(self):
-        Script(debug=False)
+        Script(gubed=False)
 
         @Command(this=('the thingie here', 'option'))
         def whoa(this):
             pass
         tests = (
                 (['whoa'], (), {}, (None, ), {}),
-                ('whoa --debug'.split(), (), {}, (None, ), {}),
-                ('whoa --debug -t bukooz'.split(), (), {}, ('bukooz', ), {}),
+                ('whoa --gubed'.split(), (), {}, (None, ), {}),
+                ('whoa --gubed -t bukooz'.split(), (), {}, ('bukooz', ), {}),
                 ('whoa -t fletcha'.split(), (), {}, ('fletcha', ), {}),
                 )
         test_func_parsing(self, whoa, tests)
 
     def test_main_with_feeling(self):
         @Script(
-                debug=False,
+                gubed=False,
                 password=('super secret hash code', 'option', None),
                 )
         def main(password):
@@ -213,7 +227,7 @@ class TestCommandlineProcessing(TestCase):
         tests = (
                 ('query blahblah'.split(), (None, ), {}, ('blahblah', ), {}),
                 ('query booboo --password banana'.split(), ('banana', ), {}, ('booboo', ), {}),
-                ('query beebee --password banana --debug'.split(), ('banana', ), {}, ('beebee', ), {}),
+                ('query beebee --password banana --gubed'.split(), ('banana', ), {}, ('beebee', ), {}),
                 )
         test_func_parsing(self, query, tests)
 
@@ -271,6 +285,20 @@ class TestCommandlineProcessing(TestCase):
                 ('blargh -ht --no-everywhere'.split(), (), {}, (True, True, False), {}),
                 )
         test_func_parsing(self, blargh, tests)
+
+    def test_verbosity(self):
+        @Command(
+                )
+        def debugger():
+            pass
+        tests = (
+                ('debugger'.split(), (), {}, (), {}),
+                ('debugger -v'.split(), (), {}, (), {}),
+                ('debugger -vv'.split(), (), {}, (), {}),
+                ('debugger --verbose'.split(), (), {}, (), {}),
+                ('debugger --verbose=2'.split(), (), {}, (), {}),
+                )
+        test_func_parsing(self, debugger, tests)
 
 class TestExecution(TestCase):
 

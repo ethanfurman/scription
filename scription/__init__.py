@@ -42,6 +42,7 @@ import traceback
 from enum import Enum
 from functools import partial
 from subprocess import Popen, PIPE, STDOUT
+from sys import stdout, stderr
 
 """
 (help, kind, abbrev, type, choices, usage_name, remove)
@@ -69,6 +70,8 @@ from subprocess import Popen, PIPE, STDOUT
   - remove determines if this argument is removed from sys.argv
 """
 
+version = 0, 74, 0
+
 # data
 __all__ = (
     'Alias', 'Command', 'Script', 'Main', 'Run', 'Spec',
@@ -77,9 +80,24 @@ __all__ = (
     'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'REQUIRED',
     'ScriptionError', 'ExecuteError', 'Execute',
     'abort', 'get_response', 'help', 'mail', 'user_ids', 'print',
+    'stdout', 'stderr',
     )
 
-version = 0, 73, 2
+VERBOSITY = 0
+SCRIPTION_DEBUG = 0
+
+# bootstrap SCRIPTION_DEBUG
+for arg in sys.argv:
+    if arg.startswith(('--SCRIPTION_DEBUG', '--SCRIPTION-DEBUG')):
+        SCRIPTION_DEBUG = 1
+        if arg[17:] == '=2':
+            SCRIPTION_DEBUG = 2
+        elif arg[17:] == '=3':
+            SCRIPTION_DEBUG = 3
+        elif arg[17:] == '=4':
+            SCRIPTION_DEBUG = 4
+        elif arg[17:] == '=5':
+            SCRIPTION_DEBUG = 5
 
 module = globals()
 script_module = None
@@ -93,8 +111,6 @@ else:
     raw_input = input
     basestring = str
     unicode = str
-
-verbosity = 10
 
 class NullHandler(logging.Handler):
     """
@@ -204,8 +220,10 @@ empty = empty()
 class Alias(object):
     "adds aliases for the function"
     def __init__(self, *aliases):
+        debug('recording aliases', aliases, verbose_level=2)
         self.aliases = aliases
     def __call__(self, func):
+        debug('applying aliases to', func, verbose_level=2)
         for alias in self.aliases:
             Command.subcommands[alias] = func
         return func
@@ -215,11 +233,13 @@ class Command(object):
     "adds __scription__ to decorated function, and adds func to Command.subcommands"
     subcommands = {}
     def __init__(self, **annotations):
+        debug('Command -> initializing', annotations, verbose_level=2)
         for name, annotation in annotations.items():
             spec = Spec(annotation)
             annotations[name] = spec
         self.annotations = annotations
     def __call__(self, func):
+        debug('Command -> applying to', func, verbose_level=2)
         global script_module
         if script_module is None:
             script_module = _func_globals(func)
@@ -412,6 +432,7 @@ class Execute(object):
 
 def Main():
     "calls Run() only if the script is being run as __main__"
+    debug('Main entered')
     if script_module['__name__'] == '__main__':
         return Run()
 
@@ -585,17 +606,17 @@ IniFile = OrmFile
 
 def Run():
     "parses command-line and compares with either func or, if None, Script.command"
+    debug('Run entered')
     if module.get('HAS_BEEN_RUN'):
+        debug('Run already called once, returning')
         return
     module['HAS_BEEN_RUN'] = True
-    debug = Script.settings.get('SCRIPTION_DEBUG')
     try:
         prog_path, prog_name = os.path.split(sys.argv[0])
         if prog_name == '__main__.py':
             # started with python -m, get actual package name for prog_name
             prog_name = os.path.split(prog_path)[1]
-        if debug:
-            print(prog_name.filename)
+        debug(prog_name, verbose_level=2)
         if not Command.subcommands:
             raise ScriptionError("no Commands defined in script")
         func_name = sys.argv[1:2]
@@ -612,9 +633,9 @@ def Run():
                 param_line = [prog_name] + sys.argv[1:]
             else:
                 if Script.command is not None:
-                    print("\nglobal options: %s" % Script.command.__usage__)
+                    _print("\nglobal options: %s" % Script.command.__usage__)
                 for name, func in sorted(Command.subcommands.items()):
-                    print("\n%s %s" % (name, func.__usage__))
+                    _print("\n%s %s" % (name, func.__usage__))
                 os._exit(-1)
         main_args, main_kwds, sub_args, sub_kwds = _usage(func, param_line)
         main_cmd = Script.command
@@ -625,8 +646,7 @@ def Run():
         return subcommand()
     except Exception:
         exc = sys.exc_info()[1]
-        if debug:
-            print(exc)
+        debug(exc)
         result = log_exception()
         script_module['exception_lines'] = result
         if isinstance(exc, ScriptionError):
@@ -643,6 +663,7 @@ class Script(object):
     named_params = []
     __usage__ = None
     def __init__(self, **settings):
+        debug('Script -> recording', settings, verbose_level=2)
         if Script.command is not None:
             raise ScriptionError("Script can only be used once")
         for name, annotation in settings.items():
@@ -672,6 +693,7 @@ class Script(object):
         Script.names = psyche.names
         Script.__usage__ = psyche.__usage__
     def __call__(self, func):
+        debug('Script -> applying to', func, verbose_level=2)
         if Script.command is not None:
             raise ScriptionError("Script can only be used once")
         if func.__name__ in Command.subcommands:
@@ -762,6 +784,14 @@ def abort(msg):
     "raises SystemExit with msg"
     raise SystemExit(msg)
 
+def debug(*values, **kwds):
+    # kwds can contain sep (' ), end ('\n'), file (sys.stdout), and
+    # verbose_level (None)
+    verbose_level = kwds.pop('verbose_level', 1)
+    if verbose_level > SCRIPTION_DEBUG:
+        return
+    _print('scription> ', *values, **kwds)
+
 def get_response(
         question,
         validate=None,
@@ -825,7 +855,7 @@ def get_response(
         answer = raw_input(question)
         if validate(answer):
             break
-        print(retry)
+        _print(retry)
     return type(answer)
 
 def help(msg):
@@ -848,8 +878,7 @@ def log_exception(tb=None):
     return lines
 
 def mail(server, port, message):
-    """sends email.message to server:port
-    """
+    "sends email.message to server:port"
     if isinstance(message, basestring):
         message = email.message_from_string(message)
     receiver = message.get_all('To', []) + message.get_all('Cc', []) + message.get_all('Bcc', [])
@@ -900,10 +929,11 @@ def _pocket(value=_pocket_sentinel, _pocket=[]):
     return _pocket[0]
 
 def print(*values, **kwds):
-    # kwds can contain sep (' ), end ('\n'), file (sys.stdout), and
-    # verbose (None)
-    verbose = kwds.pop('verbose', None)
-    if verbose and verbose > verbosity:
+    # kwds can contain sep (' '), end ('\n'), file (sys.stdout), and
+    # verbose_level (None)
+    verbose_level = kwds.pop('verbose_level', 1)
+    target = kwds.pop('file', None)
+    if verbose_level > VERBOSITY and target is not stderr:
         return
     _print(*values, **kwds)
 
@@ -1131,15 +1161,20 @@ def _rewrite_args(args):
     return new_args
 
 def _run_once(func, args, kwds):
+    debug('creating run_once function')
     cache = []
     def later():
+        debug('running later')
         global run_once
         if run_once:
+            debug('returning cached value')
             return cache[0]
         run_once = True
+        debug('calling function')
         result = func(*args, **kwds)
         cache.append(result)
         return result
+    debug('returning <later>')
     return later
 
 def _split_on_comma(text):
@@ -1167,13 +1202,13 @@ def _split_on_comma(text):
         return values
 
 def _usage(func, param_line_args):
+    global VERBOSITY, SCRIPTION_DEBUG
     program, param_line_args = param_line_args[0], _rewrite_args(param_line_args[1:])
     pos = 0
     max_pos = func.max_pos
     print_help = False
     value = None
     annotations = func.__scription__
-    script_annotations = Script.settings
     var_arg_spec = kwd_arg_spec = None
     if Script.command:
         var_arg_spec = getattr(Script.command, '_var_arg', None)
@@ -1218,6 +1253,9 @@ def _usage(func, param_line_args):
             if item.lower() == '--help':
                 print_help = True
                 continue
+            elif item == '-v':
+                VERBOSITY += 1
+                continue
             item = item.lstrip('-')
             value = True
             if item.lower().startswith('no-') and '=' not in item:
@@ -1226,12 +1264,19 @@ def _usage(func, param_line_args):
             elif '=' in item:
                 item, value = item.split('=', 1)
             item = item.replace('-','_')
+            if item.lower() == 'verbose_level':
+                try:
+                    VERBOSITY = int(value)
+                except ValueError:
+                    raise ScriptionError('invalid verbosity level: %r' % value)
+                value = None
+                continue
             if item in annotations:
                 annote = annotations[item]
-            elif item in script_annotations:
-                annote = script_annotations[item]
+            elif item in Script.settings:
+                annote = Script.settings[item]
             elif item in ('SCRIPTION_DEBUG', ):
-                Script.settings[item] = value
+                SCRIPTION_DEBUG = value
                 value = None
                 continue
             else:
@@ -1283,8 +1328,8 @@ def _usage(func, param_line_args):
     exc = None
     if print_help:
         if Script.__usage__ is not None:
-            print('global options: ' + Script.__usage__ + '\n')
-        print('%s %s' % (program, func.__usage__))
+            _print('global options: ' + Script.__usage__ + '\n')
+        _print('%s %s' % (program, func.__usage__))
         os._exit(-1)
     for setting in set(func.__scription__.values()):
         if setting.kind == 'required':
