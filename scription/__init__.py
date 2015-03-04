@@ -1179,6 +1179,11 @@ class _namespace(object):
             raise ScriptionError("namespace object has nothing named %r" % name)
     def __setitem__(self, name, value):
         self.__dict__[name] = value
+    def get(self, key, default=None):
+        try:
+            return self.__dict__[key]
+        except KeyError:
+            return default
 
 def _rewrite_args(args):
     "prog -abc heh --foo bar  -->  prog -a -b -c heh --foo bar"
