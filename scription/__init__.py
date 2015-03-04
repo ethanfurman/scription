@@ -220,10 +220,10 @@ empty = empty()
 class Alias(object):
     "adds aliases for the function"
     def __init__(self, *aliases):
-        debug('recording aliases', aliases, verbose_level=2)
+        debug('recording aliases', aliases, verbose=2)
         self.aliases = aliases
     def __call__(self, func):
-        debug('applying aliases to', func, verbose_level=2)
+        debug('applying aliases to', func, verbose=2)
         for alias in self.aliases:
             Command.subcommands[alias] = func
         return func
@@ -233,14 +233,14 @@ class Command(object):
     "adds __scription__ to decorated function, and adds func to Command.subcommands"
     subcommands = {}
     def __init__(self, **annotations):
-        debug('Command -> initializing', verbose_level=1)
-        debug(annotations, verbose_level=2)
+        debug('Command -> initializing', verbose=1)
+        debug(annotations, verbose=2)
         for name, annotation in annotations.items():
             spec = Spec(annotation)
             annotations[name] = spec
         self.annotations = annotations
     def __call__(self, func):
-        debug('Command -> applying to', func, verbose_level=1)
+        debug('Command -> applying to', func, verbose=1)
         global script_module
         if script_module is None:
             script_module = _func_globals(func)
@@ -617,7 +617,7 @@ def Run():
         if prog_name == '__main__.py':
             # started with python -m, get actual package name for prog_name
             prog_name = os.path.split(prog_path)[1]
-        debug(prog_name, verbose_level=2)
+        debug(prog_name, verbose=2)
         if not Command.subcommands:
             raise ScriptionError("no Commands defined in script")
         func_name = sys.argv[1:2]
@@ -664,8 +664,8 @@ class Script(object):
     named_params = []
     __usage__ = None
     def __init__(self, **settings):
-        debug('Script -> recording', verbose_level=1)
-        debug(settings, verbose_level=2)
+        debug('Script -> recording', verbose=1)
+        debug(settings, verbose=2)
         if Script.command is not None:
             raise ScriptionError("Script can only be used once")
         for name, annotation in settings.items():
@@ -695,7 +695,7 @@ class Script(object):
         Script.names = psyche.names
         Script.__usage__ = psyche.__usage__
     def __call__(self, func):
-        debug('Script -> applying to', func, verbose_level=1)
+        debug('Script -> applying to', func, verbose=1)
         if Script.command is not None:
             raise ScriptionError("Script can only be used once")
         if func.__name__ in Command.subcommands:
@@ -788,8 +788,10 @@ def abort(msg):
 
 def debug(*values, **kwds):
     # kwds can contain sep (' ), end ('\n'), file (sys.stdout), and
-    # verbose_level (None)
-    verbose_level = kwds.pop('verbose_level', 1)
+    # verbose (1)
+    verbose_level = kwds.pop('verbose', 1)
+    if 'file' not in kwds:
+        kwds['file'] = stderr
     if verbose_level > SCRIPTION_DEBUG:
         return
     _print('scription> ', *values, **kwds)
@@ -932,9 +934,9 @@ def _pocket(value=_pocket_sentinel, _pocket=[]):
 
 def print(*values, **kwds):
     # kwds can contain sep (' '), end ('\n'), file (sys.stdout), and
-    # verbose_level (None)
-    verbose_level = kwds.pop('verbose_level', 1)
-    target = kwds.pop('file', None)
+    # verbose (1)
+    verbose_level = kwds.pop('verbose', 1)
+    target = kwds.get('file')
     if verbose_level > VERBOSITY and target is not stderr:
         return
     _print(*values, **kwds)
@@ -992,6 +994,39 @@ def _func_globals(func):
         return func.func_globals
     else:
         return func.__globals__
+
+def _get_version(from_module, _try_other=True):
+    if from_module.get('version'):
+        version = from_module.version
+        if not isinstance(version, basestring):
+            version = '.'.join([str(x) for x in version])
+    else:
+        # try to find package name
+        try:
+            package = os.path.split(os.path.split(sys.modules['__main__'].__file__)[0])[1]
+        except IndexError:
+            version = 'unknown'
+        else:
+            if package in sys.modules and hasattr(sys.modules[package], 'version'):
+                version = sys.modules[package].version
+                if not isinstance(version, basestring):
+                    version = '.'.join([str(x) for x in version])
+            elif _try_other:
+                version = ' '.join(_get_all_versions(from_module), _try_other=False)
+            else:
+                version = 'unknown'
+    return version
+
+def _get_all_versions(from_module, _try_other=True):
+    versions = []
+    for name, module in sys.modules.items():
+        fm_obj = from_module.get(name)
+        if fm_obj is module and hasattr(module, 'version'):
+            version = module.version
+            if not isinstance(version, basestring):
+                version = '.'.join(['%s' % x for x in version])
+            versions.append('%s=%s' % (name, version))
+    return versions
 
 def _help(func):
     '''
@@ -1208,7 +1243,7 @@ def _usage(func, param_line_args):
     program, param_line_args = param_line_args[0], _rewrite_args(param_line_args[1:])
     pos = 0
     max_pos = func.max_pos
-    print_help = False
+    print_help = print_version = print_all_versions = False
     value = None
     annotations = func.__scription__
     var_arg_spec = kwd_arg_spec = None
@@ -1254,6 +1289,12 @@ def _usage(func, param_line_args):
             # (multi)option or flag
             if item.lower() == '--help':
                 print_help = True
+                continue
+            elif item.lower() == '--version':
+                print_version = True
+                continue
+            elif item.lower() in ('--all-versions', '--all_versions'):
+                print_all_versions = True
                 continue
             elif item == '-v':
                 VERBOSITY += 1
@@ -1332,6 +1373,12 @@ def _usage(func, param_line_args):
         if Script.__usage__ is not None:
             _print('global options: ' + Script.__usage__ + '\n')
         _print('%s %s' % (program, func.__usage__))
+        os._exit(-1)
+    elif print_version:
+        _print(_get_version(script_module['module']))
+        os._exit(-1)
+    elif print_all_versions:
+        _print('\n'.join(_get_all_versions(script_module)))
         os._exit(-1)
     for setting in set(func.__scription__.values()):
         if setting.kind == 'required':

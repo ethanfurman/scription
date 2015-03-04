@@ -12,7 +12,7 @@ import tempfile
 is_win = sys.platform.startswith('win')
 py_ver = sys.version_info[:2]
 gubed = False
-print('Scription %s.%s.%s' % version)
+print('Scription %s.%s.%s' % version, verbose=0)
 
 #@Script(blah=('configuration file',None,None,InputFile))
 #def main(jobstep, blah='foo', **stuff):
@@ -453,6 +453,29 @@ class TestOrm(TestCase):
         self.assertTrue(type(hg.home) is Path)
         self.assertTrue(type(hg.who) is str)
         self.assertTrue(type(hg.when) is Time)
+
+
+# class TestVersion(TestCase):
+# 
+#     def test_create(self):
+#         self.assertEqual(str(Version(0, 1)), '0.1')
+#         self.assertEqual(str(Version('0.1')), '0.1')
+#         self.assertEqual(str(Version((0, 1))), '0.1')
+#         self.assertEqual(str(Version(1, 0, 4, 'rc.1')), '1.0.4.rc1')
+#         self.assertEqual(str(Version(1, 0, 4, 'rc-1')), '1.0.4.rc1')
+#         self.assertEqual(str(Version(1, 0, 4, 'rc_1')), '1.0.4.rc1')
+#         self.assertEqual(str(Version('1.0.4.rc1')), '1.0.4.rc1')
+#         self.assertEqual(str(Version('1.0.4rc1')), '1.0.4.rc1')
+#         self.assertEqual(str(Version('1.0.4_rc1')), '1.0.4.rc1')
+#         self.assertEqual(str(Version('1.0.4-rc1')), '1.0.4.rc1')
+#         self.assertEqual(str(Version(5, 7, sub='dev3')), '5.7.dev3')
+#         self.assertEqual(str(Version(5, 7, 0, sub='dev3')), '5.7.dev3')
+#         self.assertEqual(str(Version(2, 9, sub='a2')), '2.9.a2')
+#         self.assertEqual(str(Version(9, 1, 3, local='blahyadda')), '9.1.3+blahyadda')
+#         self.assertEqual(str(Version(2, 3, 5)), '2.3.5')
+#         self.assertEqual(str(Version('2.3.5')), '2.3.5')
+#         self.assertEqual(str(Version('2.3.05')), '2.3.5')
+
 
 if __name__ == '__main__':
     scription.HAS_BEEN_RUN = True
