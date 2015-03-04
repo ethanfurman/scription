@@ -1,3 +1,4 @@
+from __future__ import print_function
 from scription import Script, Command, Run, Spec, InputFile, Bool, _usage, version, empty
 from scription import *
 from unittest import TestCase, main
