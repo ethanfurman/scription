@@ -78,14 +78,16 @@ features
   - extra parameters defined by Script are global, and can be accessed from any
     function or Command
 
-  - builtin options are:  --help (-h), --verbose (-v or -vv)
+  - builtin options are:  --help, --verbose (-v or -vv), --version, --all-versions
+    --version attempts to display the version of the main package in use
+    --all-versions attempts to display the versions of any imported packages
 
 
 [1] I use the suid-python program, available at http://selliott.org/python/suid-python.c
 '''
 
 setup( name='scription',
-       version= '0.74.02',
+       version= '0.74.03',
        license='BSD License',
        description='simple script parameter parser',
        long_description=description,
