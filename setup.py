@@ -82,12 +82,14 @@ features
     --version attempts to display the version of the main package in use
     --all-versions attempts to display the versions of any imported packages
 
+  - command-line is decoded to unicode under Python 2 (Python 3 does this for us)
+
 
 [1] I use the suid-python program, available at http://selliott.org/python/suid-python.c
 '''
 
 setup( name='scription',
-       version= '0.74.05',
+       version= '0.74.06',
        license='BSD License',
        description='simple script parameter parser',
        long_description=description,

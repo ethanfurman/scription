@@ -1,3 +1,9 @@
+0.74.06
+=======
+
+decode command-line to unicode under Python2 (Python3 does this for us)
+
+
 0.74.03
 =======
 
