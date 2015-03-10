@@ -29,6 +29,7 @@ else:
 import datetime
 import email
 import inspect
+import locale
 import logging
 import os
 import re
@@ -85,6 +86,8 @@ __all__ = (
 
 VERBOSITY = 0
 SCRIPTION_DEBUG = 0
+LOCALE_ENCODING = locale.getpreferredencoding() or 'utf-8'
+
 
 # bootstrap SCRIPTION_DEBUG
 for arg in sys.argv:
@@ -607,33 +610,44 @@ IniFile = OrmFile
 
 def Run():
     "parses command-line and compares with either func or, if None, Script.command"
+    global SYS_ARGS
     debug('Run entered')
     if module.get('HAS_BEEN_RUN'):
         debug('Run already called once, returning')
         return
     module['HAS_BEEN_RUN'] = True
+    if py_ver < (3, 0):
+        SYS_ARGS = [arg.decode(LOCALE_ENCODING) for arg in sys.argv]
+    else:
+        SYS_ARGS = sys.argv
     try:
-        prog_path, prog_name = os.path.split(sys.argv[0])
+        prog_path, prog_name = os.path.split(SYS_ARGS[0])
         if prog_name == '__main__.py':
             # started with python -m, get actual package name for prog_name
             prog_name = os.path.split(prog_path)[1]
         debug(prog_name, verbose=2)
         if not Command.subcommands:
             raise ScriptionError("no Commands defined in script")
-        func_name = sys.argv[1:2]
+        func_name = SYS_ARGS[1:2]
+        if func_name == ['--version']:
+            _print(_get_version(script_module['module']))
+            os._exit(-1)
+        elif func_name == ['--all_versions']:
+            _print('\n'.join(_get_all_versions(script_module)))
+            os._exit(-1)
         if not func_name:
             func = None
         else:
             func = Command.subcommands.get(func_name[0])
         if func is not None:
             prog_name = func_name[0]
-            param_line = [prog_name] + sys.argv[2:]
+            param_line = [prog_name] + SYS_ARGS[2:]
         else:
             func = Command.subcommands.get(prog_name, None)
             if func is not None:
-                param_line = [prog_name] + sys.argv[1:]
+                param_line = [prog_name] + SYS_ARGS[1:]
             else:
-                if Script.command is not None:
+                if Script.__usage__:
                     _print("\nglobal options: %s" % Script.command.__usage__)
                 for name, func in sorted(Command.subcommands.items()):
                     _print("\n%s %s" % (name, func.__usage__))
@@ -693,7 +707,7 @@ class Script(object):
         _add_annotations(psyche, settings, script=True)
         _help(psyche)
         Script.names = psyche.names
-        Script.__usage__ = psyche.__usage__
+        Script.__usage__ = psyche.__usage__.strip()
     def __call__(self, func):
         debug('Script -> applying to', func, verbose=1)
         if Script.command is not None:
@@ -708,7 +722,7 @@ class Script(object):
         Script.all_params = func.all_params
         Script.named_params = func.named_params
         Script.settings = func.__scription__
-        Script.__usage__ = func.__usage__
+        Script.__usage__ = func.__usage__.strip()
         Script.command = staticmethod(func)
         return func
 
@@ -1012,7 +1026,7 @@ def _get_version(from_module, _try_other=True):
                 if not isinstance(version, basestring):
                     version = '.'.join([str(x) for x in version])
             elif _try_other:
-                version = ' '.join(_get_all_versions(from_module), _try_other=False)
+                version = ' '.join(_get_all_versions(from_module, _try_other=False))
             else:
                 version = 'unknown'
     return version
@@ -1375,7 +1389,7 @@ def _usage(func, param_line_args):
                 var_arg_spec._cli_value += (var_arg_spec.type(item), )
     exc = None
     if print_help:
-        if Script.__usage__ is not None:
+        if Script.__usage__:
             _print('global options: ' + Script.__usage__ + '\n')
         _print('%s %s' % (program, func.__usage__))
         os._exit(-1)
