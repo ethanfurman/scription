@@ -1027,7 +1027,7 @@ def _get_version(from_module, _try_other=True):
                     version = '.'.join([str(x) for x in version])
             elif _try_other:
                 version = ' '.join(_get_all_versions(from_module, _try_other=False))
-            else:
+            if not version.strip():
                 version = 'unknown'
     return version
 
