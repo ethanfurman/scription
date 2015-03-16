@@ -1029,7 +1029,7 @@ def _get_version(from_module, _try_other=True):
                 version = ' '.join(_get_all_versions(from_module, _try_other=False))
             if not version.strip():
                 version = 'unknown'
-    return version
+    return version + ' running on Python %s' % '.'.join([str(i) for i in sys.version_info])
 
 def _get_all_versions(from_module, _try_other=True):
     versions = []
@@ -1040,6 +1040,7 @@ def _get_all_versions(from_module, _try_other=True):
             if not isinstance(version, basestring):
                 version = '.'.join(['%s' % x for x in version])
             versions.append('%s=%s' % (name, version))
+    versions.append('python=%s' % '.'.join([str(i) for i in sys.version_info]))
     return versions
 
 def _help(func):
