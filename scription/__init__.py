@@ -1187,6 +1187,8 @@ class _namespace(object):
     def __init__(self, wrapped_dict=None):
         if wrapped_dict is not None:
             self.__dict__ = wrapped_dict
+    def __contains__(self, name):
+        return name in self.__dict__
     def __getitem__(self, name):
         try:
             return self.__dict__[name]
