@@ -422,15 +422,15 @@ class TestOrm(TestCase):
         self.assertEqual(complete.hg.home, '/usr/local/bin')
         self.assertEqual(complete.hg.who, 'ethan')
         self.assertEqual(complete.hg.when, datetime.time(12, 45))
-        self.assertTrue(type(complete.home) is str)
-        self.assertTrue(type(complete.who) is str)
+        self.assertTrue(type(complete.home) is unicode)
+        self.assertTrue(type(complete.who) is unicode)
         self.assertTrue(type(complete.hg.when) is datetime.time)
         hg = OrmFile(self.orm_file, section='hg')
         self.assertEqual(hg.home, '/usr/local/bin')
         self.assertEqual(hg.who, 'ethan')
         self.assertEqual(hg.when, datetime.time(12, 45))
-        self.assertTrue(type(hg.home) is str)
-        self.assertTrue(type(hg.who) is str)
+        self.assertTrue(type(hg.home) is unicode)
+        self.assertTrue(type(hg.who) is unicode)
         self.assertTrue(type(hg.when) is datetime.time)
 
     def test_custom(self):
@@ -438,7 +438,7 @@ class TestOrm(TestCase):
             pass
         class Time(datetime.time):
             pass
-        complete = OrmFile(self.orm_file, types={'_path':Path, '_time':Time})
+        complete = OrmFile(self.orm_file, types={'_path':Path, '_time':Time, '_str':str})
         self.assertEqual(complete.home, '/usr/bin')
         self.assertEqual(complete.who, 'ethan')
         self.assertEqual(complete.hg.home, '/usr/local/bin')
@@ -447,7 +447,7 @@ class TestOrm(TestCase):
         self.assertTrue(type(complete.home) is Path)
         self.assertTrue(type(complete.hg.who) is str)
         self.assertTrue(type(complete.hg.when) is Time)
-        hg = OrmFile(self.orm_file, section='hg', types={'_path':Path, '_time':Time})
+        hg = OrmFile(self.orm_file, section='hg', types={'_path':Path, '_time':Time, '_str':str})
         self.assertEqual(hg.home, '/usr/local/bin')
         self.assertEqual(hg.who, 'ethan')
         self.assertEqual(hg.when, datetime.time(12, 45))

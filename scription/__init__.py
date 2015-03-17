@@ -452,8 +452,8 @@ class OrmFile(object):
       - presence of colons and/or hyphens
       - presence of period
     """
-    _str = str
-    _path = str
+    _str = unicode
+    _path = unicode
     _date = datetime.date
     _time = datetime.time
     _datetime = datetime.datetime
