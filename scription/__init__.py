@@ -461,7 +461,7 @@ class OrmFile(object):
     _float = float
     _int = int
 
-    def __init__(self, filename, section=None, export_to=None, types={}):
+    def __init__(self, filename, section=None, export_to=None, types={}, encoding='utf-8'):
         # if section, only return defaults merged with section
         # if export_to, it should be a mapping, and will be populated
         # with the settings
@@ -478,10 +478,15 @@ class OrmFile(object):
         target_section = section
         defaults = {}
         settings = self._settings = _namespace()
-        fh = open(filename)
+        if py_ver < (3, 0):
+            fh = open(filename)
+        else:
+            fh = open(filename, encoding=encoding)
         try:
             section = None
             for line in fh:
+                if py_ver < (3, 0):
+                    line = line.decode(encoding)
                 line = line.strip()
                 if not line or line.startswith(('#',';')):
                     continue

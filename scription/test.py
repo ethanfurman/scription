@@ -15,10 +15,8 @@ py_ver = sys.version_info[:2]
 gubed = False
 print('Scription %s.%s.%s' % version, verbose=0)
 
-#@Script(blah=('configuration file',None,None,InputFile))
-#def main(jobstep, blah='foo', **stuff):
-#    "testing cmd_line..."
-#    print jobstep, blah, stuff
+if py_ver >= (3, 0):
+    unicode = str
 
 def test_func_parsing(obj, func, tests, test_type=False):
     global gubed
@@ -434,7 +432,7 @@ class TestOrm(TestCase):
         self.assertTrue(type(hg.when) is datetime.time)
 
     def test_custom(self):
-        class Path(str):
+        class Path(unicode):
             pass
         class Time(datetime.time):
             pass
