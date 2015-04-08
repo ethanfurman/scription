@@ -201,9 +201,6 @@ class OrmError(ValueError):
 
 class ScriptionError(Exception):
     "raised for errors"
-    def __init__(self, msg=None, command_line=None):
-        super(ScriptionError, self).__init__(msg)
-        self.command_line = command_line
 
 
 class empty(object):
@@ -624,7 +621,7 @@ def Run():
     if py_ver < (3, 0):
         SYS_ARGS = [arg.decode(LOCALE_ENCODING) for arg in sys.argv]
     else:
-        SYS_ARGS = sys.argv
+        SYS_ARGS = sys.argv[:]
     try:
         prog_path, prog_name = os.path.split(SYS_ARGS[0])
         if prog_name == '__main__.py':
@@ -1378,7 +1375,7 @@ def _usage(func, param_line_args):
                 raise ScriptionError('%s must be specified as a %s' % (item, annotations[item].kind))
             item, value = kwd_arg_spec.type(item, value)
             if not isinstance(item, str):
-                raise ScriptionError('keyword names must be strings', ' '.join(param_line_args))
+                raise ScriptionError('keyword names must be strings')
             kwd_arg_spec._cli_value[item] = value
             value = None
         else:
@@ -1416,8 +1413,7 @@ def _usage(func, param_line_args):
     new_args = []
     for i, arg in enumerate(param_line_args):
         if i not in to_be_removed:
-            if ' ' in arg:
-                new_args.extend(('"' + arg.replace('"','\\"') + '"').split())
+            new_args.append(arg)
     sys.argv[1:] = new_args
     main_args, main_kwds = [], {}
     args, varargs = [], None

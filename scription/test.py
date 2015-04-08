@@ -360,24 +360,24 @@ class TestExecution(TestCase):
             self.assertTrue(command.stderr.endswith("KeyError: 'the key is missing?'"),
                     'Failed (actual results):\n%s' % command.stderr)
             command = Execute([sys.executable, self.pty_password_file], pty=True, password='Salutations!')
-            if py_ver < (3, 0):
-                self.assertEqual(
-                        command.stdout,
-                        "super secret santa soda sizzle?\nmake sure no one is watching you type!: \n'Salutations!'?  Are you sure??",
-                        'Failed (actual results):\n%r' % command.stdout)
-                self.assertEqual(
-                        command.stderr,
-                        '',
-                        )
-            else:
-                self.assertEqual(
-                        command.stdout,
-                        "super secret santa soda sizzle?\n'Salutations!'?  Are you sure??",
-                        'Failed (actual results):\n%r' % command.stdout)
-                self.assertEqual(
-                        command.stderr,
-                        'make sure no one is watching you type!:',
-                        )
+            # if py_ver < (3, 0):
+            self.assertEqual(
+                    command.stdout,
+                    "super secret santa soda sizzle?\nmake sure no one is watching you type!: \n'Salutations!'?  Are you sure??",
+                    'Failed (actual results):\n%r' % command.stdout)
+            self.assertEqual(
+                    command.stderr,
+                    '',
+                    )
+            # else:
+            #     self.assertEqual(
+            #             command.stdout,
+            #             "super secret santa soda sizzle?\n'Salutations!'?  Are you sure??",
+            #             'Failed (actual results):\n%r' % command.stdout)
+            #     self.assertEqual(
+            #             command.stderr,
+            #             'make sure no one is watching you type!:',
+            #             )
 
     def test_subprocess(self):
         command = Execute([sys.executable, self.good_file], pty=False)
