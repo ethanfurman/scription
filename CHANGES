@@ -1,3 +1,10 @@
+0.74.10
+=======
+
+add wait_and_check(seconds, period=1): is True until <seconds> have elapsed,
+and waits <period> seconds each check
+
+
 0.73.08
 =======
 

@@ -71,7 +71,7 @@ from sys import stdout, stderr
   - remove determines if this argument is removed from sys.argv
 """
 
-version = 0, 74, 9
+version = 0, 74, 10
 
 # data
 __all__ = (
@@ -81,7 +81,7 @@ __all__ = (
     'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'REQUIRED',
     'ScriptionError', 'ExecuteError', 'Execute',
     'abort', 'get_response', 'help', 'mail', 'user_ids', 'print',
-    'stdout', 'stderr',
+    'stdout', 'stderr', 'wait_and_see',
     )
 
 VERBOSITY = 0
