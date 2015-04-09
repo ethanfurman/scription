@@ -977,6 +977,24 @@ class user_ids(object):
         os.setregid(*self.saved_gids)
         os.setreuid(*self.saved_uids)
 
+class wait_and_check(object):
+    'is True until <seconds> have passed; waits <period> seconds on each check'
+    def __init__(self, seconds, period=1):
+        if seconds < 0:
+            raise ValueError('seconds cannot be less than zero')
+        if period <= 0:
+            raise ValueError('period must be greater than zero')
+        self.limit = time.time() + seconds
+        self.period = period
+        print('time-out:', self.limit, verbose=0)
+    def __bool__(self):
+        time.sleep(self.period)
+        if time.time() < self.limit:
+            return True
+        else:
+            return False
+    __nonzero__ = __bool__
+
 def _add_annotations(func, annotations, script=False):
     '''
     add annotations as __scription__ to func
