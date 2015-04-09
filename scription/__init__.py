@@ -81,7 +81,7 @@ __all__ = (
     'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'REQUIRED',
     'ScriptionError', 'ExecuteError', 'Execute',
     'abort', 'get_response', 'help', 'mail', 'user_ids', 'print',
-    'stdout', 'stderr', 'wait_and_see',
+    'stdout', 'stderr', 'wait_and_check',
     )
 
 VERBOSITY = 0
