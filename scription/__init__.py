@@ -633,27 +633,31 @@ def Run():
         func_name = SYS_ARGS[1:2]
         if func_name == ['--version']:
             _print(_get_version(script_module['module']))
-            os._exit(-1)
+            raise SystemExit
         elif func_name == ['--all_versions']:
             _print('\n'.join(_get_all_versions(script_module)))
-            os._exit(-1)
+            raise SystemExit
         if not func_name:
             func = None
         else:
-            func = Command.subcommands.get(func_name[0])
+            [func_name] = func_name
+            func = Command.subcommands.get(func_name)
         if func is not None:
-            prog_name = func_name[0]
+            prog_name = func_name
             param_line = [prog_name] + SYS_ARGS[2:]
         else:
             func = Command.subcommands.get(prog_name, None)
-            if func is not None:
+            if func is not None and func_name != '--help':
                 param_line = [prog_name] + SYS_ARGS[1:]
             else:
+                prog_name_is_command = prog_name in Command.subcommands
                 if Script.__usage__:
                     _print("\nglobal options: %s" % Script.command.__usage__)
                 for name, func in sorted(Command.subcommands.items()):
+                    if prog_name_is_command and name != prog_name:
+                        name = '%s %s' % (prog_name, name)
                     _print("\n%s %s" % (name, func.__usage__))
-                os._exit(-1)
+                raise SystemExit
         main_args, main_kwds, sub_args, sub_kwds = _usage(func, param_line)
         main_cmd = Script.command
         subcommand = _run_once(func, sub_args, sub_kwds)
@@ -1415,13 +1419,13 @@ def _usage(func, param_line_args):
         if Script.__usage__:
             _print('global options: ' + Script.__usage__ + '\n')
         _print('%s %s' % (program, func.__usage__))
-        os._exit(-1)
+        raise SystemExit
     elif print_version:
         _print(_get_version(script_module['module']))
-        os._exit(-1)
+        raise SystemExit
     elif print_all_versions:
         _print('\n'.join(_get_all_versions(script_module)))
-        os._exit(-1)
+        raise SystemExit
     for setting in set(func.__scription__.values()):
         if setting.kind == 'required':
             setting.value
