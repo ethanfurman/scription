@@ -628,6 +628,7 @@ def Run():
             # started with python -m, get actual package name for prog_name
             prog_name = os.path.split(prog_path)[1]
         debug(prog_name, verbose=2)
+        script_module['script_name'] = prog_name
         if not Command.subcommands:
             raise ScriptionError("no Commands defined in script")
         func_name = SYS_ARGS[1:2]
@@ -804,7 +805,7 @@ class Spec(object):
 
 def abort(msg):
     "raises SystemExit with msg"
-    raise SystemExit(msg)
+    raise SystemExit('%s: %s' % (script_module['script_name'], msg))
 
 def debug(*values, **kwds):
     # kwds can contain sep (' ), end ('\n'), file (sys.stdout), and
