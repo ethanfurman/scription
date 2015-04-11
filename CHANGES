@@ -1,3 +1,11 @@
+0.74.12
+=======
+
+inject 'script_name' in to script's globals
+add script_name to abort() and help() output
+list all subcommands when --help is requested
+
+
 0.74.10
 =======
 
