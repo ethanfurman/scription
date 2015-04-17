@@ -1,3 +1,9 @@
+0.74.13
+=======
+
+allow returncode to be specified when using abort() or help()
+
+
 0.74.12
 =======
 
