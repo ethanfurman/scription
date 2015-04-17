@@ -803,9 +803,10 @@ class Spec(object):
         return value
 
 
-def abort(msg):
-    "raises SystemExit with msg"
-    raise SystemExit('%s: %s' % (script_module['script_name'], msg))
+def abort(msg, returncode=1):
+    "prints msg to stderr, raises SystemExit with returncode"
+    print('%s: %s' % (script_module['script_name'], msg), file=stderr)
+    raise SystemExit(returncode)
 
 def debug(*values, **kwds):
     # kwds can contain sep (' ), end ('\n'), file (sys.stdout), and
@@ -883,11 +884,11 @@ def get_response(
         _print(retry)
     return type(answer)
 
-def help(msg):
+def help(msg, returncode=1):
     "conditionally adds reference to --help"
     if '--help' not in msg:
         msg += ' (use --help for more information)'
-    abort(msg)
+    abort(msg, returncode)
 
 def log_exception(tb=None):
     if tb is None:
