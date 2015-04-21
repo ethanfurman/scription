@@ -992,7 +992,6 @@ class wait_and_check(object):
             raise ValueError('period must be greater than zero')
         self.limit = time.time() + seconds
         self.period = period
-        print('time-out:', self.limit, verbose=0)
     def __bool__(self):
         time.sleep(self.period)
         if time.time() < self.limit:
