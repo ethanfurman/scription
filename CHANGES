@@ -1,3 +1,10 @@
+0.75.15
+=======
+
+allow _params in commands to not be annotated
+treat underscore and dash the same in command names
+
+
 0.74.13
 =======
 
