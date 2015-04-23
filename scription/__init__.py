@@ -1082,6 +1082,9 @@ def _help(func):
     pos = None
     max_pos = 0
     for i, name in enumerate(params + vararg + keywordarg):
+        if name[0] == '_':
+            # ignore private params
+            continue        
         spec = annotations.get(name, None)
         pos = None
         if spec is None:
@@ -1140,6 +1143,9 @@ def _help(func):
         func._kwd_arg = annotations[keywordarg[0]]
     if defaults:
         for name, dflt in zip(reversed(params), reversed(defaults)):
+            if name[0] == '_':
+                # ignore private params
+                continue
             annote = annotations[name]
             if annote._script_default:
                 # default specified in two places
@@ -1166,6 +1172,9 @@ def _help(func):
     global_params = [n for n in func.names if n not in func.all_params]
     print_params = []
     for param in global_params + params:
+        if param[0] == '_':
+            # ignore private params
+            continue
         example = annotations[param].usage
         if annotations[param].kind == 'flag':
             print_params.append('--%s' % param)
@@ -1184,6 +1193,9 @@ def _help(func):
     if func.__doc__:
         usage.extend(['    ' + func.__doc__.strip(), ''])
     for name in global_params + params + vararg + keywordarg:
+        if name[0] == '_':
+            # ignore private params
+            continue
         annote = annotations[name]
         choices = ''
         if annote._script_default is empty or annote._script_default is None or '[default: ' in annote.help:
@@ -1460,6 +1472,9 @@ def _usage(func, param_line_args):
     sub_args, sub_kwds = [], {}
     args, varargs = [], None
     for name in func.all_params:
+        if name[0] == '_':
+            # ignore private params
+            continue
         annote = func.__scription__[name]
         value = annote.value
         if annote is var_arg_spec:

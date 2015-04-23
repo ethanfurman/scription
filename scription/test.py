@@ -71,6 +71,18 @@ class TestCommandlineProcessing(TestCase):
                 )
         test_func_parsing(self, tester, tests)
 
+    def test_multi_with_private(self):
+        @Command(
+                huh=('misc options', 'multi'),
+                )
+        def tester(huh, _mine=''):
+            pass
+        tests = (
+                ( 'tester -h file1'.split(), (), {}, (('file1', ), ), {} ),
+                ( 'tester -h file1 -h file2'.split(), (), {}, (('file1', 'file2'), ), {} ),
+                )
+        test_func_parsing(self, tester, tests)
+
     def test_multi_with_comma(self):
         @Command(
                 huh=('misc options', 'multi'),
@@ -89,6 +101,19 @@ class TestCommandlineProcessing(TestCase):
                 huh=('misc options', 'multi'),
                 )
         def tester(huh):
+            pass
+        tests = (
+                ( shlex.split('tester --huh="one,two,three four"'), (), {}, (('one', 'two', 'three four'), ), {}),
+                ( shlex.split('tester --huh "one,two nine,three"'), (), {}, (('one', 'two nine', 'three'), ), {}),
+                ( shlex.split('tester -h one,two -h "three,four teen"'), (), {}, (('one', 'two', 'three', 'four teen'), ), {}),
+                )
+        test_func_parsing(self, tester, tests)
+
+    def test_multi_with_comma_and_quotes_and_private(self):
+        @Command(
+                huh=('misc options', 'multi'),
+                )
+        def tester(huh, _still_private=None):
             pass
         tests = (
                 ( shlex.split('tester --huh="one,two,three four"'), (), {}, (('one', 'two', 'three four'), ), {}),
@@ -163,6 +188,31 @@ class TestCommandlineProcessing(TestCase):
                 comment=('misc comment for testing', 'option',),
                 )
         def copy(file1, file2, binary=True, comment=''):
+            pass
+        tests = (
+                ('copy file1 file2'.split(), (), {}, ('file1', 'file2', True, ''), {} ),
+                ('copy file1 file2 --no-binary'.split(), (), {}, ('file1', 'file2', False, ''), {} ),
+                ('copy file1 file2 --comment howdy!'.split(), (), {}, ('file1', 'file2', True, 'howdy!'), {} ),
+                ('copy file1 file2 --comment=howdy!'.split(), (), {}, ('file1', 'file2', True, 'howdy!'), {} ),
+                ('copy file1 file2 --no-binary --comment=howdy!'.split(), (), {}, ('file1', 'file2', False, 'howdy!'), {} ),
+                ('copy file1 file2 --comment howdy!'.split(), (), {}, ('file1', 'file2', True, 'howdy!'), {} ),
+                ('copy file1 file2 --no-binary --comment howdy!'.split(), (), {}, ('file1', 'file2', False, 'howdy!'), {} ),
+                (shlex.split('copy file1 file2 --comment "howdy doody!"'), (), {}, ('file1', 'file2', True, 'howdy doody!'), {} ),
+                (shlex.split('copy file1 file2 --comment="howdy doody!"'), (), {}, ('file1', 'file2', True, 'howdy doody!'), {} ),
+                (shlex.split('copy file1 file2 --no-binary --comment="howdy doody!"'), (), {}, ('file1', 'file2', False, 'howdy doody!'), {} ),
+                (shlex.split('copy file1 file2 --comment "howdy doody!"'), (), {}, ('file1', 'file2', True, 'howdy doody!'), {} ),
+                (shlex.split('copy file1 file2 --no-binary --comment "howdy doody!"'), (), {}, ('file1', 'file2', False, 'howdy doody!'), {} ),
+                )
+        test_func_parsing(self, copy, tests)
+
+    def test_positional_with_flag_and_var_and_private(self):
+        @Command(
+                file1=('source file', ),
+                file2=('dest file', ),
+                binary=('copy in binary mode', 'flag',),
+                comment=('misc comment for testing', 'option',),
+                )
+        def copy(file1, file2, binary=True, comment='', _cache=[]):
             pass
         tests = (
                 ('copy file1 file2'.split(), (), {}, ('file1', 'file2', True, ''), {} ),
@@ -259,6 +309,23 @@ class TestCommandlineProcessing(TestCase):
                 )
         test_func_parsing(self, sassy, tests)
 
+    def test_varargs_with_regular_args_and_private(self):
+        @Command(
+                these=('some of these please', ),
+                those=('maybe those', 'flag', ),
+                them=('most important!', 'required'),
+                )
+        def sassy(these, those, _un_cache={}, *them):
+            pass
+        tests = (
+                ('sassy biscuit and gravy'.split(), (), {}, ('biscuit', False, 'and' ,'gravy'), {}),
+                ('sassy --those biscuit and gravy'.split(), (), {}, ('biscuit', True, 'and' ,'gravy'), {}),
+                ('sassy biscuit --those and gravy'.split(), (), {}, ('biscuit', True, 'and' ,'gravy'), {}),
+                ('sassy biscuit and --those gravy'.split(), (), {}, ('biscuit', True, 'and' ,'gravy'), {}),
+                ('sassy biscuit and gravy --those'.split(), (), {}, ('biscuit', True, 'and' ,'gravy'), {}),
+                )
+        test_func_parsing(self, sassy, tests)
+
     def test_kwds(self):
         @Command(
                 hirelings=('who to boss around', ),
@@ -298,6 +365,7 @@ class TestCommandlineProcessing(TestCase):
                 ('debugger --verbose=2'.split(), (), {}, (), {}),
                 )
         test_func_parsing(self, debugger, tests)
+
 
 class TestExecution(TestCase):
 
