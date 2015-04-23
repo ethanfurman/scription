@@ -246,7 +246,8 @@ class Command(object):
             script_module = _func_globals(func)
             script_module['module'] = _namespace(script_module)
         _add_annotations(func, self.annotations)
-        Command.subcommands[func.__name__] = func
+        func_name = func.__name__.replace('_', '-')
+        Command.subcommands[func_name] = func
         _help(func)
         return func
 
@@ -635,14 +636,14 @@ def Run():
         if func_name == ['--version']:
             _print(_get_version(script_module['module']))
             raise SystemExit
-        elif func_name == ['--all_versions']:
+        elif func_name in ( ['--all-versions'], ['--all_versions'] ):
             _print('\n'.join(_get_all_versions(script_module)))
             raise SystemExit
-        if not func_name:
-            func = None
+        elif func_name:
+            func_name = func_name[0].replace('_', '-')
         else:
-            [func_name] = func_name
-            func = Command.subcommands.get(func_name)
+            func_name = None
+        func = Command.subcommands.get(func_name)
         if func is not None:
             prog_name = func_name
             param_line = [prog_name] + SYS_ARGS[2:]
@@ -719,8 +720,9 @@ class Script(object):
         debug('Script -> applying to', func, verbose=1)
         if Script.command is not None:
             raise ScriptionError("Script can only be used once")
-        if func.__name__ in Command.subcommands:
-            raise ScriptionError('%r cannot be both Command and Scription' % func.__name__)
+        func_name = func.__name__.replace('_', '-')
+        if func_name in Command.subcommands:
+            raise ScriptionError('%r cannot be both Command and Scription' % func_name)
         global script_module
         script_module = _func_globals(func)
         script_module['module'] = _namespace(script_module)
@@ -1429,9 +1431,11 @@ def _usage(func, param_line_args):
                 var_arg_spec._cli_value += (var_arg_spec.type(item), )
     exc = None
     if print_help:
+        _print()
         if Script.__usage__:
             _print('global options: ' + Script.__usage__ + '\n')
         _print('%s %s' % (program, func.__usage__))
+        _print()
         raise SystemExit
     elif print_version:
         _print(_get_version(script_module['module']))
