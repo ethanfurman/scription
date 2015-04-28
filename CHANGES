@@ -1,3 +1,10 @@
+0.74.17
+=======
+
+use None as default for a MULTI option when specified in header (not
+(None, ) )
+
+
 0.74.16
 =======
 
