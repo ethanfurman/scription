@@ -1,4 +1,17 @@
-0.75.15
+0.74.16
+=======
+
+fix regression: parameter type from def will be used if none in Spec
+fix regression: show script name in help output
+fix help display when Scription has no function
+show module __doc__ with help display
+change global help to show commands and their doc strings; specific
+command help will show details
+always inject 'script_name' and 'script_command_name'
+fix CHANGES file (not at 0.75 yet!)
+
+
+0.74.15
 =======
 
 allow _params in commands to not be annotated
