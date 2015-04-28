@@ -1128,7 +1128,7 @@ def _help(func):
             raise ScriptionError('duplicate abbreviations: %r' % abbrev)
         if usage_name is empty:
             usage_name = name.upper()
-        if arg_type is _identity and default is not empty:
+        if arg_type is _identity and default is not empty and default is not None:
             arg_type = type(default)
         spec._order = i
         spec.kind = kind
@@ -1163,18 +1163,21 @@ def _help(func):
                 raise ScriptionError('default value for %s specified in Spec and in header (%r, %r)' %
                         (name, annote._script_default, dflt))
             if annote.kind != 'multi':
-                if annote.type is _identity:
+                if annote.type is _identity and dflt is not None:
                     annote.type = type(dflt)
                 annote._script_default = annote.type(dflt)
             else:
-                if not isinstance(dflt, tuple):
-                    dflt = (dflt, )
-                if annote.type is _identity:
-                    annote.type = type(dflt[0])
-                new_dflt = []
-                for d in dflt:
-                    new_dflt.append(annote.type(d))
-                annote._script_default = tuple(new_dflt)
+                if dflt is None:
+                    annote._script_default = dflt
+                else:
+                    if not isinstance(dflt, tuple):
+                        dflt = (dflt, )
+                    if annote.type is _identity:
+                        annote.type = type(dflt[0])
+                    new_dflt = []
+                    for d in dflt:
+                        new_dflt.append(annote.type(d))
+                    annote._script_default = tuple(new_dflt)
     if vararg:
         vararg_type = annotations[vararg[0]].type
     if keywordarg:
