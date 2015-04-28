@@ -656,7 +656,7 @@ def Run():
                 if Script.__usage__:
                     _print("\nglobal options: %s" % Script.__usage__)
                 for name, func in sorted(Command.subcommands.items()):
-                    if prog_name_is_command and name != prog_name:
+                    if not prog_name_is_command or name != prog_name:
                         name = '%s %s' % (prog_name, name)
                     _print("\n%s %s" % (name, func.__usage__))
                 raise SystemExit
