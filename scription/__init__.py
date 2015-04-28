@@ -663,8 +663,9 @@ def Run():
         main_args, main_kwds, sub_args, sub_kwds = _usage(func, param_line)
         main_cmd = Script.command
         subcommand = _run_once(func, sub_args, sub_kwds)
+        script_module['script_command'] = subcommand
+        script_module['script_command_name'] = func.__name__
         if main_cmd:
-            script_module['script_command'] = subcommand
             main_cmd(*main_args, **main_kwds)
         return subcommand()
     except Exception:
