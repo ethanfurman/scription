@@ -1172,7 +1172,7 @@ def _help(func):
                 else:
                     if not isinstance(dflt, tuple):
                         dflt = (dflt, )
-                    if annote.type is _identity:
+                    if annote.type is _identity and dflt:
                         annote.type = type(dflt[0])
                     new_dflt = []
                     for d in dflt:

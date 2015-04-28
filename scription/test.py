@@ -373,15 +373,17 @@ class TestCommandlineProcessing(TestCase):
                 value3=('and yet more values', MULTI, None),
                 value4=('possible None option', OPTION, None),
                 value5=('possible None multi', MULTI, None),
+                value6=('possible tuple multi', MULTI, None),
                 )
-        def type_tester(value1=7, value2=3.1415, value3=3.0j, value4=None, value5=None):
+        def type_tester(value1=7, value2=3.1415, value3=3.0j, value4=None, value5=None, value6=()):
             pass
         tests = (
-                ('type_tester 9 --value2 31.25 --value3 14'.split(), (), {}, (9, 31.25, (14+0j, ), None, None), {}),
-                ('type_tester 9 --value2 31.25 --value3=14'.split(), (), {}, (9, 31.25, (14+0j, ), None, None), {}),
-                ('type_tester 9 --value2 31.25 --value3=14,15+3j'.split(), (), {}, (9, 31.25, (14+0j, 15+3j), None, None), {}),
-                ('type_tester 9 --value2 31.25 --value5=this,that'.split(), (), {}, (9, 31.25, (3.0j, ), None, ('this', 'that')), {}),
-                (shlex.split('type_tester 9 --value2 31.25 --value4="woo hoo"'), (), {}, (9, 31.25, (3.0j, ), 'woo hoo', None), {}),
+                ('type_tester 9 --value2 31.25 --value3 14'.split(), (), {}, (9, 31.25, (14+0j, ), None, None, ()), {}),
+                ('type_tester 9 --value2 31.25 --value3=14'.split(), (), {}, (9, 31.25, (14+0j, ), None, None, ()), {}),
+                ('type_tester 9 --value2 31.25 --value3=14,15+3j'.split(), (), {}, (9, 31.25, (14+0j, 15+3j), None, None, ()), {}),
+                ('type_tester 9 --value2 31.25 --value5=this,that'.split(), (), {}, (9, 31.25, (3.0j, ), None, ('this', 'that'), ()), {}),
+                (shlex.split('type_tester 9 --value2 31.25 --value4="woo hoo"'), (), {}, (9, 31.25, (3.0j, ), 'woo hoo', None, ()), {}),
+                ('type_tester 9 --value2 31.25 --value6 71'.split(), (), {}, (9, 31.25, (3.0j, ), None, None, ('71', )), {}),
                 )
         test_func_parsing(self, type_tester, tests)
 
