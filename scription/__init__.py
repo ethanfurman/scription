@@ -654,7 +654,7 @@ def Run():
             else:
                 prog_name_is_command = prog_name in Command.subcommands
                 if Script.__usage__:
-                    _print("\nglobal options: %s" % Script.command.__usage__)
+                    _print("\nglobal options: %s" % Script.__usage__)
                 for name, func in sorted(Command.subcommands.items()):
                     if prog_name_is_command and name != prog_name:
                         name = '%s %s' % (prog_name, name)
