@@ -366,6 +366,21 @@ class TestCommandlineProcessing(TestCase):
                 )
         test_func_parsing(self, debugger, tests)
 
+    def test_param_type_from_header(self):
+        @Command(
+                value1=('some value', ),
+                value2=('another value', OPTION, None),
+                value3=('and yet more values', MULTI, None),
+                )
+        def type_tester(value1=7, value2=3.1415, value3=3.0j):
+            pass
+        tests = (
+                ('type_tester 9 --value2 31.25 --value3 14'.split(), (), {}, (9, 31.25, (14+0j, )), {}),
+                ('type_tester 9 --value2 31.25 --value3=14'.split(), (), {}, (9, 31.25, (14+0j, )), {}),
+                ('type_tester 9 --value2 31.25 --value3=14,15+3j'.split(), (), {}, (9, 31.25, (14+0j, 15+3j)), {}),
+                )
+        test_func_parsing(self, type_tester, tests)
+
 
 class TestCommandNames(TestCase):
 

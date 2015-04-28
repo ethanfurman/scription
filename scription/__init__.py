@@ -769,10 +769,6 @@ class Spec(object):
             arg_type_default = None
         elif kind == 'multi':
             arg_type_default = tuple()
-            if default and not isinstance(default, tuple):
-                default = (default, )
-            if type is _identity:
-                type = str
         self.help = help
         self.kind = kind
         self.abbrev = abbrev
@@ -1144,6 +1140,7 @@ def _help(func):
     if keywordarg:
         func._kwd_arg = annotations[keywordarg[0]]
     if defaults:
+        # check the defaults in the header
         for name, dflt in zip(reversed(params), reversed(defaults)):
             if name[0] == '_':
                 # ignore private params
@@ -1154,10 +1151,14 @@ def _help(func):
                 raise ScriptionError('default value for %s specified in Spec and in header (%r, %r)' %
                         (name, annote._script_default, dflt))
             if annote.kind != 'multi':
+                if annote.type is _identity:
+                    annote.type = type(dflt)
                 annote._script_default = annote.type(dflt)
             else:
                 if not isinstance(dflt, tuple):
                     dflt = (dflt, )
+                if annote.type is _identity:
+                    annote.type = type(dflt[0])
                 new_dflt = []
                 for d in dflt:
                     new_dflt.append(annote.type(d))
@@ -1331,7 +1332,8 @@ def _usage(func, param_line_args):
             if annote.kind == 'option':
                 annote._cli_value = annote.type(value)
             elif annote.kind == 'multi':
-                annote._cli_value += tuple([annote.type(a) for a in _split_on_comma(value)])
+                values = [annote.type(a) for a in _split_on_comma(value)]
+                annote._cli_value += tuple(values)
             else:
                 raise ScriptionError('Error: kind %r not in (multi, option)' % annote.kind)
             value = None
