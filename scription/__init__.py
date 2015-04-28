@@ -653,6 +653,8 @@ def Run():
                 param_line = [prog_name] + SYS_ARGS[1:]
             else:
                 prog_name_is_command = prog_name in Command.subcommands
+                if script_module['__doc__']:
+                    _print(script_module['__doc__'])
                 if Script.__usage__:
                     _print("\nglobal options: %s" % Script.__usage__)
                 for name, func in sorted(Command.subcommands.items()):
