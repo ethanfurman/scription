@@ -675,7 +675,7 @@ def Run():
         main_cmd = Script.command
         subcommand = _run_once(func, sub_args, sub_kwds)
         script_module['script_command'] = subcommand
-        script_module['script_command_name'] = func.__name__
+        script_module['script_command_name'] = func_name
         if main_cmd:
             main_cmd(*main_args, **main_kwds)
         return subcommand()
