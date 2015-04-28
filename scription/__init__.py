@@ -655,12 +655,21 @@ def Run():
                 prog_name_is_command = prog_name in Command.subcommands
                 if script_module['__doc__']:
                     _print(script_module['__doc__'])
-                if Script.__usage__:
+                    _print()
+                if len(Command.subcommands) == 1:
+                    _detail_help = True
+                else:
+                    _detail_help = False
+                    _name_length = max([len(name) for name in Command.subcommands])
+                if Script.__usage__ and _detail_help:
                     _print("\nglobal options: %s" % Script.__usage__)
                 for name, func in sorted(Command.subcommands.items()):
-                    if not prog_name_is_command or name != prog_name:
-                        name = '%s %s' % (prog_name, name)
-                    _print("\n%s %s" % (name, func.__usage__))
+                    if _detail_help:
+                        if not prog_name_is_command or name != prog_name:
+                            name = '%s %s' % (prog_name, name)
+                        _print("\n%s %s" % (name, func.__usage__))
+                    else:
+                        _print("   %*s  %s" % (_name_length, name, func.__doc__))
                 raise SystemExit
         main_args, main_kwds, sub_args, sub_kwds = _usage(func, param_line)
         main_cmd = Script.command
