@@ -629,7 +629,7 @@ def Run():
             # started with python -m, get actual package name for prog_name
             prog_name = os.path.split(prog_path)[1]
         debug(prog_name, verbose=2)
-        script_module['script_name'] = prog_name.replace('_','-')
+        script_module['script_name'] = prog_name
         prog_name = prog_name.replace('_','-')
         if not Command.subcommands:
             raise ScriptionError("no Commands defined in script")
@@ -677,6 +677,7 @@ def Run():
         subcommand = _run_once(func, sub_args, sub_kwds)
         script_module['script_command'] = subcommand
         script_module['script_command_name'] = func_name
+        script_module['script_verbosity'] = VERBOSITY
         if main_cmd:
             main_cmd(*main_args, **main_kwds)
         return subcommand()
