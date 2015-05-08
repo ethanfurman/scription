@@ -1350,7 +1350,7 @@ def _usage(func, param_line_args):
         original_item = item
         if value is not None:
             if item is None or item.startswith('-') or '=' in item:
-                raise ScriptionError('%s has no value' % last_item)
+                help('%s has no value' % last_item)
             if annote.remove:
                 to_be_removed.append(offset)
             value = item
@@ -1370,7 +1370,7 @@ def _usage(func, param_line_args):
             continue
         if all_to_varargs:
             if var_arg_spec is None:
-                raise ScriptionError("don't know what to do with %r" % item)
+                help("don't know what to do with %r" % item)
             var_arg_spec._cli_value += (var_arg_spec.type(item), )
             continue
         if item.startswith('-'):
@@ -1399,7 +1399,7 @@ def _usage(func, param_line_args):
                 try:
                     VERBOSITY = int(value)
                 except ValueError:
-                    raise ScriptionError('invalid verbosity level: %r' % value)
+                    abort('invalid verbosity level: %r' % value)
                 value = None
                 continue
             if item in annotations:
@@ -1411,7 +1411,7 @@ def _usage(func, param_line_args):
                 value = None
                 continue
             else:
-                raise ScriptionError('%s not valid' % original_item, ' '.join(param_line_args))
+                help('%s not valid' % original_item))
             if annote.remove:
                 to_be_removed.append(offset)
             if annote.kind in ('multi', 'option'):
@@ -1432,14 +1432,14 @@ def _usage(func, param_line_args):
         elif '=' in item:
             # no lead dash, keyword args
             if kwd_arg_spec is None:
-                raise ScriptionError("don't know what to do with %r" % item)
+                help("don't know what to do with %r" % item)
             item, value = item.split('=')
             item = item.replace('-','_')
             if item in func.named_params:
-                raise ScriptionError('%s must be specified as a %s' % (item, annotations[item].kind))
+                help('%s must be specified as a %s' % (item, annotations[item].kind))
             item, value = kwd_arg_spec.type(item, value)
             if not isinstance(item, str):
-                raise ScriptionError('keyword names must be strings')
+                help('keyword names must be strings')
             kwd_arg_spec._cli_value[item] = value
             value = None
         else:
@@ -1448,13 +1448,13 @@ def _usage(func, param_line_args):
                 annote = annotations[pos]
                 # check for choices membership before transforming into a type
                 if annote.choices and item not in annote.choices:
-                    raise ScriptionError('%s: %r not in [ %s ]' % (annote.usage, item, ' | '.join(annote.choices)))
+                    help('%s: %r not in [ %s ]' % (annote.usage, item, ' | '.join(annote.choices)))
                 item = annote.type(item)
                 annote._cli_value = item
                 pos += 1
             else:
                 if var_arg_spec is None:
-                    raise ScriptionError("don't know what to do with %r" % item)
+                    help("don't know what to do with %r" % item)
                 var_arg_spec._cli_value += (var_arg_spec.type(item), )
     exc = None
     if print_help:
