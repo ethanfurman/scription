@@ -1411,7 +1411,7 @@ def _usage(func, param_line_args):
                 value = None
                 continue
             else:
-                help('%s not valid' % original_item))
+                help('%s not valid' % original_item)
             if annote.remove:
                 to_be_removed.append(offset)
             if annote.kind in ('multi', 'option'):
