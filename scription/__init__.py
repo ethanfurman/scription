@@ -284,8 +284,8 @@ class Execute(object):
         if self.pid == 0: # child process
             os.close(error_read)
             self.child_fd = sys.stdout.fileno()
-            self.error_pipe = error_write
             os.dup2(error_write, 2)
+            self.error_pipe = 2
             try:
                 max_fd = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
                 for fd in range(3, max_fd):
@@ -373,7 +373,7 @@ class Execute(object):
         return True
 
     def read(self, size=1, timeout=10):
-        "non-blocking read"
+        "non-blocking read (should only be called by the parent)"
         if self.closed:
             raise ValueError("I/O operation on closed file.")
         r, w, x = select.select([self.child_fd, self.error_pipe], [], [], 0)
@@ -393,7 +393,7 @@ class Execute(object):
         raise ExecuteError('unknown problem with read')
 
     def read_error(self):
-        "only call if error output is available"
+        "only call if error output is available (should only be called by the parent"
         try:
             result = os.read(self.error_pipe, 1024)
         except OSError:
