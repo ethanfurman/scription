@@ -1,3 +1,11 @@
+0.74.21
+=======
+
+use 'help()' instead of raising exceptions for user errors
+quote args that contain white space
+fix writing error output from child
+
+
 0.74.20
 =======
 
