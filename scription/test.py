@@ -57,6 +57,14 @@ def test_func_parsing(obj, func, tests, test_type=False):
         Script.settings = {}
         Script.names = []
 
+def test_func_docstrings(obj, func, docstring):
+    try:
+        obj.assertEqual(func.__doc__, docstring)
+    finally:
+        Script.command = None
+        Script.settings = {}
+        Script.names = []
+
 class TestCommandlineProcessing(TestCase):
 
     def test_multi(self):
@@ -421,6 +429,89 @@ class TestCommandNames(TestCase):
             self.assertTrue(result.returncode is 0, '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
             self.assertEqual(result.stderr, '', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
             self.assertEqual(result.stdout, 'success!', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
+
+
+class TestDocStrings(TestCase):
+
+    def test_single_line(self):
+        @Script()
+        def main():
+            "a single-line test"
+
+        @Command()
+        def sub():
+            "another one-liner"
+
+        test_func_docstrings(self, main, "a single-line test")
+        test_func_docstrings(self, sub, "another one-liner")
+
+    def test_one_line(self):
+        @Script()
+        def main():
+            """
+            a single-line in three
+            """
+
+        @Command()
+        def sub():
+            """
+            another one-liner in three
+            """
+
+        test_func_docstrings(self, main, "a single-line in three")
+        test_func_docstrings(self, sub, "another one-liner in three")
+
+    def test_two_lines(self):
+        @Script()
+        def main():
+            """this is the first line
+            and this is indented
+            """
+
+        @Command()
+        def sub():
+            """another first line
+            and another indented
+            """
+
+        test_func_docstrings(self, main, "this is the first line\n            and this is indented")
+        test_func_docstrings(self, sub, "another first line\n            and another indented")
+
+    def test_two_lines_in_three(self):
+        @Script()
+        def main():
+            """
+            this is the first line
+            and this is the same indentation
+            """
+
+        @Command()
+        def sub():
+            """
+            another first line
+            and another indented the same
+            """
+
+        test_func_docstrings(self, main, "this is the first line\nand this is the same indentation")
+        test_func_docstrings(self, sub, "another first line\nand another indented the same")
+
+    def test_two_lines_with_good_indentation(self):
+        @Script()
+        def main():
+            """
+            this is the first line
+                and this is indented
+            """
+
+        @Command()
+        def sub():
+            """
+            another first line
+                with good indentation
+            """
+
+        test_func_docstrings(self, main, "this is the first line\n    and this is indented")
+        test_func_docstrings(self, sub, "another first line\n    with good indentation")
 
 
 class TestExecution(TestCase):

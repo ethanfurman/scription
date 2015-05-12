@@ -38,6 +38,7 @@ import shlex
 import smtplib
 import socket
 import tempfile
+import textwrap
 import time
 import traceback
 from enum import Enum
@@ -245,6 +246,8 @@ class Command(object):
         if script_module is None:
             script_module = _func_globals(func)
             script_module['module'] = _namespace(script_module)
+        if func.__doc__ is not None:
+            func.__doc__ = textwrap.dedent(func.__doc__).strip()
         _add_annotations(func, self.annotations)
         func_name = func.__name__.replace('_', '-')
         Command.subcommands[func_name] = func
@@ -678,7 +681,8 @@ def Run():
                             name = '%s %s' % (prog_name, name)
                         _print("\n%s %s" % (name, func.__usage__))
                     else:
-                        _print("   %*s  %s" % (_name_length, name, func.__doc__))
+                        doc = (func.__doc__ or '').split('\n')[0]
+                        _print("   %*s  %s" % (_name_length, name, doc))
                 raise SystemExit
         main_args, main_kwds, sub_args, sub_kwds = _usage(func, param_line)
         main_cmd = Script.command
@@ -748,6 +752,8 @@ class Script(object):
         global script_module
         script_module = _func_globals(func)
         script_module['module'] = _namespace(script_module)
+        if func.__doc__ is not None:
+            func.__doc__ = textwrap.dedent(func.__doc__).strip()
         _add_annotations(func, Script.settings, script=True)
         _help(func)
         Script.all_params = func.all_params
@@ -1219,7 +1225,9 @@ def _help(func):
         usage.append("[name1=value1 [name2=value2 [...]]]")
     usage = [' '.join(usage), '']
     if func.__doc__:
-        usage.extend(['    ' + func.__doc__.strip(), ''])
+        for line in func.__doc__.split('\n'):
+            usage.append('    ' + line)
+        usage.append('')
     for name in global_params + params + vararg + keywordarg:
         if name[0] == '_':
             # ignore private params
