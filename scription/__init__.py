@@ -929,29 +929,47 @@ def log_exception(tb=None):
             logger.critical(ln)
     return lines
 
-def mail(server, port, message):
-    "sends email.message to server:port"
-    if isinstance(message, basestring):
+def mail(server=None, port=25, message=None):
+    """
+    sends email.message to server:port
+
+    if message is a str, will break apart To, Cc, and Bcc at commas
+    """
+    receivers = []
+    if message is None:
+        raise ValueError('message not specified')
+    elif isinstance(message, basestring):
         message = email.message_from_string(message)
-    receiver = message.get_all('To', []) + message.get_all('Cc', []) + message.get_all('Bcc', [])
+        for targets in ('To', 'Cc', 'Bcc'):
+            groups = message.get_all(targets, [])
+            del message[targets]
+            for group in groups:
+                addresses = group.split(',')
+                for target in addresses:
+                    target = target.strip()
+                    message[targets] = target
+                    receivers.append(target)
     sender = message['From']
-    try:
-        smtp = smtplib.SMTP(server, port)
-    except socket.error:
-        exc = sys.exc_info()[1]
-        send_errs = {}
-        for rec in receiver:
-            send_errs[rec] = (server, exc.args)
+    if server is None:
+        send_errs = dict.fromkeys(receivers)
     else:
         try:
-            send_errs = smtp.sendmail(sender, receiver, message.as_string())
-        except smtplib.SMTPRecipientsRefused:
+            smtp = smtplib.SMTP(server, port)
+        except socket.error:
             exc = sys.exc_info()[1]
             send_errs = {}
-            for user, detail in exc.recipients.items():
-                send_errs[user] = (server, detail)
-        finally:
-            smtp.quit()
+            for rec in receivers:
+                send_errs[rec] = (server, exc.args)
+        else:
+            try:
+                send_errs = smtp.sendmail(sender, receivers, message.as_string())
+            except smtplib.SMTPRecipientsRefused:
+                exc = sys.exc_info()[1]
+                send_errs = {}
+                for user, detail in exc.recipients.items():
+                    send_errs[user] = (server, detail)
+            finally:
+                smtp.quit()
     errs = {}
     if send_errs:
         for user in send_errs:
@@ -969,10 +987,7 @@ def mail(server, port, message):
                     errs[user] = [send_errs[user], (server, exc.recipients[user])]
                 finally:
                     smtp.quit()
-    if not is_win:
-        for user, errors in errs.items():
-            for server, (code, response) in errors:
-                syslog('%s: %s --> %s: %s' % (server, user, code, response))
+    return errs
 
 _pocket_sentinel = object()
 def _pocket(value=_pocket_sentinel, _pocket=[]):
