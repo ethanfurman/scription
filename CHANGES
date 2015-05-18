@@ -1,3 +1,10 @@
+0.74.25
+=======
+
+Execute: close error pipe when done reading (avoids resource leakage in long-
+running processes)
+
+
 0.74.24
 =======
 
