@@ -326,7 +326,7 @@ class Execute(object):
         self.terminated = False
         submission_received = True
         # loop to read output
-        time.sleep(0.25)
+        time.sleep(0.1)
         last_comms = time.time()
         while self.is_alive():
             if not self.get_echo() and password and submission_received:
@@ -337,12 +337,12 @@ class Execute(object):
                 output.append(_pocket())
                 submission_received = True
                 last_comms = time.time()
-            time.sleep(0.1)
+            time.sleep(0.01)
             if timeout and time.time() - last_comms > timeout:
                 self.close()
         while _pocket(self.read(1024)):
             output.append(_pocket())
-            time.sleep(0.1)
+            time.sleep(0.01)
         while self.error_available:
             self.read_error()
         self.stdout = ''.join(output).rstrip().replace('\r\n', '\n')
@@ -351,8 +351,9 @@ class Execute(object):
 
     def close(self, force=True):
         if not self.closed:
+            os.close(self.error_pipe)
             os.close(self.child_fd)
-            time.sleep(1)
+            time.sleep(0.1)
             if self.is_alive():
                 if not self.terminate(force):
                     raise ExecutionError("Could not terminate the child.")
