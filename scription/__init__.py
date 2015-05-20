@@ -16,12 +16,12 @@ if not is_win:
     import termios
     from syslog import syslog
     import signal
-    kill_signals = signal.SIGHUP, signal.SIGINT
+    KILL_SIGNALS = signal.SIGHUP, signal.SIGINT
 elif py_ver >= (2, 7):
     import signal
-    kill_signals = signal.CTRL_C_EVENT, signal.CTRL_BREAK_EVENT
+    KILL_SIGNALS = signal.CTRL_C_EVENT, signal.CTRL_BREAK_EVENT
 else:
-    kill_signals = ()
+    KILL_SIGNALS = ()
 if py_ver < (3, 0):
     from __builtin__ import print as _print
 else:
@@ -190,6 +190,14 @@ SpecKind.export_to(module)
 
 class ExecuteError(Exception):
     "errors raised by Execute"
+    def __init__(self, msg=None, process=None):
+        self.process = process
+        Exception.__init__(self, msg)
+
+
+class ExecuteTimeoutError(ExecuteError):
+    "Execute timed out"
+
 # deprecated
 ExecutionError = ExecuteError
 
@@ -201,7 +209,7 @@ class OrmError(ValueError):
 
 
 class ScriptionError(Exception):
-    "raised for errors"
+    "raised for errors in user script"
 
 
 class empty(object):
@@ -325,6 +333,7 @@ class Execute(object):
         self.closed = False
         self.terminated = False
         submission_received = True
+        timed_out = False
         # loop to read output
         time.sleep(0.1)
         last_comms = time.time()
@@ -339,24 +348,33 @@ class Execute(object):
                 last_comms = time.time()
             time.sleep(0.01)
             if timeout and time.time() - last_comms > timeout:
-                self.close()
+                timed_out = True
+                self.terminate()
         while _pocket(self.read(1024)):
             output.append(_pocket())
+            if timed_out:
+                break
             time.sleep(0.01)
         while self.error_available:
-            self.read_error()
+            self._read_error()
+            if timed_out:
+                break
         self.stdout = ''.join(output).rstrip().replace('\r\n', '\n')
         self.stderr = ''.join(self.stderr).rstrip().replace('\r\n', '\n')
-        self.close()
+        try:
+            if timed_out:
+                raise ExecuteTimeoutError('process failed to complete in %s seconds' % timeout, process=self)
+        finally:
+            self.close()
 
-    def close(self, force=True):
+    def close(self, force=True,):
         if not self.closed:
             os.close(self.error_pipe)
             os.close(self.child_fd)
             time.sleep(0.1)
             if self.is_alive():
                 if not self.terminate(force):
-                    raise ExecutionError("Could not terminate the child.")
+                    raise ExecuteError("Could not terminate the child.", process=self)
             self.child_fd = -1
             self.closed = True
 
@@ -402,10 +420,10 @@ class Execute(object):
             return result or unicode()
         if result is not None:
             return result
-        raise ExecuteError('unknown problem with read')
+        raise ExecuteError('unknown problem with read', process=self)
 
-    def read_error(self):
-        "only call if error output is available (should only be called by the parent"
+    def _read_error(self):
+        "only call if error output is available"
         try:
             result = os.read(self.error_pipe, 1024)
         except OSError:
@@ -419,7 +437,7 @@ class Execute(object):
     def terminate(self, force=False):
         if not self.is_alive():
             return True
-        for sig in kill_signals:
+        for sig in KILL_SIGNALS:
             os.kill(self.pid, sig)
             time.sleep(0.1)
             if not self.is_alive():
