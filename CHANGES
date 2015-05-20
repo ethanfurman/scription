@@ -1,3 +1,11 @@
+0.74.26
+=======
+
+Execute: raise ExecuteTimeoutError when pty is True and timeout is exceeded;
+all Execute*Error now have an attribute, process, that contains the Execute
+attempt
+
+
 0.74.25
 =======
 
