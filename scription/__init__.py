@@ -1402,9 +1402,10 @@ def _usage(func, param_line_args):
                 values = [annote.type(a) for a in _split_on_comma(value)]
                 annote._cli_value += tuple(values)
             else:
-                raise ScriptionError('Error: kind %r not in (multi, option)' % annote.kind)
+                raise ScriptionError("Error: %s's kind %r not in (multi, option)" % (last_item, annote.kind))
             value = None
             continue
+        last_item = item
         if item is None:
             break
         elif item == '--':
@@ -1471,6 +1472,8 @@ def _usage(func, param_line_args):
                 value = annote.type(value)
                 annote._cli_value = value
                 value = None
+            else:
+                help('%s argument %s should not be introduced with --' % (annote.kind, item))
         elif '=' in item:
             # no lead dash, keyword args
             if kwd_arg_spec is None:
