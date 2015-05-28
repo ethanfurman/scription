@@ -268,7 +268,13 @@ class Execute(object):
     if pty is True runs command in a forked process, otherwise runs in a subprocess
     """
 
-    def __init__(self, args, bufsize=-1, cwd=None, password=None, timeout=None, pty=False):
+    def __init__(self, args, bufsize=-1, cwd=None, password=None, timeout=None, pty=False, interactive=False):
+        # args        -> command to run
+        # cwd         -> directory to run in
+        # password    -> d'oh
+        # timeout     -> raise exception of not complete in timeout seconds
+        # pty         -> False = subprocess, True = fork
+        # interactive -> False = record only, 'echo' = echo output as we get it
         self.env = None
         if isinstance(args, basestring):
             args = shlex.split(args)
@@ -295,6 +301,11 @@ class Execute(object):
             self.closed = True
             self.terminated = True
             self.signal = None
+            if interactive == 'echo':
+                if self.stdout:
+                    print(self.stdout)
+                if self.stderr:
+                    print(self.stderr, file=stderr)
             return
         if is_win:
             raise OSError("pty support for Execute not currently implemented for Windows")
@@ -361,6 +372,11 @@ class Execute(object):
                 break
         self.stdout = ''.join(output).rstrip().replace('\r\n', '\n')
         self.stderr = ''.join(self.stderr).rstrip().replace('\r\n', '\n')
+        if interactive == 'echo':
+            if self.stdout:
+                print(self.stdout)
+            if self.stderr:
+                print(self.stderr, file=stderr)
         try:
             if timed_out:
                 raise ExecuteTimeoutError('process failed to complete in %s seconds' % timeout, process=self)
@@ -1053,11 +1069,11 @@ class wait_and_check(object):
         self.limit = time.time() + seconds
         self.period = period
     def __bool__(self):
-        time.sleep(self.period)
         if time.time() < self.limit:
-            return True
-        else:
-            return False
+            time.sleep(self.period)
+            if time.time() < self.limit:
+                return True
+        return False
     __nonzero__ = __bool__
 
 def _add_annotations(func, annotations, script=False):
