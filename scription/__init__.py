@@ -288,6 +288,7 @@ class Execute(object):
             args = new_args
         if not pty:
             # use subprocess
+            debug('subprocess args:', args)
             process = Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE, cwd=cwd)
             if password is not None:
                 if not isinstance(password, bytes):
@@ -974,36 +975,49 @@ def mail(server=None, port=25, message=None):
     if message is None:
         raise ValueError('message not specified')
     elif isinstance(message, basestring):
+        debug('converting string -> email.message')
+        debug(message, verbose=2)
         message = email.message_from_string(message)
         for targets in ('To', 'Cc', 'Bcc'):
+            debug('   recipient target:', targets, verbose=2)
             groups = message.get_all(targets, [])
+            debug('      groups:', groups, verbose=2)
             del message[targets]
             for group in groups:
+                debug('      group:', group, verbose=2)
                 addresses = group.split(',')
                 for target in addresses:
+                    debug('         individual:', target, verbose=2)
                     target = target.strip()
                     message[targets] = target
                     receivers.append(target)
+    debug('receivers:', receivers, verbose=2)
     sender = message['From']
     if server is None:
+        debug('skipping stage 1', verbose=2)
         send_errs = dict.fromkeys(receivers)
     else:
         try:
+            debug('stage 1: connect to smtp server', server, port)
             smtp = smtplib.SMTP(server, port)
         except socket.error:
             exc = sys.exc_info()[1]
+            debug('error:', exc)
             send_errs = {}
             for rec in receivers:
                 send_errs[rec] = (server, exc.args)
         else:
             try:
+                debug('         sending mail')
                 send_errs = smtp.sendmail(sender, receivers, message.as_string())
             except smtplib.SMTPRecipientsRefused:
                 exc = sys.exc_info()[1]
+                debug('error:', exc)
                 send_errs = {}
                 for user, detail in exc.recipients.items():
                     send_errs[user] = (server, detail)
             finally:
+                debug('         quiting')
                 smtp.quit()
     errs = {}
     if send_errs:
