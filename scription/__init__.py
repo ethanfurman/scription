@@ -995,6 +995,8 @@ def mail(server=None, port=25, message=None):
                     message[targets] = target
                     receivers.append(target)
     debug('receivers:', receivers, verbose=2)
+    if 'date' not in message:
+        message['date'] = email.utils.formatdate(localtime=True)
     sender = message['From']
     if server is None:
         debug('skipping stage 1', verbose=2)
