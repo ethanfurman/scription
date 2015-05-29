@@ -254,6 +254,7 @@ class Command(object):
         if script_module is None:
             script_module = _func_globals(func)
             script_module['module'] = _namespace(script_module)
+            script_module['script_name'] = '<unknown>'
         if func.__doc__ is not None:
             func.__doc__ = textwrap.dedent(func.__doc__).strip()
         _add_annotations(func, self.annotations)
@@ -786,8 +787,10 @@ class Script(object):
         if func_name in Command.subcommands:
             raise ScriptionError('%r cannot be both Command and Scription' % func_name)
         global script_module
-        script_module = _func_globals(func)
-        script_module['module'] = _namespace(script_module)
+        if script_module is None:
+            script_module = _func_globals(func)
+            script_module['module'] = _namespace(script_module)
+            script_module['script_name'] = '<unknown>'
         if func.__doc__ is not None:
             func.__doc__ = textwrap.dedent(func.__doc__).strip()
         _add_annotations(func, Script.settings, script=True)
@@ -1200,8 +1203,11 @@ def _help(func):
         elif kind == 'multi':
             if abbrev is empty:
                 abbrev = name[0]
-            if default and not isinstance(default, tuple):
-                default = (default, )
+            if default:
+                if isinstance(default, list):
+                    default = tuple(default)
+                elif not isinstance(default, tuple):
+                    default = (default, )
         else:
             raise ValueError('unknown kind: %r' % kind)
         if abbrev in annotations:
@@ -1209,7 +1215,11 @@ def _help(func):
         if usage_name is empty:
             usage_name = name.upper()
         if arg_type is _identity and default is not empty and default is not None:
-            arg_type = type(default)
+            if kind == 'multi':
+                if default:
+                    arg_type = type(default[0])
+            else:
+                arg_type = type(default)
         spec._order = i
         spec.kind = kind
         spec.abbrev = abbrev
@@ -1374,9 +1384,12 @@ def _run_once(func, args, kwds):
     return later
 
 def _split_on_comma(text):
+    debug('_split_on_comma(%r)' % text, verbose=2)
     if ',' not in text:
+        debug('  -> %r' % ([text], ), verbose=2)
         return [text]
     elif '\\,' not in text:
+        debug('  -> %r' % text.split(','), verbose=2)
         return text.split(',')
     else:
         values = []
@@ -1395,6 +1408,7 @@ def _split_on_comma(text):
             last_ch = ch
         if new_value:
             raise ScriptionError('trailing "\\" in argument %r' % text)
+        debug('  -> %r' % values, verbose=2)
         return values
 
 def _usage(func, param_line_args):
@@ -1496,7 +1510,9 @@ def _usage(func, param_line_args):
                         annote._cli_value = annote.type(value)
                     else:
                         # value could be a list of comma-separated values
+                        debug('_usage:multi ->', annote.type, verbose=2)
                         annote._cli_value += tuple([annote.type(a) for a in _split_on_comma(value)])
+                        debug('_usage:multi ->', annote._cli_value, verbose=2)
                     value = None
             elif annote.kind == 'flag':
                 value = annote.type(value)
@@ -1606,3 +1622,5 @@ def InputFile(arg):
 
 def OutputFile(arg):
     return open(arg, 'w')
+
+

@@ -145,6 +145,45 @@ class TestCommandlineProcessing(TestCase):
                 )
         test_func_parsing(self, tester, tests)
 
+    def test_multi_with_Spec_default_str(self):
+        @Command(
+                huh=Spec('misc options', 'multi', default='woo'),
+                )
+        def tester(huh):
+            pass
+        tests = (
+                ( 'tester'.split(), (), {}, (('woo', ), ), {} ),
+                ( 'tester --huh=file1'.split(), (), {}, (('file1', ), ), {} ),
+                ( 'tester -h file1 -h file2'.split(), (), {}, (('file1', 'file2'), ), {} ),
+                )
+        test_func_parsing(self, tester, tests)
+
+    def test_multi_with_Spec_default_tuple(self):
+        @Command(
+                huh=Spec('misc options', 'multi', default=('woo', )),
+                )
+        def tester(huh):
+            pass
+        tests = (
+                ( 'tester'.split(), (), {}, (('woo', ), ), {} ),
+                ( 'tester --huh=file1'.split(), (), {}, (('file1', ), ), {} ),
+                ( 'tester -h file1 -h file2'.split(), (), {}, (('file1', 'file2'), ), {} ),
+                )
+        test_func_parsing(self, tester, tests)
+
+    def test_multi_with_Spec_default_int(self):
+        @Command(
+                huh=Spec('misc options', 'multi', default=(7, )),
+                )
+        def tester(huh):
+            pass
+        tests = (
+                ( 'tester'.split(), (), {}, ((7, ), ), {} ),
+                ( 'tester --huh=1'.split(), (), {}, ((1, ), ), {} ),
+                ( 'tester -h 11 -h 13'.split(), (), {}, ((11, 13), ), {} ),
+                )
+        test_func_parsing(self, tester, tests)
+
     def test_positional_only(self):
         @Command(
                 file1=('source file', ),
