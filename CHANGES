@@ -1,3 +1,11 @@
+0.74.28
+=======
+
+Execute: new 'interactive' paramater:
+  False  -> only store output
+  'echo' -> echo output as soon as feasible (and store)
+
+
 0.74.26
 =======
 
