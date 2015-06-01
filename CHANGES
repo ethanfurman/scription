@@ -1,3 +1,11 @@
+0.74.29
+=======
+
+-v only means 'verbose' if v has been used as an abbreviation for some other
+argument
+remove whitespace from script __doc__ when printing help
+
+
 0.74.28
 =======
 
