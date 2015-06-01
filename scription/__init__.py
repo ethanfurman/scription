@@ -703,8 +703,7 @@ def Run():
             else:
                 prog_name_is_command = prog_name in Command.subcommands
                 if script_module['__doc__']:
-                    _print(script_module['__doc__'])
-                    _print()
+                    _print(script_module['__doc__'].strip())
                 if len(Command.subcommands) == 1:
                     _detail_help = True
                 else:
