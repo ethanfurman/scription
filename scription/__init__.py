@@ -1472,7 +1472,7 @@ def _usage(func, param_line_args):
             elif item.lower() in ('--all-versions', '--all_versions'):
                 print_all_versions = True
                 continue
-            elif item == '-v':
+            elif item == '-v' and 'v' not in annotations:
                 VERBOSITY += 1
                 continue
             item = item.lstrip('-')
