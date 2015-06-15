@@ -439,11 +439,12 @@ class TestCommandNames(TestCase):
 
     def setUp(self):
         target_dir = os.path.join(os.getcwd(), os.path.split(os.path.split(scription.__file__)[0])[0])
-        self.command_file = command_file_name = os.path.join(tempdir, 'some_script')
+        self.command_file = command_file_name = os.path.join(tempdir, 'Some_Script')
         command_file = open(command_file_name, 'w')
         try:
             command_file.write(
                 "from __future__ import print_function\n"
+                "'just a test doc'\n"
                 "import sys\n"
                 "sys.path.insert(0, %r)\n"
                 "from scription import *\n"
@@ -453,7 +454,13 @@ class TestCommandNames(TestCase):
                 "        wow=('oh yeah', 'option'),\n"
                 "        )\n"
                 "def test_dash(huh, wow):\n"
+                "    'testing dashes in name'\n"
                 "    print('success!', verbose=0)\n"
+                "\n"
+                "@Command()\n"
+                "def some_script():\n"
+                "    'testing caps in name'\n"
+                "    print('aint that nice.', verbose=0)\n"
                 "\n"
                 "Run()\n"
                 % target_dir
@@ -461,14 +468,30 @@ class TestCommandNames(TestCase):
         finally:
             command_file.close()
 
+
     def test_dash_in_name(self):
         for name in ('test_dash', 'test-dash'):
             cmdline = ' '.join([sys.executable, self.command_file, name])
             result = Execute(cmdline)
             self.assertTrue(result.returncode is 0, '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
             self.assertEqual(result.stderr, '', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
-            self.assertEqual(result.stdout, 'success!', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
+            self.assertEqual(result.stdout, 'success!\n', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
 
+    def test_capital_in_name(self):
+        cmdline = ' '.join([sys.executable, self.command_file])
+        result = Execute(cmdline)
+        self.assertTrue(result.returncode is 0, '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
+        self.assertEqual(result.stderr, '', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
+        self.assertEqual(result.stdout, 'aint that nice.\n', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
+        # cmdline = ' '.join([sys.executable, self.command_file, '--help'])
+        # result = Execute(cmdline)
+        # self.assertTrue(result.returncode is 0, '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
+        # self.assertEqual(result.stderr, '', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
+        # self.assertEqual(
+        #         result.stdout,
+        #         'aint that nice.\n',
+        #         '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr),
+        #         )
 
 class TestDocStrings(TestCase):
 
@@ -604,20 +627,21 @@ class TestExecution(TestCase):
     if not is_win:
         def test_pty(self):
             command = Execute([sys.executable, self.good_file], pty=True)
-            self.assertEqual(command.stdout, 'good output here!')
+            self.assertEqual(command.stdout, 'good output here!\n')
             self.assertEqual(command.stderr, '')
             command = Execute([sys.executable, self.bad_file], pty=True)
             self.assertEqual(command.stdout, '')
-            self.assertTrue(command.stderr.endswith('ValueError: uh-oh -- bad value!'))
+            self.assertTrue(command.stderr.endswith('ValueError: uh-oh -- bad value!\n'))
             command = Execute([sys.executable, self.mixed_file], pty=True)
-            self.assertEqual(command.stdout, 'good night\nsweetheart!')
-            self.assertTrue(command.stderr.endswith("KeyError: 'the key is missing?'"),
+            self.assertEqual(command.stdout, 'good night\nsweetheart!\n')
+            self.assertTrue(command.stderr.endswith("KeyError: 'the key is missing?'\n"),
                     'Failed (actual results):\n%s' % command.stderr)
             command = Execute([sys.executable, self.pty_password_file], pty=True, password='Salutations!')
             # if py_ver < (3, 0):
             self.assertEqual(
                     command.stdout,
-                    "super secret santa soda sizzle?\nmake sure no one is watching you type!: \n'Salutations!'?  Are you sure??",
+                    # "super secret santa soda sizzle?\nmake sure no one is watching you type!: \n'Salutations!'?  Are you sure??",
+                    "'Salutations!'?  Are you sure??\n",
                     'Failed (actual results):\n%r' % command.stdout)
             self.assertEqual(
                     command.stderr,
@@ -635,17 +659,17 @@ class TestExecution(TestCase):
 
     def test_subprocess(self):
         command = Execute([sys.executable, self.good_file], pty=False)
-        self.assertEqual(command.stdout, 'good output here!')
+        self.assertEqual(command.stdout, 'good output here!\n')
         self.assertEqual(command.stderr, '')
         command = Execute([sys.executable, self.bad_file], pty=False)
         self.assertEqual(command.stdout, '')
-        self.assertTrue(command.stderr.endswith('ValueError: uh-oh -- bad value!'))
+        self.assertTrue(command.stderr.endswith('ValueError: uh-oh -- bad value!\n'))
         command = Execute([sys.executable, self.mixed_file], pty=False)
-        self.assertEqual(command.stdout, 'good night\nsweetheart!')
-        self.assertTrue(command.stderr.endswith("KeyError: 'the key is missing?'"),
+        self.assertEqual(command.stdout, 'good night\nsweetheart!\n')
+        self.assertTrue(command.stderr.endswith("KeyError: 'the key is missing?'\n"),
                 'Failed (actual results):\n%r' % command.stderr)
         command = Execute([sys.executable, self.subp_password_file], pty=False, password='Salutations!')
-        self.assertTrue(command.stdout.startswith("super secret santa soda sizzle?\nmake sure no one is watching you type!: 'Salutations!'?  Are you sure??"),
+        self.assertTrue(command.stdout.startswith("super secret santa soda sizzle?\nmake sure no one is watching you type!: 'Salutations!'?  Are you sure??\n"),
                 'Failed (actual results):\n%r' % command.stdout)
         self.assertEqual(command.stderr, '')
 

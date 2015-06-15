@@ -297,8 +297,8 @@ class Execute(object):
                 else:
                     password += '\n'.encode('utf-8')
             stdout, stderr = process.communicate(input=password)
-            self.stdout = stdout.rstrip().decode('utf-8').replace('\r\n', '\n')
-            self.stderr = stderr.rstrip().decode('utf-8').replace('\r\n', '\n')
+            self.stdout = stdout.decode('utf-8').replace('\r\n', '\n')
+            self.stderr = stderr.decode('utf-8').replace('\r\n', '\n')
             self.returncode = process.returncode
             self.closed = True
             self.terminated = True
@@ -375,8 +375,10 @@ class Execute(object):
             self._read_error()
             if timed_out:
                 break
-        self.stdout = ''.join(output).rstrip().replace('\r\n', '\n')
-        self.stderr = ''.join(self.stderr).rstrip().replace('\r\n', '\n')
+        self.stdout = ''.join(output).replace('\r\n', '\n')
+        self.stderr = ''.join(self.stderr).replace('\r\n', '\n')
+        if password and self.stdout[0] == '\n':
+            self.stdout = self.stdout[1:]
         if interactive == 'echo':
             if self.stdout:
                 print(self.stdout)
@@ -685,26 +687,28 @@ def Run():
         if not Command.subcommands:
             raise ScriptionError("no Commands defined in script")
         func_name = SYS_ARGS[1:2]
-        if func_name == ['--version']:
-            _print(_get_version(script_module['module']))
-            raise SystemExit
-        elif func_name in ( ['--all-versions'], ['--all_versions'] ):
-            _print('\n'.join(_get_all_versions(script_module)))
-            raise SystemExit
-        elif func_name:
-            func_name = func_name[0].replace('_', '-')
-        else:
+        if not func_name:
             func_name = None
+        else:
+            func_name = func_name[0].lower()
+            if func_name == '--version':
+                _print(_get_version(script_module['module']))
+                raise SystemExit
+            elif func_name in ('--all-versions', '--all_versions'):
+                _print('\n'.join(_get_all_versions(script_module)))
+                raise SystemExit
+            else:
+                func_name = func_name.replace('_', '-')
         func = Command.subcommands.get(func_name)
         if func is not None:
-            prog_name = func_name
+            prog_name = SYS_ARGS[1:2]
             param_line = [prog_name] + SYS_ARGS[2:]
         else:
-            func = Command.subcommands.get(prog_name, None)
+            func = Command.subcommands.get(prog_name.lower(), None)
             if func is not None and func_name != '--help':
                 param_line = [prog_name] + SYS_ARGS[1:]
             else:
-                prog_name_is_command = prog_name in Command.subcommands
+                prog_name_is_command = prog_name.lower() in Command.subcommands
                 if script_module['__doc__']:
                     _print(script_module['__doc__'].strip())
                 if len(Command.subcommands) == 1:
