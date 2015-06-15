@@ -1,3 +1,10 @@
+0.74.31
+=======
+
+--version now recognizes 'version', '__version__', 'VERSION', and
+'__VERSION__'
+
+
 0.74.30
 =======
 
