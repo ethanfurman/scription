@@ -72,7 +72,7 @@ from sys import stdout, stderr
   - remove determines if this argument is removed from sys.argv
 """
 
-version = 0, 74, 30
+version = 0, 74, 31
 
 # data
 __all__ = (
@@ -115,6 +115,11 @@ else:
     raw_input = input
     basestring = str
     unicode = str
+
+# the __version__ and __VERSION__ are for compatibility with existing code,
+# but those names are reserved by the Python interpreter and should not be
+# used
+_version_strings = 'version', 'VERSION', '__version__', '__VERSION__'
 
 class NullHandler(logging.Handler):
     """
@@ -1136,10 +1141,12 @@ def _func_globals(func):
         return func.__globals__
 
 def _get_version(from_module, _try_other=True):
-    if from_module.get('version'):
-        version = from_module.version
-        if not isinstance(version, basestring):
-            version = '.'.join([str(x) for x in version])
+    for ver in _version_strings:
+        if from_module.get(ver):
+            version = getattr(from_module, ver)
+            if not isinstance(version, basestring):
+                version = '.'.join([str(x) for x in version])
+            break
     else:
         # try to find package name
         try:
@@ -1147,7 +1154,7 @@ def _get_version(from_module, _try_other=True):
         except IndexError:
             version = 'unknown'
         else:
-            if package in sys.modules and hasattr(sys.modules[package], 'version'):
+            if package in sys.modules and any(hasattr(sys.modules[package], v) for v in _version_strings):
                 version = sys.modules[package].version
                 if not isinstance(version, basestring):
                     version = '.'.join([str(x) for x in version])
@@ -1161,11 +1168,14 @@ def _get_all_versions(from_module, _try_other=True):
     versions = []
     for name, module in sys.modules.items():
         fm_obj = from_module.get(name)
-        if fm_obj is module and hasattr(module, 'version'):
-            version = module.version
-            if not isinstance(version, basestring):
-                version = '.'.join(['%s' % x for x in version])
-            versions.append('%s=%s' % (name, version))
+        if fm_obj is module:
+            for ver in _version_strings:
+                if hasattr(module, ver):
+                    version = getattr(module.ver)
+                    if not isinstance(version, basestring):
+                        version = '.'.join(['%s' % x for x in version])
+                    versions.append('%s=%s' % (name, version))
+                    break
     versions.append('python=%s' % '.'.join([str(i) for i in sys.version_info]))
     return versions
 
