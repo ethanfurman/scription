@@ -352,6 +352,9 @@ class Execute(object):
         last_comms = time.time()
         while self.is_alive():
             if not self.get_echo() and password and submission_received:
+                # discard any output before password was requested
+                self.read(1024)
+                output[:] = []
                 self.write(password)
                 self.write('\r\n')
                 submission_received = False
