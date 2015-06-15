@@ -1,8 +1,14 @@
+0.74.30
+=======
+
+do not strip leading/trailing whitespace from Execute output
+
+
 0.74.29
 =======
 
--v only means 'verbose' if v has been used as an abbreviation for some other
-argument
+-v only means 'verbose' if v has not been used as an abbreviation for some
+other argument
 remove whitespace from script __doc__ when printing help
 
 
