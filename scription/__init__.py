@@ -382,7 +382,7 @@ class Execute(object):
                 break
         self.stdout = ''.join(output).replace('\r\n', '\n')
         self.stderr = ''.join(self.stderr).replace('\r\n', '\n')
-        if password and self.stdout[0] == '\n':
+        if password and self.stdout and self.stdout[0] == '\n':
             self.stdout = self.stdout[1:]
         if interactive == 'echo':
             if self.stdout:
