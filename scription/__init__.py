@@ -322,6 +322,7 @@ class Execute(object):
             os.close(error_read)
             self.child_fd = sys.stdout.fileno()
             os.dup2(error_write, 2)
+            os.close(error_write)
             self.error_pipe = 2
             try:
                 max_fd = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
