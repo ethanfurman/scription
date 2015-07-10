@@ -1,3 +1,10 @@
+0.74.33
+=======
+
+enhance Execute pty support
+allow multiple passwords / raise if no password available
+
+
 0.74.31
 =======
 

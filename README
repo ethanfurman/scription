@@ -67,15 +67,25 @@ helper functions/classes
 
 features
 
+  - extra parameters defined by Script are global, and can be accessed from any
+    function or Command
+
   - 'module' is a namespace inserted into the script
 
   - 'script_command' is the Command selected from the command line (useful when
     one needs to call the subcommand directly from a main() function)
 
-  - extra parameters defined by Script are global, and can be accessed from any
-    function or Command
+  - 'script_command_name' is the name of the script_command
 
-  - builtin options are:  --help (-h), --verbose (-v or -vv)
+  - 'script_verbosity' is the level of verboseness selected (defaults to 0)
+
+  - 'script_name' is the name of the script
+
+  - builtin options are:  --help, --verbose (-v or -vv), --version, --all-versions
+    --version attempts to display the version of the main package in use
+    --all-versions attempts to display the versions of any imported packages
+
+  - command-line is decoded to unicode under Python 2 (Python 3 does this for us)
 
 
 [1] I use the suid-python program, available at http://selliott.org/python/suid-python.c

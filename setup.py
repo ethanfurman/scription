@@ -70,13 +70,19 @@ helper functions/classes
 
 features
 
+  - extra parameters defined by Script are global, and can be accessed from any
+    function or Command
+
   - 'module' is a namespace inserted into the script
 
   - 'script_command' is the Command selected from the command line (useful when
     one needs to call the subcommand directly from a main() function)
 
-  - extra parameters defined by Script are global, and can be accessed from any
-    function or Command
+  - 'script_command_name' is the name of the script_command
+
+  - 'script_verbosity' is the level of verboseness selected (defaults to 0)
+
+  - 'script_name' is the name of the script
 
   - builtin options are:  --help, --verbose (-v or -vv), --version, --all-versions
     --version attempts to display the version of the main package in use
@@ -89,7 +95,7 @@ features
 '''
 
 setup( name='scription',
-       version= '0.74.32',
+       version= '0.74.33',
        license='BSD License',
        description='simple script parameter parser',
        long_description=description,
