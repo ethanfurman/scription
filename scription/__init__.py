@@ -72,7 +72,7 @@ from sys import stdout, stderr
   - remove determines if this argument is removed from sys.argv
 """
 
-version = 0, 74, 31
+version = 0, 74, 32
 
 # data
 __all__ = (
@@ -199,12 +199,15 @@ class ExecuteError(Exception):
         self.process = process
         Exception.__init__(self, msg)
 
+class FailedPassword(ExecuteError):
+    "Bad or too few passwords"
 
-class ExecuteTimeoutError(ExecuteError):
+class Timeout(ExecuteError):
     "Execute timed out"
 
 # deprecated
 ExecutionError = ExecuteError
+ExecuteTimeout = Timeout
 
 
 class OrmError(ValueError):
@@ -346,22 +349,32 @@ class Execute(object):
         self.error_pipe = error_read
         self.returncode = None
         self.signal = None
+        discarded = []
         output = []
         self.stderr = []
         self.error_available = False
         self.closed = False
         self.terminated = False
         submission_received = True
-        timed_out = False
+        error = False
+        if isinstance(password, basestring):
+            password = (password, )
         # loop to read output
         time.sleep(0.1)
         last_comms = time.time()
         while self.is_alive():
-            if not self.get_echo() and password and submission_received:
+            if not self.get_echo() and submission_received:
                 # discard any output before password was requested
-                self.read(1024)
+                discarded.extend(output)
+                discarded.append(self.read(1024))
                 output[:] = []
-                self.write(password)
+                if not password:
+                    error = FailedPassword('bad or missing password(s)', process=self)
+                    output[:] = discarded
+                    self.terminate()
+                    break
+                pw, password = password[0], password[1:]
+                self.write(pw)
                 self.write('\r\n')
                 submission_received = False
             while _pocket(self.read(1024)):
@@ -370,16 +383,16 @@ class Execute(object):
                 last_comms = time.time()
             time.sleep(0.01)
             if timeout and time.time() - last_comms > timeout:
-                timed_out = True
+                error = Timeout('process failed to complete in %s seconds' % timeout, process=self)
                 self.terminate()
         while _pocket(self.read(1024)):
             output.append(_pocket())
-            if timed_out:
+            if error:
                 break
             time.sleep(0.01)
         while self.error_available:
             self._read_error()
-            if timed_out:
+            if error:
                 break
         self.stdout = ''.join(output).replace('\r\n', '\n')
         self.stderr = ''.join(self.stderr).replace('\r\n', '\n')
@@ -391,8 +404,8 @@ class Execute(object):
             if self.stderr:
                 print(self.stderr, file=stderr)
         try:
-            if timed_out:
-                raise ExecuteTimeoutError('process failed to complete in %s seconds' % timeout, process=self)
+            if error:
+                raise error
         finally:
             self.close()
 
