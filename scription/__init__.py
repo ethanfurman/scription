@@ -1494,7 +1494,7 @@ def _usage(func, param_line_args):
             continue
         if item.startswith('-'):
             # (multi)option or flag
-            if item.lower() == '--help':
+            if item.lower() == '--help' or item == '-h' and 'h' not in annotations:
                 print_help = True
                 continue
             elif item.lower() == '--version':
