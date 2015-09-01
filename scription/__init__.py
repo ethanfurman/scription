@@ -1173,7 +1173,7 @@ def _get_version(from_module, _try_other=True):
                 if not isinstance(version, basestring):
                     version = '.'.join([str(x) for x in version])
             elif _try_other:
-                version = ' '.join(_get_all_versions(from_module, _try_other=False))
+                version = ' / '.join(_get_all_versions(from_module, _try_other=False))
             if not version.strip():
                 version = 'unknown'
     return version + ' running on Python %s' % '.'.join([str(i) for i in sys.version_info])
@@ -1185,7 +1185,7 @@ def _get_all_versions(from_module, _try_other=True):
         if fm_obj is module:
             for ver in _version_strings:
                 if hasattr(module, ver):
-                    version = getattr(module.ver)
+                    version = getattr(module, ver)
                     if not isinstance(version, basestring):
                         version = '.'.join(['%s' % x for x in version])
                     versions.append('%s=%s' % (name, version))
