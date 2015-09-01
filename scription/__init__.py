@@ -288,13 +288,7 @@ class Execute(object):
         if isinstance(args, basestring):
             args = shlex.split(args)
         else:
-            new_args = []
-            for arg in args:
-                if any(ws in arg for ws in ' \n\r\t'):
-                    new_args.append('"%s"' % arg)
-                else:
-                    new_args.append(arg)
-            args = new_args
+            args = list(args)
         if not pty:
             # use subprocess
             debug('subprocess args:', args)
