@@ -72,7 +72,7 @@ from sys import stdout, stderr
   - remove determines if this argument is removed from sys.argv
 """
 
-version = 0, 74, 32
+version = 0, 74, 34
 
 # data
 __all__ = (
@@ -714,7 +714,7 @@ def Run():
                 func_name = func_name.replace('_', '-')
         func = Command.subcommands.get(func_name)
         if func is not None:
-            prog_name = SYS_ARGS[1:2]
+            prog_name = SYS_ARGS[1].lower()
             param_line = [prog_name] + SYS_ARGS[2:]
         else:
             func = Command.subcommands.get(prog_name.lower(), None)
