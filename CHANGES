@@ -1,3 +1,11 @@
+0.74.34
+=======
+
+arguments to Execute passed as a list no longer get quotes around them
+reenable -h for help
+do not show command name as a list in --help
+
+
 0.74.33
 =======
 
