@@ -1458,7 +1458,6 @@ def _usage(func, param_line_args):
     to_be_removed = []
     all_to_varargs = False
     for offset, item in enumerate(param_line_args + [None]):
-        offset += 1
         original_item = item
         if value is not None:
             if item is None or item.startswith('-') or '=' in item:
