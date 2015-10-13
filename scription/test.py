@@ -19,7 +19,7 @@ if py_ver >= (3, 0):
     unicode = str
 
 def test_func_parsing(obj, func, tests, test_type=False):
-    global gubed
+    global gubed, script_name, script_main, script_commands, script_command, script_commandname
     try:
         for params, main_args, main_kwds, sub_args, sub_kwds in tests:
             have_gubed = verbose = False
@@ -53,17 +53,18 @@ def test_func_parsing(obj, func, tests, test_type=False):
             for spec in set(func.__scription__.values()):
                 spec._cli_value = empty
     finally:
-        Script.command = None
-        Script.settings = {}
-        Script.names = []
+        script_name = '<unknown>'
+        script_main = None
+        script_commands = {}
+        script_command = None
+        script_commandname = ''
 
 def test_func_docstrings(obj, func, docstring):
     try:
         obj.assertEqual(func.__doc__, docstring)
     finally:
-        Script.command = None
-        Script.settings = {}
-        Script.names = []
+        script_main = None
+        script_commands = {}
 
 class TestCommandlineProcessing(TestCase):
 
@@ -294,20 +295,6 @@ class TestCommandlineProcessing(TestCase):
                 )
         test_func_parsing(self, tester, tests, test_type=True)
 
-    def test_main(self):
-        Script(gubed=False)
-
-        @Command(this=('the thingie here', 'option'))
-        def whoa(this):
-            pass
-        tests = (
-                (['whoa'], (), {}, (None, ), {}),
-                ('whoa --gubed'.split(), (), {}, (None, ), {}),
-                ('whoa --gubed -t bukooz'.split(), (), {}, ('bukooz', ), {}),
-                ('whoa -t fletcha'.split(), (), {}, ('fletcha', ), {}),
-                )
-        test_func_parsing(self, whoa, tests)
-
     def test_main_with_feeling(self):
         @Script(
                 gubed=False,
@@ -443,8 +430,8 @@ class TestCommandNames(TestCase):
         command_file = open(command_file_name, 'w')
         try:
             command_file.write(
-                "from __future__ import print_function\n"
                 "'just a test doc'\n"
+                "from __future__ import print_function\n"
                 "import sys\n"
                 "sys.path.insert(0, %r)\n"
                 "from scription import *\n"
@@ -473,25 +460,25 @@ class TestCommandNames(TestCase):
         for name in ('test_dash', 'test-dash'):
             cmdline = ' '.join([sys.executable, self.command_file, name])
             result = Execute(cmdline)
-            self.assertTrue(result.returncode is 0, '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
+            self.assertTrue(result.returncode == 0, '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
             self.assertEqual(result.stderr, '', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
             self.assertEqual(result.stdout, 'success!\n', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
 
     def test_capital_in_name(self):
         cmdline = ' '.join([sys.executable, self.command_file])
         result = Execute(cmdline)
-        self.assertTrue(result.returncode is 0, '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
+        self.assertTrue(result.returncode == 0, '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
         self.assertEqual(result.stderr, '', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
         self.assertEqual(result.stdout, 'aint that nice.\n', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
-        # cmdline = ' '.join([sys.executable, self.command_file, '--help'])
-        # result = Execute(cmdline)
-        # self.assertTrue(result.returncode is 0, '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
-        # self.assertEqual(result.stderr, '', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
-        # self.assertEqual(
-        #         result.stdout,
-        #         'aint that nice.\n',
-        #         '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr),
-        #         )
+        cmdline = ' '.join([sys.executable, self.command_file, '--help'])
+        result = Execute(cmdline)
+        self.assertTrue(result.returncode == 0, '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
+        self.assertEqual(result.stderr, '', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
+        self.assertEqual(
+                result.stdout,
+                'just a test doc\n   some-script  testing caps in name\n     test-dash  testing dashes in name\n',
+                '%s failed!\nstdout: %r\nstderr: %r' % (cmdline, result.stdout, result.stderr),
+                )
 
 class TestDocStrings(TestCase):
 

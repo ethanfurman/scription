@@ -241,14 +241,21 @@ class Alias(object):
         self.aliases = aliases
     def __call__(self, func):
         debug('applying aliases to', func, verbose=2)
+        global script_module
+        if script_module is None:
+            script_module = _func_globals(func)
+            script_module['module'] = _namespace(script_module)
+            script_module['script_name'] = '<unknown>'
+            script_module['script_main'] = None
+            script_module['script_commands'] = {}
         for alias in self.aliases:
-            Command.subcommands[alias] = func
+            alias_name = alias.replace('_', '-')
+            script_module['script_commands'][alias_name] = func
         return func
 
 
 class Command(object):
     "adds __scription__ to decorated function, and adds func to Command.subcommands"
-    subcommands = {}
     def __init__(self, **annotations):
         debug('Command -> initializing', verbose=1)
         debug(annotations, verbose=2)
@@ -263,11 +270,13 @@ class Command(object):
             script_module = _func_globals(func)
             script_module['module'] = _namespace(script_module)
             script_module['script_name'] = '<unknown>'
+            script_module['script_main'] = None
+            script_module['script_commands'] = {}
         if func.__doc__ is not None:
             func.__doc__ = textwrap.dedent(func.__doc__).strip()
         _add_annotations(func, self.annotations)
         func_name = func.__name__.replace('_', '-')
-        Command.subcommands[func_name] = func
+        script_module['script_commands'][func_name] = func
         _help(func)
         return func
 
@@ -678,7 +687,7 @@ IniFile = OrmFile
 
 
 def Run():
-    "parses command-line and compares with either func or, if None, Script.command"
+    "parses command-line and compares with either func or, if None, script_module['script_main']"
     global SYS_ARGS
     debug('Run entered')
     if module.get('HAS_BEEN_RUN'):
@@ -689,6 +698,8 @@ def Run():
         SYS_ARGS = [arg.decode(LOCALE_ENCODING) for arg in sys.argv]
     else:
         SYS_ARGS = sys.argv[:]
+    Script = script_module['script_main']
+    Command = script_module['script_commands']
     try:
         prog_path, prog_name = os.path.split(SYS_ARGS[0])
         if prog_name == '__main__.py':
@@ -697,7 +708,7 @@ def Run():
         debug(prog_name, verbose=2)
         script_module['script_name'] = prog_name
         prog_name = prog_name.replace('_','-')
-        if not Command.subcommands:
+        if not Command:
             raise ScriptionError("no Commands defined in script")
         func_name = SYS_ARGS[1:2]
         if not func_name:
@@ -712,26 +723,26 @@ def Run():
                 raise SystemExit
             else:
                 func_name = func_name.replace('_', '-')
-        func = Command.subcommands.get(func_name)
+        func = Command.get(func_name)
         if func is not None:
             prog_name = SYS_ARGS[1].lower()
             param_line = [prog_name] + SYS_ARGS[2:]
         else:
-            func = Command.subcommands.get(prog_name.lower(), None)
+            func = Command.get(prog_name.lower(), None)
             if func is not None and func_name != '--help':
                 param_line = [prog_name] + SYS_ARGS[1:]
             else:
-                prog_name_is_command = prog_name.lower() in Command.subcommands
+                prog_name_is_command = prog_name.lower() in Command
                 if script_module['__doc__']:
                     _print(script_module['__doc__'].strip())
-                if len(Command.subcommands) == 1:
+                if len(Command) == 1:
                     _detail_help = True
                 else:
                     _detail_help = False
-                    _name_length = max([len(name) for name in Command.subcommands])
-                if Script.__usage__ and _detail_help:
+                    _name_length = max([len(name) for name in Command])
+                if Script and Script.__usage__ and _detail_help:
                     _print("\nglobal options: %s" % Script.__usage__)
-                for name, func in sorted(Command.subcommands.items()):
+                for name, func in sorted(Command.items()):
                     if _detail_help:
                         if not prog_name_is_command or name != prog_name:
                             name = '%s %s' % (prog_name, name)
@@ -741,7 +752,7 @@ def Run():
                         _print("   %*s  %s" % (_name_length, name, doc))
                 raise SystemExit
         main_args, main_kwds, sub_args, sub_kwds = _usage(func, param_line)
-        main_cmd = Script.command
+        main_cmd = Script and Script.command
         subcommand = _run_once(func, sub_args, sub_kwds)
         script_module['script_command'] = subcommand
         script_module['script_command_name'] = func_name
@@ -760,18 +771,10 @@ def Run():
 
 
 class Script(object):
-    "adds __scription__ to decorated function, and stores func in Script.command"
-    command = None
-    settings = {}
-    names = []
-    all_params = []
-    named_params = []
-    __usage__ = None
+    "adds __scription__ to decorated function, and stores func in self.command"
     def __init__(self, **settings):
         debug('Script -> recording', verbose=1)
         debug(settings, verbose=2)
-        if Script.command is not None:
-            raise ScriptionError("Script can only be used once")
         for name, annotation in settings.items():
             if isinstance(annotation, (Spec, tuple)):
                 spec = Spec(annotation)
@@ -787,38 +790,38 @@ class Script(object):
             if spec.usage is empty:
                 spec.usage = name.upper()
             settings[name] = spec
-        Script.settings = settings
-        Script.names = sorted(settings.keys())
-        num_keys = len(Script.names)
-        for i, name in enumerate(Script.names):
+        self.settings = settings
+        self.names = sorted(settings.keys())
+        num_keys = len(self.names)
+        for i, name in enumerate(self.names):
             settings[name]._order = i + num_keys
         def psyche():
             pass
         _add_annotations(psyche, settings, script=True)
         _help(psyche)
-        Script.names = psyche.names
-        Script.__usage__ = psyche.__usage__.strip()
+        self.names = psyche.names
+        self.__usage__ = psyche.__usage__.strip()
     def __call__(self, func):
         debug('Script -> applying to', func, verbose=1)
-        if Script.command is not None:
-            raise ScriptionError("Script can only be used once")
-        func_name = func.__name__.replace('_', '-')
-        if func_name in Command.subcommands:
-            raise ScriptionError('%r cannot be both Command and Scription' % func_name)
         global script_module
         if script_module is None:
             script_module = _func_globals(func)
             script_module['module'] = _namespace(script_module)
             script_module['script_name'] = '<unknown>'
+            script_module['script_commands'] = {}
+        func_name = func.__name__.replace('_', '-')
+        if func_name in script_module.get('script_commands', []):
+            raise ScriptionError('%r cannot be both Command and Scription' % func_name)
         if func.__doc__ is not None:
             func.__doc__ = textwrap.dedent(func.__doc__).strip()
-        _add_annotations(func, Script.settings, script=True)
+        _add_annotations(func, self.settings, script=True)
         _help(func)
-        Script.all_params = func.all_params
-        Script.named_params = func.named_params
-        Script.settings = func.__scription__
-        Script.__usage__ = func.__usage__.strip()
-        Script.command = staticmethod(func)
+        self.all_params = func.all_params
+        self.named_params = func.named_params
+        self.settings = func.__scription__
+        self.__usage__ = func.__usage__.strip()
+        self.command = func
+        script_module['script_main'] = self
         return func
 
 
@@ -1439,6 +1442,8 @@ def _split_on_comma(text):
 
 def _usage(func, param_line_args):
     global VERBOSITY, SCRIPTION_DEBUG
+    Script = script_module['script_main']
+    Command = script_module['script_commands']
     program, param_line_args = param_line_args[0], _rewrite_args(param_line_args[1:])
     pos = 0
     max_pos = func.max_pos
@@ -1446,7 +1451,7 @@ def _usage(func, param_line_args):
     value = None
     annotations = func.__scription__
     var_arg_spec = kwd_arg_spec = None
-    if Script.command:
+    if Script and Script.command:
         var_arg_spec = getattr(Script.command, '_var_arg', None)
         kwd_arg_spec = getattr(Script.command, '_kwd_arg', None)
     if func._var_arg:
@@ -1516,7 +1521,7 @@ def _usage(func, param_line_args):
                 continue
             if item in annotations:
                 annote = annotations[item]
-            elif item in Script.settings:
+            elif Script and item in Script.settings:
                 annote = Script.settings[item]
             elif item in ('SCRIPTION_DEBUG', ):
                 SCRIPTION_DEBUG = value
@@ -1575,7 +1580,7 @@ def _usage(func, param_line_args):
     exc = None
     if print_help:
         _print()
-        if Script.__usage__:
+        if Script and Script.__usage__:
             _print('global options: ' + Script.__usage__ + '\n')
         _print('%s %s' % (program, func.__usage__))
         _print()
@@ -1599,18 +1604,19 @@ def _usage(func, param_line_args):
     sys.argv[1:] = new_args
     main_args, main_kwds = [], {}
     args, varargs = [], None
-    for name in Script.names:
-        annote = Script.settings[name]
-        value = annote.value
-        if annote._global:
-            script_module[name] = value
-        else:
-            if annote is var_arg_spec:
-                varargs = value
-            elif annote is kwd_arg_spec:
-                main_kwds = value
+    if Script:
+        for name in Script.names:
+            annote = Script.settings[name]
+            value = annote.value
+            if annote._global:
+                script_module[name] = value
             else:
-                args.append(annote)
+                if annote is var_arg_spec:
+                    varargs = value
+                elif annote is kwd_arg_spec:
+                    main_kwds = value
+                else:
+                    args.append(annote)
     args = [arg.value for arg in sorted(args, key=lambda a: a._order)]
     if varargs is not None:
         main_args = tuple(args) + varargs
@@ -1647,5 +1653,6 @@ def InputFile(arg):
 
 def OutputFile(arg):
     return open(arg, 'w')
+
 
 
