@@ -11,9 +11,8 @@ sub-commands within a script
 
 decorators
 
-  - Script:  sets global variables and/or parameters for Commands; when used as
-    decorator, the decorated function will be called by Main/Run before any
-    specified Command
+  - Script:  sets global variables and/or parameters for Commands; the decorated
+    function will be called by Main/Run before any specified Command
 
   - Command:  marks function as a subcommand for the script (e.g. add, delete,
     list, etc.); if no subcommand is specified on the command-line, scription
@@ -95,7 +94,7 @@ features
 '''
 
 setup( name='scription',
-       version= '0.74.34',
+       version= '0.74.35',
        license='BSD License',
        description='simple script parameter parser',
        long_description=description,

@@ -1,11 +1,10 @@
-from __future__ import print_function
 """
 intelligently parses command lines
 
 flags: true/false values
 options: other specified value (e.g. user name)
-global script variables:  i.e. debug=True (python expression)
 """
+from __future__ import print_function
 
 import sys
 py_ver = sys.version_info[:2]
@@ -72,7 +71,7 @@ from sys import stdout, stderr
   - remove determines if this argument is removed from sys.argv
 """
 
-version = 0, 74, 34
+version = 0, 74, 35
 
 # data
 __all__ = (

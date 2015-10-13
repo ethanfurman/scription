@@ -1,3 +1,10 @@
+0.74.35
+=======
+
+allow other scriptionified modules to be imported
+remove ability for Script to be used as a plain function
+
+
 0.74.34
 =======
 
