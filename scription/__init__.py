@@ -288,7 +288,7 @@ class Execute(object):
     def __init__(self, args, bufsize=-1, cwd=None, password=None, timeout=None, pty=False, interactive=False):
         # args        -> command to run
         # cwd         -> directory to run in
-        # password    -> d'oh
+        # password    -> single password or tuple of passwords (pty=True only)
         # timeout     -> raise exception of not complete in timeout seconds
         # pty         -> False = subprocess, True = fork
         # interactive -> False = record only, 'echo' = echo output as we get it
