@@ -739,16 +739,23 @@ def Run():
                 else:
                     _detail_help = False
                     _name_length = max([len(name) for name in Command])
-                if Script and Script.__usage__ and _detail_help:
-                    _print("\nglobal options: %s" % Script.__usage__)
+                if not _detail_help:
+                    _print("Available commands/options in", script_module['script_name'])
+                if Script and Script.__usage__:
+                    if _detail_help:
+                        _print("\nglobal options: %s" % Script.__usage__)
+                    else:
+                        _print("\n   global options: %s\n" % Script.__usage__.split('\n')[0])
                 for name, func in sorted(Command.items()):
                     if _detail_help:
-                        if not prog_name_is_command or name != prog_name:
+                        if not (prog_name_is_command or name != prog_name) and len(Command) > 1:
+                            continue
                             name = '%s %s' % (prog_name, name)
                         _print("\n%s %s" % (name, func.__usage__))
                     else:
-                        doc = (func.__doc__ or '').split('\n')[0]
-                        _print("   %*s  %s" % (_name_length, name, doc))
+                        doc = (func.__doc__ or func.__usage__.split('\n')[0]).split('\n')[0]
+                        _print("   %*s  %s" % (-_name_length, name, doc))
+
                 raise SystemExit
         main_args, main_kwds, sub_args, sub_kwds = _usage(func, param_line)
         main_cmd = Script and Script.command

@@ -546,6 +546,132 @@ class TestCommandNames(TestCase):
                 '%s failed!\nstdout: %r\nstderr: %r' % (cmdline, result.stdout, result.stderr),
                 )
 
+class TestHelp(TestCase):
+
+    def write_script(self, test_data):
+        target_dir = os.path.join(os.getcwd(), os.path.split(os.path.split(scription.__file__)[0])[0])
+        file_path = os.path.join(tempdir, 'help_test')
+        file = open(file_path, 'w')
+        try:
+            file.write(test_data % target_dir)
+            return file_path
+        finally:
+            file.close()
+
+    def test_single_command(self):
+        file_data = (
+                "import sys\n"
+                "sys.path.insert(0, %r)\n"
+                "from scription import *\n"
+                "\n"
+                "@Script(\n"
+                "        conf=('configuration file', OPTION),\n"
+                "        )\n"
+                "def main():\n"
+                "    pass\n"
+                "\n"
+                "@Command(\n"
+                "        this=('this argument',),\n"
+                "        that=('that argument',),\n"
+                "        )\n"
+                "def whatever(this, that):\n"
+                "    pass\n"
+                "\n"
+                "\n"
+                "Main()\n"
+                )
+        target_result = (
+                "global options: --conf CONF\n"
+                "\n"
+                "    CONF   configuration file\n"
+                "\n"
+                "whatever THIS THAT\n"
+                "\n"
+                "    THIS   this argument    \n"
+                "    THAT   that argument    \n"
+                )
+        test_file = self.write_script(file_data)
+        result = Execute([sys.executable, test_file, '--help'])
+        self.assertMultiLineEqual(result.stdout.strip(), target_result.strip())
+
+    def test_alias_command(self):
+        file_data = (
+                "import sys\n"
+                "sys.path.insert(0, %r)\n"
+                "from scription import *\n"
+                "\n"
+                "@Script(\n"
+                "        conf=('configuration file', OPTION),\n"
+                "        )\n"
+                "def main():\n"
+                "    pass\n"
+                "\n"
+                "@Command(\n"
+                "        this=('this argument',),\n"
+                "        that=('that argument',),\n"
+                "        )\n"
+                "@Alias('another-thing')\n"
+                "def whatever(this, that):\n"
+                "    pass\n"
+                "\n"
+                "\n"
+                "Main()\n"
+                )
+        target_result = (
+                "Available commands/options in help_test\n"
+                "\n"
+                "   global options: --conf CONF\n"
+                "\n"
+                "   another-thing  THIS THAT\n"
+                "   whatever       THIS THAT\n"
+                )
+        test_file = self.write_script(file_data)
+        result = Execute([sys.executable, test_file, '--help'])
+        self.assertMultiLineEqual(result.stdout.strip(), target_result.strip())
+
+    def test_multiple_commands(self):
+        file_data = (
+                "import sys\n"
+                "sys.path.insert(0, %r)\n"
+                "from scription import *\n"
+                "\n"
+                "@Script(\n"
+                "        conf=('configuration file', OPTION),\n"
+                "        )\n"
+                "def main():\n"
+                "    pass\n"
+                "\n"
+                "@Command(\n"
+                "        this=('this argument',),\n"
+                "        that=('that argument',),\n"
+                "        )\n"
+                "@Alias('another-thing')\n"
+                "def whatever(this, that):\n"
+                "    pass\n"
+                "\n"
+                "@Command(\n"
+                "        other=('an other argumant', ),\n"
+                "        )\n"
+                "def that_thing(other):\n"
+                "    pass\n"
+                "\n"
+                "\n"
+                "Main()\n"
+                )
+        target_result = (
+                "Available commands/options in help_test\n"
+                "\n"
+                "   global options: --conf CONF\n"
+                "\n"
+                "   another-thing  THIS THAT\n"
+                "   that-thing     OTHER\n"
+                "   whatever       THIS THAT\n"
+                )
+        test_file = self.write_script(file_data)
+        result = Execute([sys.executable, test_file, '--help'])
+        self.assertMultiLineEqual(result.stdout.strip(), target_result.strip())
+
+
 class TestDocStrings(TestCase):
 
     def test_single_line(self):
