@@ -1566,6 +1566,8 @@ def _usage(func, param_line_args):
             # positional (required?) argument
             if pos < max_pos:
                 annote = annotations[pos]
+                if annote.remove:
+                    to_be_removed.append(offset)
                 # check for choices membership before transforming into a type
                 if annote.choices and item not in annote.choices:
                     help('%s: %r not in [ %s ]' % (annote.usage, item, ' | '.join(annote.choices)))

@@ -422,6 +422,72 @@ class TestCommandlineProcessing(TestCase):
         test_func_parsing(self, type_tester, tests)
 
 
+class TestParamRemoval(TestCase):
+
+    template = (
+            "import sys\n"
+            "sys.path.insert(0, %r)\n"
+            "from scription import *\n"
+            "\n"
+            "@Command(\n"
+            "        test=Spec('does this get removed?', %s, remove=True),\n"
+            "        )\n"
+            "def removal_script(test):\n"
+            "    if isinstance(test, tuple):\n"
+            "        for t in test:\n"
+            "            if t in sys.argv:\n"
+            "                print('failure')\n"
+            "        else:\n"
+            "            print('success!')\n"
+            "    else:\n"
+            "        if test not in sys.argv:\n"
+            "            print('success!')\n"
+            "        else:\n"
+            "            print(sys.argv)\n"
+            "\n"
+            "Main()"
+            )
+
+    def write_script(self, test_type):
+        target_dir = os.path.join(os.getcwd(), os.path.split(os.path.split(scription.__file__)[0])[0])
+        file_path = os.path.join(tempdir, 'removal_script')
+        file = open(file_path, 'w')
+        try:
+            file.write(self.template % (target_dir, test_type))
+            return file_path
+        finally:
+            file.close()
+
+    def test_required(self):
+        test_file = self.write_script('REQUIRED')
+        result = Execute([sys.executable, test_file, 'haha!'])
+        self.assertEqual(result.stdout, 'success!\n', result.stdout + '\n' + result.stderr)
+
+    def test_option(self):
+        test_file = self.write_script('OPTION')
+        result = Execute([sys.executable, test_file, '--test', 'haha!'])
+        self.assertEqual(result.stdout, 'success!\n', result.stdout + '\n' + result.stderr)
+
+    def test_flag(self):
+        test_file = self.write_script('FLAG')
+        result = Execute([sys.executable, test_file, '--test'])
+        self.assertEqual(result.stdout, 'success!\n', result.stdout + '\n' + result.stderr)
+
+    def test_multi1(self):
+        test_file = self.write_script('MULTI')
+        result = Execute([sys.executable, test_file, '--test', 'boo'])
+        self.assertEqual(result.stdout, 'success!\n', result.stdout + '\n' + result.stderr)
+
+    def test_multi2(self):
+        test_file = self.write_script('MULTI')
+        result = Execute([sys.executable, test_file, '--test', 'boo,hoo'])
+        self.assertEqual(result.stdout, 'success!\n', result.stdout + '\n' + result.stderr)
+
+    def test_multi3(self):
+        test_file = self.write_script('MULTI')
+        result = Execute([sys.executable, test_file, '--test', 'boo', '--test', 'hoo'])
+        self.assertEqual(result.stdout, 'success!\n', result.stdout + '\n' + result.stderr)
+
 class TestCommandNames(TestCase):
 
     def setUp(self):
