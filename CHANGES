@@ -1,3 +1,9 @@
+0.74.38
+=======
+
+change Execute pty default on non-Windows systems to True
+
+
 0.74.35
 =======
 
