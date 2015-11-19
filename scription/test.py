@@ -425,6 +425,7 @@ class TestCommandlineProcessing(TestCase):
 class TestParamRemoval(TestCase):
 
     template = (
+            "from __future__ import print_function\n"
             "import sys\n"
             "sys.path.insert(0, %r)\n"
             "from scription import *\n"
@@ -436,14 +437,14 @@ class TestParamRemoval(TestCase):
             "    if isinstance(test, tuple):\n"
             "        for t in test:\n"
             "            if t in sys.argv:\n"
-            "                print('failure')\n"
+            "                print('failure', verbose=0)\n"
             "        else:\n"
-            "            print('success!')\n"
+            "            print('success!', verbose=0)\n"
             "    else:\n"
             "        if test not in sys.argv:\n"
-            "            print('success!')\n"
+            "            print('success!', verbose=0)\n"
             "        else:\n"
-            "            print(sys.argv)\n"
+            "            print(sys.argv, verbose=0)\n"
             "\n"
             "Main()"
             )
@@ -542,7 +543,7 @@ class TestCommandNames(TestCase):
         self.assertEqual(result.stderr, '', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
         self.assertEqual(
                 result.stdout,
-                'just a test doc\n   some-script  testing caps in name\n     test-dash  testing dashes in name\n',
+                'just a test doc\n   some-script  testing caps in name\n   test-dash    testing dashes in name\n',
                 '%s failed!\nstdout: %r\nstderr: %r' % (cmdline, result.stdout, result.stderr),
                 )
 
