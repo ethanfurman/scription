@@ -9,22 +9,21 @@ from __future__ import print_function
 import sys
 py_ver = sys.version_info[:2]
 is_win = sys.platform.startswith('win')
-if not is_win:
+if is_win:
+    import signal
+    KILL_SIGNALS = [getattr(signal, sig) for sig in ('SIGINT', 'SIGTERM') if hasattr(signal, sig)]
+else:
     from pty import fork
     import resource
     import termios
     from syslog import syslog
     import signal
-    KILL_SIGNALS = signal.SIGHUP, signal.SIGINT
-elif py_ver >= (2, 7):
-    import signal
-    KILL_SIGNALS = signal.CTRL_C_EVENT, signal.CTRL_BREAK_EVENT
-else:
-    KILL_SIGNALS = ()
+    KILL_SIGNALS = [getattr(signal, sig) for sig in ('SIGINT', 'SIGTERM', 'SIGQUIT', 'SIGKILL') if hasattr(signal, sig)]
 if py_ver < (3, 0):
     from __builtin__ import print as _print
 else:
     from builtins import print as _print
+
 import datetime
 import email
 import inspect
@@ -285,7 +284,7 @@ class Execute(object):
     if pty is True runs command in a forked process, otherwise runs in a subprocess
     """
 
-    def __init__(self, args, bufsize=-1, cwd=None, password=None, timeout=None, pty=False, interactive=False):
+    def __init__(self, args, bufsize=-1, cwd=None, password=None, timeout=None, pty=not is_win, interactive=False):
         # args        -> command to run
         # cwd         -> directory to run in
         # password    -> single password or tuple of passwords (pty=True only)
@@ -306,7 +305,10 @@ class Execute(object):
                     password = (password+'\n').encode('utf-8')
                 else:
                     password += '\n'.encode('utf-8')
-            stdout, stderr = process.communicate(input=password)
+            if py_ver < (3, 3):
+                stdout, stderr = process.communicate(input=password)
+            else:
+                stdout, stderr = process.communicate(input=password, timeout=timeout)
             self.stdout = stdout.decode('utf-8').replace('\r\n', '\n')
             self.stderr = stderr.decode('utf-8').replace('\r\n', '\n')
             self.returncode = process.returncode
@@ -411,7 +413,7 @@ class Execute(object):
         finally:
             self.close()
 
-    def close(self, force=True,):
+    def close(self, force=True):
         if not self.closed:
             os.close(self.error_pipe)
             os.close(self.child_fd)
@@ -739,7 +741,7 @@ def Run():
                 else:
                     _detail_help = False
                     _name_length = max([len(name) for name in Command])
-                if not _detail_help:
+                if not (_detail_help or script_module['__doc__']):
                     _print("Available commands/options in", script_module['script_name'])
                 if Script and Script.__usage__:
                     if _detail_help:
