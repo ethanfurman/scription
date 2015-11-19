@@ -1,3 +1,9 @@
+0.74.40
+=======
+
+If Execute times out, modify resulting object instead of raising
+
+
 0.74.38
 =======
 
