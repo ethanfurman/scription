@@ -200,12 +200,12 @@ class ExecuteError(Exception):
 class FailedPassword(ExecuteError):
     "Bad or too few passwords"
 
-class Timeout(ExecuteError):
+class TimeoutError(ExecuteError):
     "Execute timed out"
 
 # deprecated
 ExecutionError = ExecuteError
-ExecuteTimeout = Timeout
+ExecuteTimeout = TimeoutError
 
 
 class OrmError(ValueError):
@@ -387,7 +387,7 @@ class Execute(object):
                 last_comms = time.time()
             time.sleep(0.01)
             if timeout and time.time() - last_comms > timeout:
-                error = Timeout('process failed to complete in %s seconds' % timeout, process=self)
+                error = TimeoutError('process failed to complete in %s seconds' % timeout, process=self)
                 self.terminate()
         while _pocket(self.read(1024)):
             output.append(_pocket())
@@ -397,6 +397,7 @@ class Execute(object):
         while self.error_available:
             self._read_error()
             if error:
+                self.stderr.append('\n<timeout: %s>' % error)
                 break
         self.stdout = ''.join(output).replace('\r\n', '\n')
         self.stderr = ''.join(self.stderr).replace('\r\n', '\n')
@@ -407,11 +408,7 @@ class Execute(object):
                 print(self.stdout)
             if self.stderr:
                 print(self.stderr, file=stderr)
-        try:
-            if error:
-                raise error
-        finally:
-            self.close()
+        self.close()
 
     def close(self, force=True):
         if not self.closed:

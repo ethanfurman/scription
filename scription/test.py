@@ -630,6 +630,40 @@ class TestHelp(TestCase):
         result = Execute([sys.executable, test_file, '--help'])
         self.assertMultiLineEqual(result.stdout.strip(), target_result.strip())
 
+    # def test_alias_matches_script_name(self):
+    #     file_data = (
+    #             "import sys\n"
+    #             "sys.path.insert(0, %r)\n"
+    #             "from scription import *\n"
+    #             "\n"
+    #             "@Script(\n"
+    #             "        conf=('configuration file', OPTION),\n"
+    #             "        )\n"
+    #             "def main():\n"
+    #             "    pass\n"
+    #             "\n"
+    #             "@Command(\n"
+    #             "        this=('this argument',),\n"
+    #             "        that=('that argument',),\n"
+    #             "        )\n"
+    #             "@Alias('help-test')\n"
+    #             "def whatever(this, that):\n"
+    #             "    pass\n"
+    #             "\n"
+    #             "\n"
+    #             "Main()\n"
+    #             )
+    #     target_result = (
+    #             "Available commands/options in help_test\n"
+    #             "\n"
+    #             "   global options: --conf CONF\n"
+    #             "\n"
+    #             "   help_test  THIS THAT\n"
+    #             )
+    #     test_file = self.write_script(file_data)
+    #     result = Execute([sys.executable, test_file, '--help'])
+    #     self.assertMultiLineEqual(result.stdout.strip(), target_result.strip())
+
     def test_multiple_commands(self):
         file_data = (
                 "import sys\n"
@@ -806,17 +840,17 @@ class TestExecution(TestCase):
 
     if not is_win:
         def test_pty(self):
-            command = Execute([sys.executable, self.good_file], pty=True)
+            command = Execute([sys.executable, self.good_file])
             self.assertEqual(command.stdout, 'good output here!\n')
             self.assertEqual(command.stderr, '')
-            command = Execute([sys.executable, self.bad_file], pty=True)
+            command = Execute([sys.executable, self.bad_file])
             self.assertEqual(command.stdout, '')
             self.assertTrue(command.stderr.endswith('ValueError: uh-oh -- bad value!\n'))
-            command = Execute([sys.executable, self.mixed_file], pty=True)
+            command = Execute([sys.executable, self.mixed_file])
             self.assertEqual(command.stdout, 'good night\nsweetheart!\n')
             self.assertTrue(command.stderr.endswith("KeyError: 'the key is missing?'\n"),
                     'Failed (actual results):\n%s' % command.stderr)
-            command = Execute([sys.executable, self.pty_password_file], pty=True, password='Salutations!')
+            command = Execute([sys.executable, self.pty_password_file], password='Salutations!')
             self.assertEqual(
                     command.stdout,
                     "\n'Salutations!'?  Are you sure??\n",
@@ -825,6 +859,12 @@ class TestExecution(TestCase):
                     command.stderr,
                     '',
                     )
+
+    if not is_win or py_ver >= (3, 3):
+        def test_timeout(self):
+            command = Execute([sys.executable, '-c', 'import time; time.sleep(30)'], timeout=1)
+            self.assertTrue(command.returncode)
+            self.assertTrue('process failed to complete in 1 seconds' in command.stderr)
 
     def test_subprocess(self):
         command = Execute([sys.executable, self.good_file], pty=False)
