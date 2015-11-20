@@ -1,3 +1,13 @@
+0.74.41
+=======
+
+change Execute pty default back to False as I encountered issues with
+forked processes forking other processes
+
+use signal to provide timeout when pty is False on non-Windows systems;
+(Windows systems are out of luck until Python 3.3)
+
+
 0.74.40
 =======
 
