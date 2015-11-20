@@ -284,14 +284,20 @@ class Execute(object):
     if pty is True runs command in a forked process, otherwise runs in a subprocess
     """
 
-    def __init__(self, args, bufsize=-1, cwd=None, password=None, timeout=None, pty=not is_win, interactive=False):
+    env = None
+    returncode = None
+    signal = None
+    terminated = False
+
+    def __init__(self, args, bufsize=-1, cwd=None, password=None, timeout=None, pty=False, interactive=False):
         # args        -> command to run
         # cwd         -> directory to run in
         # password    -> single password or tuple of passwords (pty=True only)
         # timeout     -> raise exception of not complete in timeout seconds
         # pty         -> False = subprocess, True = fork
         # interactive -> False = record only, 'echo' = echo output as we get it
-        self.env = None
+        if timeout and is_win and py_ver < (3, 3):
+            raise OSError('timeout is not supported on Windows until Python 3.3')
         if isinstance(args, basestring):
             args = shlex.split(args)
         else:
@@ -300,21 +306,39 @@ class Execute(object):
             # use subprocess
             debug('subprocess args:', args)
             process = Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE, cwd=cwd)
+            self.pid = process.pid
             if password is not None:
                 if not isinstance(password, bytes):
                     password = (password+'\n').encode('utf-8')
                 else:
                     password += '\n'.encode('utf-8')
-            if py_ver < (3, 3):
-                stdout, stderr = process.communicate(input=password)
-            else:
+            if timeout and is_win:
                 stdout, stderr = process.communicate(input=password, timeout=timeout)
+            else:
+                if timeout:
+                    signal.signal(signal.SIGALRM, self.terminate)
+                    signal.alarm(timeout)
+                try:
+                    stdout, stderr = process.communicate(input=password)
+                    if timeout:
+                        signal.alarm(0)
+                except Exception:
+                    if self.terminated:
+                        stdout = ''.encode('utf-8')
+                        stderr = ('<timeout: process failed to complete in %s second(s)>' % timeout).encode('utf-8')
+                    else:
+                        _print('strange')
+                        stdout = ''.encode('utf-8')
+                        stderr = str(sys.exc_info()[1]).encode('utf-8')
             self.stdout = stdout.decode('utf-8').replace('\r\n', '\n')
             self.stderr = stderr.decode('utf-8').replace('\r\n', '\n')
-            self.returncode = process.returncode
-            self.closed = True
-            self.terminated = True
-            self.signal = None
+            if self.terminated:
+                self.stderr += ('\n<timeout: process failed to complete in %s second(s)>' % timeout).encode('utf-8').decode('utf-8')
+            else:
+                self.returncode = process.returncode
+                self.closed = True
+                self.terminated = True
+                self.signal = None
             if interactive == 'echo':
                 if self.stdout:
                     print(self.stdout)
@@ -387,7 +411,7 @@ class Execute(object):
                 last_comms = time.time()
             time.sleep(0.01)
             if timeout and time.time() - last_comms > timeout:
-                error = TimeoutError('process failed to complete in %s seconds' % timeout, process=self)
+                error = TimeoutError('process failed to complete in %s second(s)' % timeout, process=self)
                 self.terminate()
         while _pocket(self.read(1024)):
             output.append(_pocket())
@@ -408,7 +432,10 @@ class Execute(object):
                 print(self.stdout)
             if self.stderr:
                 print(self.stderr, file=stderr)
-        self.close()
+        try:
+            self.close()
+        except ExecuteError:
+            pass
 
     def close(self, force=True):
         if not self.closed:
@@ -416,7 +443,7 @@ class Execute(object):
             os.close(self.child_fd)
             time.sleep(0.1)
             if self.is_alive():
-                if not self.terminate(force):
+                if not self.terminate(force=force):
                     raise ExecuteError("Could not terminate the child.", process=self)
             self.child_fd = -1
             self.closed = True
@@ -477,7 +504,7 @@ class Execute(object):
         else:
             self.stderr.append(result)
 
-    def terminate(self, force=False):
+    def terminate(self, signum=None, frame=None, force=False):
         if not self.is_alive():
             return True
         for sig in KILL_SIGNALS:
@@ -485,12 +512,16 @@ class Execute(object):
             time.sleep(0.1)
             if not self.is_alive():
                 self.terminated = True
+                if signum:
+                    self.signal = signum
                 return True
         if force:
             os.kill(self.pid, signal.SIGKILL)
             time.sleep(0.1)
             if not self.is_alive():
                 self.terminated = True
+                if signum:
+                    self.signal = signum
                 return True
         return False
 

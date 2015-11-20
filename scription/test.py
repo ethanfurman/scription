@@ -840,17 +840,17 @@ class TestExecution(TestCase):
 
     if not is_win:
         def test_pty(self):
-            command = Execute([sys.executable, self.good_file])
+            command = Execute([sys.executable, self.good_file], pty=True)
             self.assertEqual(command.stdout, 'good output here!\n')
             self.assertEqual(command.stderr, '')
-            command = Execute([sys.executable, self.bad_file])
+            command = Execute([sys.executable, self.bad_file], pty=True)
             self.assertEqual(command.stdout, '')
             self.assertTrue(command.stderr.endswith('ValueError: uh-oh -- bad value!\n'))
-            command = Execute([sys.executable, self.mixed_file])
+            command = Execute([sys.executable, self.mixed_file], pty=True)
             self.assertEqual(command.stdout, 'good night\nsweetheart!\n')
             self.assertTrue(command.stderr.endswith("KeyError: 'the key is missing?'\n"),
                     'Failed (actual results):\n%s' % command.stderr)
-            command = Execute([sys.executable, self.pty_password_file], password='Salutations!')
+            command = Execute([sys.executable, self.pty_password_file], password='Salutations!', pty=True)
             self.assertEqual(
                     command.stdout,
                     "\n'Salutations!'?  Are you sure??\n",
@@ -860,11 +860,39 @@ class TestExecution(TestCase):
                     '',
                     )
 
-    if not is_win or py_ver >= (3, 3):
+    if is_win:
+        if py_ver >= (3, 3):
+            def test_timeout(self):
+                "test timeout with subprocess alone"
+                command = Execute([sys.executable, '-c', 'import time; time.sleep(30)'], timeout=1, pty=False)
+                self.assertTrue(command.returncode)
+                self.assertTrue('process failed to complete in 1 second(s)' in command.stderr)
+        else:
+            def test_timeout(self):
+                "no timeout in this version"
+                self.assertRaises(
+                        OSError,
+                        Execute,
+                        [sys.executable, '-c', 'import time; time.sleep(30)'],
+                        timeout=1,
+                        pty=False,
+                        )
+                self.assertRaises(
+                        OSError,
+                        Execute,
+                        [sys.executable, '-c', 'import time; time.sleep(30)'],
+                        timeout=1,
+                        pty=True,
+                        )
+    else:
         def test_timeout(self):
-            command = Execute([sys.executable, '-c', 'import time; time.sleep(30)'], timeout=1)
+            "test timeout with pty, and with subprocess/signals"
+            command = Execute([sys.executable, '-c', 'import time; time.sleep(30); raise Exception("did not time out!")'], timeout=1, pty=True)
             self.assertTrue(command.returncode)
-            self.assertTrue('process failed to complete in 1 seconds' in command.stderr)
+            self.assertTrue('process failed to complete in 1 second(s)' in command.stderr, command.stderr)
+            command = Execute([sys.executable, '-c', 'import time; time.sleep(30); raise Exception("did not time out!")'], timeout=1, pty=False)
+            self.assertTrue(command.returncode)
+            self.assertTrue('process failed to complete in 1 second(s)' in command.stderr, command.stderr)
 
     def test_subprocess(self):
         command = Execute([sys.executable, self.good_file], pty=False)
