@@ -32,6 +32,7 @@ except ImportError:
     from queue import Queue
 import datetime
 import email
+import errno
 import inspect
 import locale
 import logging
@@ -289,8 +290,17 @@ def Execute(args, cwd=None, password=None, timeout=None, pty=None, interactive=N
     try:
         job.communicate(timeout=timeout, interactive=interactive, password=password)
     except TimeoutError:
-        job.terminate()
-        job.communicate(timeout=timeout, interactive=interactive)
+        while job.kill_signals:
+            try:
+                job.terminate()
+                job.communicate(timeout=1, interactive=interactive)
+            except:
+                if job.poll() is not None:
+                    return job
+    except:
+        exc = sys.exc_info()[1]
+        _print('received %r' % exc, file=stderr)
+        sys.stderr.flush()
     return job
 
 
@@ -312,6 +322,7 @@ class Job(object):
         # pty         -> False = subprocess, True = fork
         if pty and is_win:
             raise OSError("pty support for Job not currently implemented for Windows")
+        self.kill_signals = list(KILL_SIGNALS)
         if isinstance(args, basestring):
             args = shlex.split(args)
         else:
@@ -447,7 +458,9 @@ class Job(object):
                     # pty -- look for echo off first
                     while self.get_echo():
                         if timeout is not None and time.time() - start >= timeout:
-                            raise TimeoutError('process failed to complete in %s second(s)' % timeout, process=self.process)
+                            message = '\nTIMEOUT: process failed to complete in %s seconds\n' % timeout
+                            self._stderr.append(message)
+                            raise TimeoutError(message, process=self.process)
                         time.sleep(0.01)
                     pw, passwords = passwords[0], passwords[1:]
                     self.write(pw, block=False)
@@ -457,8 +470,13 @@ class Job(object):
                 time.sleep(0.01)
         active = 2
         while active:
+            if not self.get_echo():
+                # looking for a password? we have none
+                raise FailedPassword
             if timeout is not None and time.time() - start >= timeout:
-                raise TimeoutError('process failed to complete in %s second(s)' % timeout, process=self.process)
+                message = '\nTIMEOUT: process failed to complete in %s seconds\n' % timeout
+                self._stderr.append(message)
+                raise TimeoutError(message, process=self.process)
             if not self._all_output.qsize():
                 time.sleep(0.1)
                 continue
@@ -470,11 +488,13 @@ class Job(object):
             if stream == 'stdout':
                 self._stdout.append(data)
                 if interactive == 'echo':
-                    _print(data)
+                    _print(data, end='')
+                    sys.stdout.flush()
             elif stream == 'stderr':
                 self._stderr.append(data)
                 if interactive == 'echo':
-                    _print(data)
+                    _print(data, end='', file=stderr)
+                    sys.stderr.flush()
             else:
                 raise Exception('unknown stream: %r' % stream)
         self.stdout = ''.join(self._stdout).replace('\r\n', '\n')
@@ -519,7 +539,11 @@ class Job(object):
 
     def get_echo(self):
         "return the child's terminal echo status (True is on) (parent method)"
-        attr = termios.tcgetattr(self.child_fd)
+        try:
+            child_fd = self.child_fd
+        except AttributeError:
+            return True
+        attr = termios.tcgetattr(child_fd)
         if attr[3] & termios.ECHO:
             return True
         return False
@@ -532,7 +556,13 @@ class Job(object):
         'parent method'
         if self.terminated:
             return False
-        pid, status = os.waitpid(self.pid, os.WNOHANG)
+        try:
+            pid, status = os.waitpid(self.pid, os.WNOHANG)
+        except:
+            exc = sys.exc_info()[1]
+            if isinstance(exc, OSError) and exc.errno == errno.ECHILD:
+                return False
+            raise ExecuteError(str(exc))
         if pid != 0:
             self.signal = status % 256
             if self.signal:
@@ -545,13 +575,10 @@ class Job(object):
 
     def kill(self):
         'parent method'
-        if self.is_alive():
-            for sig in KILL_SIGNALS[::-1]:
-                os.kill(self.pid, sig)
-                time.sleep(0.1)
-                if not self.is_alive():
-                    self.terminated = True
-                break
+        if self.is_alive() and self.kill_signals:
+            sig = self.kill_signals.pop()
+            os.kill(self.pid, sig)
+            time.sleep(0.1)
 
     def poll(self):
         if self.is_alive():
@@ -590,13 +617,10 @@ class Job(object):
 
     def terminate(self):
         'parent method'
-        if self.is_alive():
-            for sig in KILL_SIGNALS:
-                os.kill(self.pid, sig)
-                time.sleep(0.1)
-                if not self.is_alive():
-                    self.terminated = True
-                break
+        if self.is_alive() and self.kill_signals:
+            sig = self.kill_signals.pop(0)
+            os.kill(self.pid, sig)
+            time.sleep(0.1)
 
     def write(self, data, block=True):
         'parent method'
@@ -1194,6 +1218,10 @@ def print(*values, **kwds):
     if verbose_level > VERBOSITY and target is not stderr:
         return
     _print(*values, **kwds)
+    if target:
+        target.flush()
+    else:
+        sys.stdout.flush()
 
 class user_ids(object):
     """
