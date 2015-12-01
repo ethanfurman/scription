@@ -11,19 +11,25 @@ py_ver = sys.version_info[:2]
 is_win = sys.platform.startswith('win')
 if is_win:
     import signal
-    KILL_SIGNALS = [getattr(signal, sig) for sig in ('SIGINT', 'SIGTERM') if hasattr(signal, sig)]
+    KILL_SIGNALS = [getattr(signal, sig) for sig in ('SIGTERM') if hasattr(signal, sig)]
+    from subprocess import Popen, PIPE, STDOUT, STARTUPINFO, STARTF_USESTDHANDLES, CREATE_NEW_PROCESS_GROUP
 else:
     from pty import fork
     import resource
     import termios
     from syslog import syslog
     import signal
-    KILL_SIGNALS = [getattr(signal, sig) for sig in ('SIGINT', 'SIGTERM', 'SIGQUIT', 'SIGKILL') if hasattr(signal, sig)]
+    KILL_SIGNALS = [getattr(signal, sig) for sig in ('SIGTERM', 'SIGQUIT', 'SIGKILL') if hasattr(signal, sig)]
+    from subprocess import Popen, PIPE, STDOUT
 if py_ver < (3, 0):
     from __builtin__ import print as _print
 else:
     from builtins import print as _print
-
+from threading import Thread
+try:
+    from Queue import Queue
+except ImportError:
+    from queue import Queue
 import datetime
 import email
 import inspect
@@ -41,7 +47,6 @@ import time
 import traceback
 from enum import Enum
 from functools import partial
-from subprocess import Popen, PIPE, STDOUT
 from sys import stdout, stderr
 
 """
@@ -78,7 +83,7 @@ __all__ = (
     'Bool','InputFile', 'OutputFile',
     'IniError', 'IniFile', 'OrmError', 'OrmFile',
     'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'REQUIRED',
-    'ScriptionError', 'ExecuteError', 'Execute',
+    'ScriptionError', 'ExecuteError', 'Execute', 'Job',
     'abort', 'get_response', 'help', 'mail', 'user_ids', 'print',
     'stdout', 'stderr', 'wait_and_check',
     )
@@ -279,7 +284,17 @@ class Command(object):
         return func
 
 
-class Execute(object):
+def Execute(args, cwd=None, password=None, timeout=None, pty=None, interactive=None):
+    job = Job(args, cwd, pty)
+    try:
+        job.communicate(timeout=timeout, interactive=interactive, password=password)
+    except TimeoutError:
+        job.terminate()
+        job.communicate(timeout=timeout, interactive=interactive)
+    return job
+
+
+class Job(object):
     """
     if pty is True runs command in a forked process, otherwise runs in a subprocess
     """
@@ -288,16 +303,16 @@ class Execute(object):
     returncode = None
     signal = None
     terminated = False
+    process = None
+    si = None
+    closed = False
 
-    def __init__(self, args, bufsize=-1, cwd=None, password=None, timeout=None, pty=False, interactive=False):
+    def __init__(self, args, cwd=None, pty=None):
         # args        -> command to run
         # cwd         -> directory to run in
-        # password    -> single password or tuple of passwords (pty=True only)
-        # timeout     -> raise exception of not complete in timeout seconds
         # pty         -> False = subprocess, True = fork
-        # interactive -> False = record only, 'echo' = echo output as we get it
-        if timeout and is_win and py_ver < (3, 3):
-            raise OSError('timeout is not supported on Windows until Python 3.3')
+        if pty and is_win:
+            raise OSError("pty support for Job not currently implemented for Windows")
         if isinstance(args, basestring):
             args = shlex.split(args)
         else:
@@ -305,232 +320,297 @@ class Execute(object):
         if not pty:
             # use subprocess
             debug('subprocess args:', args)
-            process = Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE, cwd=cwd)
+            self.process = process = Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE, cwd=cwd)
             self.pid = process.pid
-            if password is not None:
-                if not isinstance(password, bytes):
-                    password = (password+'\n').encode('utf-8')
-                else:
-                    password += '\n'.encode('utf-8')
-            if timeout and is_win:
-                stdout, stderr = process.communicate(input=password, timeout=timeout)
-            else:
-                if timeout:
-                    signal.signal(signal.SIGALRM, self.terminate)
-                    signal.alarm(timeout)
+            self.child_fd_out = process.stdout
+            self.child_fd_in = process.stdin
+            self.child_fd_err = process.stderr
+            self.poll = process.poll
+            self.terminate = process.terminate
+            self.kill = process.kill
+        else:
+            error_read, error_write = os.pipe()
+            self.pid, self.child_fd = fork()
+            if self.pid == 0: # child process
+                os.close(error_read)
+                self.child_fd_out = sys.stdout.fileno()
+                os.dup2(error_write, 2)
+                os.close(error_write)
+                self.error_pipe = 2
                 try:
-                    stdout, stderr = process.communicate(input=password)
-                    if timeout:
-                        signal.alarm(0)
-                except Exception:
-                    if self.terminated:
-                        stdout = ''.encode('utf-8')
-                        stderr = ('<timeout: process failed to complete in %s second(s)>' % timeout).encode('utf-8')
+                    max_fd = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
+                    for fd in range(3, max_fd):
+                        try:
+                            os.close(fd)
+                        except OSError:
+                            pass
+                    if cwd:
+                        os.chdir(cwd)
+                    if self.env:
+                        os.execvpe(args[0], args, self.env)
                     else:
-                        _print('strange')
-                        stdout = ''.encode('utf-8')
-                        stderr = str(sys.exc_info()[1]).encode('utf-8')
-            self.stdout = stdout.decode('utf-8').replace('\r\n', '\n')
-            self.stderr = stderr.decode('utf-8').replace('\r\n', '\n')
-            if self.terminated:
-                self.stderr += ('\n<timeout: process failed to complete in %s second(s)>' % timeout).encode('utf-8').decode('utf-8')
-            else:
-                self.returncode = process.returncode
-                self.closed = True
-                self.terminated = True
-                self.signal = None
-            if interactive == 'echo':
-                if self.stdout:
-                    print(self.stdout)
-                if self.stderr:
-                    print(self.stderr, file=stderr)
-            return
-        if is_win:
-            raise OSError("pty support for Execute not currently implemented for Windows")
-        error_read, error_write = os.pipe()
-        self.pid, self.child_fd = fork()
-        if self.pid == 0: # child process
-            os.close(error_read)
-            self.child_fd = sys.stdout.fileno()
-            os.dup2(error_write, 2)
+                        os.execvp(args[0], args)
+                except Exception:
+                    exc = sys.exc_info()[1]
+                    self.write_error("%s:  %s" % (exc.__class__.__name__, ' - '.join([str(a) for a in exc.args])))
+                    os._exit(-1)
+            # parent process
             os.close(error_write)
-            self.error_pipe = 2
+            self.child_fd_out = self.child_fd
+            self.child_fd_in = self.child_fd
+            self.child_fd_err = error_read
+        # start reading output
+        self._all_output = Queue()
+        self._all_input = Queue()
+        self._stdout = []
+        self._stderr = []
+        self._stdout_history = []
+        self._stderr_history = []
+        def read_comm(name, channel, q):
             try:
-                max_fd = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
-                for fd in range(3, max_fd):
-                    try:
-                        os.close(fd)
-                    except OSError:
-                        pass
-                if cwd:
-                    os.chdir(cwd)
-                if self.env:
-                    os.execvpe(args[0], args, self.env)
+                if isinstance(channel, int):
+                    read = lambda size: os.read(channel, size)
+                    close = os.close
                 else:
-                    os.execvp(args[0], args)
+                    read = channel.read
+                    close = channel.close
+                i = 0
+                while True:
+                    data = read(1024)
+                    i += 1
+                    q.put((name, data))
+                    if not data:
+                        # close(channel)
+                        break
             except Exception:
+                q.put((name, ''.encode('utf-8')))
                 exc = sys.exc_info()[1]
-                self.write_error("%s:  %s" % (exc.__class__.__name__, ' - '.join([str(a) for a in exc.args])))
-                os._exit(-1)
-        # parent process
-        os.close(error_write)
-        self.error_pipe = error_read
-        self.returncode = None
-        self.signal = None
-        discarded = []
-        output = []
-        self.stderr = []
-        self.error_available = False
-        self.closed = False
-        self.terminated = False
-        submission_received = True
-        error = False
-        if isinstance(password, basestring):
-            password = (password, )
-        # loop to read output
-        time.sleep(0.1)
-        last_comms = time.time()
-        while self.is_alive():
-            if not self.get_echo() and submission_received:
-                # discard any output before password was requested
-                discarded.extend(output)
-                discarded.append(self.read(1024))
-                output[:] = []
-                if not password:
-                    error = FailedPassword('bad or missing password(s)', process=self)
-                    output[:] = discarded
-                    self.terminate()
+                if not isinstance(exc, OSError) or exc.errno != 5:
+                    raise
+                # close(channel)
+        def write_comm(channel, q):
+            if isinstance(channel, int):
+                write = lambda data: os.write(channel, data)
+                flush = lambda: ''
+            else:
+                write = channel.write
+                flush = channel.flush
+            while True:
+                data = q.get()
+                if not data:
+                    # os.close(channel)
                     break
-                pw, password = password[0], password[1:]
-                self.write(pw)
-                self.write('\r\n')
-                submission_received = False
-            while _pocket(self.read(1024)):
-                output.append(_pocket())
-                submission_received = True
-                last_comms = time.time()
-            time.sleep(0.01)
-            if timeout and time.time() - last_comms > timeout:
-                error = TimeoutError('process failed to complete in %s second(s)' % timeout, process=self)
-                self.terminate()
-        while _pocket(self.read(1024)):
-            output.append(_pocket())
-            if error:
-                break
-            time.sleep(0.01)
-        while self.error_available:
-            self._read_error()
-            if error:
-                self.stderr.append('\n<timeout: %s>' % error)
-                break
-        self.stdout = ''.join(output).replace('\r\n', '\n')
-        self.stderr = ''.join(self.stderr).replace('\r\n', '\n')
-        if password and self.stdout and self.stdout[0] == '\n':
-            self.stdout = self.stdout[1:]
-        if interactive == 'echo':
-            if self.stdout:
-                print(self.stdout)
-            if self.stderr:
-                print(self.stderr, file=stderr)
+                size = write(data)
+                flush()
+        t = Thread(target=read_comm, name='stdout', args=('stdout', self.child_fd_out, self._all_output))
+        t.daemon = True
+        t.start()
+        t = Thread(target=read_comm, name='stderr', args=('stderr', self.child_fd_err, self._all_output))
+        t.daemon = True
+        t.start()
+        t = Thread(target=write_comm, name='stdin', args=(self.child_fd_in, self._all_input))
+        t.daemon = True
+        t.start()
+        
+
+    def communicate(self, input=None, password=None, timeout=None, interactive=None, encoding='utf-8'):
+        # password    -> single password or tuple of passwords (pty=True only)
+        # timeout     -> raise exception of not complete in timeout seconds
+        # interactive -> False = record only, 'echo' = echo output as we get it
+        passwords = []
+        if input is not None and not isinstance(input, bytes):
+            input = input.encode('utf-8')
+        if password is None:
+            password = ()
+        elif isinstance(password, basestring):
+            password = (password, )
+        for pwd in password:
+            if not isinstance(pwd, bytes):
+                passwords.append((pwd + '\n').encode('utf-8'))
+            else:
+                passwords.append(pwd + '\n'.encode('utf-8'))
+        self._discarded = []
+        error = None
+
+        # loop to read output
+        start = time.time()
+        if self.poll() is None and (passwords or input is not None):
+            while passwords:
+                if self.process:
+                    # feed all passwords at once, after a short delay
+                    time.sleep(0.1)
+                    pwd = passwords[0]
+                    for next_pwd in passwords[1:]:
+                        pwd += next_pwd
+                    self.write(pwd, block=False)
+                    passwords = []
+                else:
+                    # pty -- look for echo off first
+                    while self.get_echo():
+                        if timeout is not None and time.time() - start >= timeout:
+                            raise TimeoutError('process failed to complete in %s second(s)' % timeout, process=self.process)
+                        time.sleep(0.01)
+                    pw, passwords = passwords[0], passwords[1:]
+                    self.write(pw, block=False)
+                    time.sleep(0.01)
+            if input is not None:
+                self.write(pw, block=False)
+                time.sleep(0.01)
+        active = 2
+        while active:
+            if timeout is not None and time.time() - start >= timeout:
+                raise TimeoutError('process failed to complete in %s second(s)' % timeout, process=self.process)
+            if not self._all_output.qsize():
+                time.sleep(0.1)
+                continue
+            stream, data = self._all_output.get()
+            if not data:
+                active -= 1
+            if encoding is not None:
+                data = data.decode(encoding)
+            if stream == 'stdout':
+                self._stdout.append(data)
+                if interactive == 'echo':
+                    _print(data)
+            elif stream == 'stderr':
+                self._stderr.append(data)
+                if interactive == 'echo':
+                    _print(data)
+            else:
+                raise Exception('unknown stream: %r' % stream)
+        self.stdout = ''.join(self._stdout).replace('\r\n', '\n')
+        self.stderr = ''.join(self._stderr).replace('\r\n', '\n')
         try:
             self.close()
         except ExecuteError:
             pass
 
     def close(self, force=True):
+        'parent method'
         if not self.closed:
-            os.close(self.error_pipe)
-            os.close(self.child_fd)
-            time.sleep(0.1)
-            if self.is_alive():
-                if not self.terminate(force=force):
-                    raise ExecuteError("Could not terminate the child.", process=self)
+            if isinstance(self.child_fd_in, int):
+                os.close(self.child_fd_in)
+            else:
+                self.child_fd_in.close()
+            if isinstance(self.child_fd_out, int):
+                # os.close(self.child_fd_out)
+                pass
+            else:
+                self.child_fd_out.close()
+            if isinstance(self.child_fd_err, int):
+                os.close(self.child_fd_err)
+            else:
+                self.child_fd_err.close()
             self.child_fd = -1
+            self.child_fd_in = -1
+            self.child_fd_out = -1
+            time.sleep(0.1)
             self.closed = True
+            if self.is_alive():
+                self.terminate()
+                time.sleep(0.1)
+                if force and self.is_alive():
+                    self.kill()
+                    time.sleep(0.1)
+                    self.is_alive()
 
     def fileno(self):
+        'parent method'
         return self.child_fd
 
     def get_echo(self):
-        "return the child's terminal echo status (True is on)"
+        "return the child's terminal echo status (True is on) (parent method)"
         attr = termios.tcgetattr(self.child_fd)
         if attr[3] & termios.ECHO:
             return True
         return False
 
     def isatty(self):
+        'parent method'
         return os.isatty(self.child_fd)
 
     def is_alive(self):
+        'parent method'
         if self.terminated:
             return False
         pid, status = os.waitpid(self.pid, os.WNOHANG)
         if pid != 0:
             self.signal = status % 256
-            self.returncode = status >> 8
+            if self.signal:
+                self.returncode = -self.signal
+            else:
+                self.returncode = status >> 8
             self.terminated = True
             return False
         return True
 
-    def read(self, size=1, timeout=10):
-        "non-blocking read (should only be called by the parent)"
-        if self.closed:
-            raise ValueError("I/O operation on closed file.")
-        r, w, x = select.select([self.child_fd, self.error_pipe], [], [], 0)
-        if not r:
-            return unicode()
-        result = None
-        if self.child_fd in r:
-            try:
-                result = os.read(self.child_fd, size).decode('utf-8')
-            except OSError:
-                result = unicode()
-        if self.error_pipe in r:
-            self.error_available = True
-            return result or unicode()
-        if result is not None:
-            return result
-        raise ExecuteError('unknown problem with read', process=self)
+    def kill(self):
+        'parent method'
+        if self.is_alive():
+            for sig in KILL_SIGNALS[::-1]:
+                os.kill(self.pid, sig)
+                time.sleep(0.1)
+                if not self.is_alive():
+                    self.terminated = True
+                break
 
-    def _read_error(self):
-        "only call if error output is available"
-        try:
-            result = os.read(self.error_pipe, 1024)
-        except OSError:
-            result = '<unknown error>'.encode('latin1')
-        result = result.decode('utf-8')
-        if not result:
-            self.error_available = False
+    def poll(self):
+        if self.is_alive():
+            return None
         else:
-            self.stderr.append(result)
+            return self.returncode
 
-    def terminate(self, signum=None, frame=None, force=False):
-        if not self.is_alive():
-            return True
-        for sig in KILL_SIGNALS:
-            os.kill(self.pid, sig)
-            time.sleep(0.1)
-            if not self.is_alive():
-                self.terminated = True
-                if signum:
-                    self.signal = signum
-                return True
-        if force:
-            os.kill(self.pid, signal.SIGKILL)
-            time.sleep(0.1)
-            if not self.is_alive():
-                self.terminated = True
-                if signum:
-                    self.signal = signum
-                return True
-        return False
+    def read(self, max_size, block=True, encoding='utf-8'):
+        # if block is False, return None if no data ready
+        # otherwise, encode to string with encoding, or raw if
+        # encoding is None
+        #
+        # check for any unread data
+        while "looking for data":
+            while self._all_output.qsize() or block:
+                stream, data = self._all_output.get()
+                if encoding is not None:
+                    data = data.decode(encoding)
+                if stream == 'stdout':
+                    self._stdout.append(data)
+                elif stream == 'stderr':
+                    self._stderr.append(data)
+                else:
+                    raise Exception('unknown stream: %r' % stream)
+                if self._stdout:
+                    break
+            if self._stdout:
+                data = self.pop(0)
+                if len(data) > max_size:
+                    # trim
+                    self._stdout.insert(0, data[max_size:])
+                self._stdout_history.append(data)
+                return data
+            elif not block:
+                return None
 
-    def write(self, data):
+    def terminate(self):
+        'parent method'
+        if self.is_alive():
+            for sig in KILL_SIGNALS:
+                os.kill(self.pid, sig)
+                time.sleep(0.1)
+                if not self.is_alive():
+                    self.terminated = True
+                break
+
+    def write(self, data, block=True):
+        'parent method'
         if not isinstance(data, bytes):
             data = data.encode('utf-8')
-        os.write(self.child_fd, data)
+        self._all_input.put(data)
+        if block:
+            while not self._all_input.empty():
+                time.sleep(0.01)
+        return len(data)
 
     def write_error(self, data):
+        'child method'
         if not isinstance(data, bytes):
             data = data.encode('utf-8')
         os.write(self.error_pipe, data)
@@ -1694,3 +1774,86 @@ def OutputFile(arg):
 
 
 
+        # if self.process and (is_win or passwords):
+        #     if passwords:
+        #         password = passwords[0]
+        #         for pwd in passwords[1:]:
+        #             password += pwd
+        #         password += input
+        #     stdout, stderr = process.communicate(input=password or input, timeout=timeout)
+            # else:
+            #     if timeout:
+            #         signal.signal(signal.SIGALRM, self.terminate)
+            #         signal.alarm(timeout)
+            #     try:
+            #         stdout, stderr = process.communicate(input=password)
+            #         if timeout:
+            #             signal.alarm(0)
+            #     except Exception:
+            #         if self.terminated:
+            #             stdout = ''.encode('utf-8')
+            #             stderr = ('<timeout: process failed to complete in %s second(s)>' % timeout).encode('utf-8')
+            #         else:
+            #             _print('strange')
+            #             stdout = ''.encode('utf-8')
+            #             stderr = str(sys.exc_info()[1]).encode('utf-8')
+            # self.stdout = stdout.decode('utf-8').replace('\r\n', '\n')
+            # self.stderr = stderr.decode('utf-8').replace('\r\n', '\n')
+            # if self.terminated:
+            #     self.stderr += ('\n<timeout: process failed to complete in %s second(s)>' % timeout).encode('utf-8').decode('utf-8')
+            # else:
+            #     self.returncode = process.returncode
+            #     self.closed = True
+            #     self.terminated = True
+            #     self.signal = None
+            # if interactive == 'echo':
+            #     if self.stdout:
+            #         print(self.stdout)
+            #     if self.stderr:
+            #         print(self.stderr, file=stderr)
+            # return
+        # self.error_available = False
+
+
+
+    # def read(self, size=1, timeout=0):
+    #     "non-blocking read  if timeout is None (parent method)"
+    #     if self.closed:
+    #         raise ValueError("I/O operation on closed file.")
+    #     entry = time.time()
+    #     while 'waiting for data to appear':
+    #         r, w, x = select.select([self.child_fd_out, self.child_fd_err], [], [], 0)
+    #         if self.child_fd_err in r:
+    # 
+    # 
+    #         if not r:
+    #             return unicode()
+    #     result = None
+    #     if self.child_fd_out in r:
+    #         try:
+    #             result = os.read(self.child_fd_out, size).decode('utf-8')
+    #         except OSError:
+    #             result = unicode()
+    #     if self.child_fd_err in r:
+    #         self.error_available = True
+    #         return result or unicode()
+    #     if result is not None:
+    #         return result
+    #     raise ExecuteError('unknown problem with read', process=self)
+    # 
+    # def _read_error(self):
+    #     "only call if error output is available (parent method)"
+    #     try:
+    #         result = os.read(self.child_fd_err, 1024)
+    #     except OSError:
+    #         result = '<unknown error>'.encode('latin1')
+    #     result = result.decode('utf-8')
+    #     if not result:
+    #         self.error_available = False
+    #     else:
+    #         self.stderr.append(result)
+
+            # if is_win:
+            #     # create STARTUPINFO object
+            #     self.si = STARTUPINFO()
+            #     self.si.dwFlags = STARTF_USESTDHANDLES | CREATE_NEW_PROCESS_GROUP

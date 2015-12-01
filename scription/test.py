@@ -461,32 +461,32 @@ class TestParamRemoval(TestCase):
 
     def test_required(self):
         test_file = self.write_script('REQUIRED')
-        result = Execute([sys.executable, test_file, 'haha!'])
+        result = Execute([sys.executable, test_file, 'haha!'], timeout=10)
         self.assertEqual(result.stdout, 'success!\n', result.stdout + '\n' + result.stderr)
 
     def test_option(self):
         test_file = self.write_script('OPTION')
-        result = Execute([sys.executable, test_file, '--test', 'haha!'])
+        result = Execute([sys.executable, test_file, '--test', 'haha!'], timeout=10)
         self.assertEqual(result.stdout, 'success!\n', result.stdout + '\n' + result.stderr)
 
     def test_flag(self):
         test_file = self.write_script('FLAG')
-        result = Execute([sys.executable, test_file, '--test'])
+        result = Execute([sys.executable, test_file, '--test'], timeout=10)
         self.assertEqual(result.stdout, 'success!\n', result.stdout + '\n' + result.stderr)
 
     def test_multi1(self):
         test_file = self.write_script('MULTI')
-        result = Execute([sys.executable, test_file, '--test', 'boo'])
+        result = Execute([sys.executable, test_file, '--test', 'boo'], timeout=10)
         self.assertEqual(result.stdout, 'success!\n', result.stdout + '\n' + result.stderr)
 
     def test_multi2(self):
         test_file = self.write_script('MULTI')
-        result = Execute([sys.executable, test_file, '--test', 'boo,hoo'])
+        result = Execute([sys.executable, test_file, '--test', 'boo,hoo'], timeout=10)
         self.assertEqual(result.stdout, 'success!\n', result.stdout + '\n' + result.stderr)
 
     def test_multi3(self):
         test_file = self.write_script('MULTI')
-        result = Execute([sys.executable, test_file, '--test', 'boo', '--test', 'hoo'])
+        result = Execute([sys.executable, test_file, '--test', 'boo', '--test', 'hoo'], timeout=10)
         self.assertEqual(result.stdout, 'success!\n', result.stdout + '\n' + result.stderr)
 
 class TestCommandNames(TestCase):
@@ -526,19 +526,19 @@ class TestCommandNames(TestCase):
     def test_dash_in_name(self):
         for name in ('test_dash', 'test-dash'):
             cmdline = ' '.join([sys.executable, self.command_file, name])
-            result = Execute(cmdline)
+            result = Execute(cmdline, timeout=10)
             self.assertTrue(result.returncode == 0, '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
             self.assertEqual(result.stderr, '', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
             self.assertEqual(result.stdout, 'success!\n', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
 
     def test_capital_in_name(self):
         cmdline = ' '.join([sys.executable, self.command_file])
-        result = Execute(cmdline)
+        result = Execute(cmdline, timeout=10)
         self.assertTrue(result.returncode == 0, '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
         self.assertEqual(result.stderr, '', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
         self.assertEqual(result.stdout, 'aint that nice.\n', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
         cmdline = ' '.join([sys.executable, self.command_file, '--help'])
-        result = Execute(cmdline)
+        result = Execute(cmdline, timeout=10)
         self.assertTrue(result.returncode == 0, '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
         self.assertEqual(result.stderr, '', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
         self.assertEqual(
@@ -592,7 +592,9 @@ class TestHelp(TestCase):
                 "    THAT   that argument    \n"
                 )
         test_file = self.write_script(file_data)
-        result = Execute([sys.executable, test_file, '--help'])
+        result = Execute([sys.executable, test_file, '--help'], timeout=10)
+        self.assertMultiLineEqual(result.stdout.strip(), target_result.strip())
+        result = Execute([sys.executable, test_file, '--help'], pty=True, timeout=10)
         self.assertMultiLineEqual(result.stdout.strip(), target_result.strip())
 
     def test_alias_command(self):
@@ -627,7 +629,7 @@ class TestHelp(TestCase):
                 "   whatever       THIS THAT\n"
                 )
         test_file = self.write_script(file_data)
-        result = Execute([sys.executable, test_file, '--help'])
+        result = Execute([sys.executable, test_file, '--help'], timeout=10)
         self.assertMultiLineEqual(result.stdout.strip(), target_result.strip())
 
     # def test_alias_matches_script_name(self):
@@ -661,7 +663,7 @@ class TestHelp(TestCase):
     #             "   help_test  THIS THAT\n"
     #             )
     #     test_file = self.write_script(file_data)
-    #     result = Execute([sys.executable, test_file, '--help'])
+    #     result = Execute([sys.executable, test_file, '--help'], timeout=10)
     #     self.assertMultiLineEqual(result.stdout.strip(), target_result.strip())
 
     def test_multiple_commands(self):
@@ -703,7 +705,7 @@ class TestHelp(TestCase):
                 "   whatever       THIS THAT\n"
                 )
         test_file = self.write_script(file_data)
-        result = Execute([sys.executable, test_file, '--help'])
+        result = Execute([sys.executable, test_file, '--help'], timeout=10)
         self.assertMultiLineEqual(result.stdout.strip(), target_result.strip())
 
 
@@ -840,21 +842,21 @@ class TestExecution(TestCase):
 
     if not is_win:
         def test_pty(self):
-            command = Execute([sys.executable, self.good_file], pty=True)
+            command = Execute([sys.executable, self.good_file], pty=True, timeout=10)
             self.assertEqual(command.stdout, 'good output here!\n')
             self.assertEqual(command.stderr, '')
-            command = Execute([sys.executable, self.bad_file], pty=True)
+            command = Execute([sys.executable, self.bad_file], pty=True, timeout=10)
             self.assertEqual(command.stdout, '')
             self.assertTrue(command.stderr.endswith('ValueError: uh-oh -- bad value!\n'))
-            command = Execute([sys.executable, self.mixed_file], pty=True)
+            command = Execute([sys.executable, self.mixed_file], pty=True, timeout=10)
             self.assertEqual(command.stdout, 'good night\nsweetheart!\n')
             self.assertTrue(command.stderr.endswith("KeyError: 'the key is missing?'\n"),
                     'Failed (actual results):\n%s' % command.stderr)
-            command = Execute([sys.executable, self.pty_password_file], password='Salutations!', pty=True)
+            command = Execute([sys.executable, self.pty_password_file], password='Salutations!', pty=True, timeout=10)
             self.assertEqual(
                     command.stdout,
-                    "\n'Salutations!'?  Are you sure??\n",
-                    'Failed\n  wanted: %r\n     got: %r' % ("\n'Salutations!'?  Are you sure??\n", command.stdout))
+                    "super secret santa soda sizzle?\nmake sure no one is watching you type!: \n'Salutations!'?  Are you sure??\n",
+                    )
             self.assertEqual(
                     command.stderr,
                     '',
@@ -866,7 +868,6 @@ class TestExecution(TestCase):
                 "test timeout with subprocess alone"
                 command = Execute([sys.executable, '-c', 'import time; time.sleep(30)'], timeout=1, pty=False)
                 self.assertTrue(command.returncode)
-                self.assertTrue('process failed to complete in 1 second(s)' in command.stderr)
         else:
             def test_timeout(self):
                 "no timeout in this version"
@@ -887,27 +888,53 @@ class TestExecution(TestCase):
     else:
         def test_timeout(self):
             "test timeout with pty, and with subprocess/signals"
-            command = Execute([sys.executable, '-c', 'import time; time.sleep(30); raise Exception("did not time out!")'], timeout=1, pty=True)
+            command = Execute(
+                    [sys.executable, '-c', 'import time; time.sleep(30); raise Exception("did not time out!")'],
+                    timeout=1,
+                    pty=True,
+                    )
             self.assertTrue(command.returncode)
-            self.assertTrue('process failed to complete in 1 second(s)' in command.stderr, command.stderr)
-            command = Execute([sys.executable, '-c', 'import time; time.sleep(30); raise Exception("did not time out!")'], timeout=1, pty=False)
+            command = Execute(
+                    [sys.executable, '-c', 'import time; time.sleep(30); raise Exception("did not time out!")'],
+                    timeout=1,
+                    pty=False,
+                    )
             self.assertTrue(command.returncode)
-            self.assertTrue('process failed to complete in 1 second(s)' in command.stderr, command.stderr)
 
     def test_subprocess(self):
-        command = Execute([sys.executable, self.good_file], pty=False)
+        command = Execute(
+                [sys.executable, self.good_file],
+                pty=False,
+                timeout=10,
+                )
         self.assertEqual(command.stdout, 'good output here!\n')
         self.assertEqual(command.stderr, '')
-        command = Execute([sys.executable, self.bad_file], pty=False)
+        command = Execute(
+                [sys.executable, self.bad_file],
+                pty=False,
+                timeout=10,
+                )
         self.assertEqual(command.stdout, '')
         self.assertTrue(command.stderr.endswith('ValueError: uh-oh -- bad value!\n'))
-        command = Execute([sys.executable, self.mixed_file], pty=False)
+        command = Execute(
+                [sys.executable, self.mixed_file],
+                pty=False,
+                timeout=10,
+                )
         self.assertEqual(command.stdout, 'good night\nsweetheart!\n')
         self.assertTrue(command.stderr.endswith("KeyError: 'the key is missing?'\n"),
                 'Failed (actual results):\n%r' % command.stderr)
-        command = Execute([sys.executable, self.subp_password_file], pty=False, password='Salutations!')
-        self.assertTrue(command.stdout.startswith("super secret santa soda sizzle?\nmake sure no one is watching you type!: 'Salutations!'?  Are you sure??\n"),
-                'Failed (actual results):\n%r' % command.stdout)
+        command = Execute(
+                [sys.executable, self.subp_password_file],
+                pty=False,
+                password='Salutations!',
+                timeout=10,
+                )
+        self.assertEqual(
+                command.stdout,
+                "super secret santa soda sizzle?\nmake sure no one is watching you type!: 'Salutations!'?  Are you sure??\n",
+                'Failed (actual results):\n%r' % command.stdout,
+                )
         self.assertEqual(command.stderr, '')
 
 
