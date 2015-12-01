@@ -1,3 +1,14 @@
+0.75.0
+======
+
+Execute
+-------
+
+- use timer loop to drive both subprocess and pty instead of signals
+- do not strip any output before passwords
+- keep Execute as convenience function; actual class changed to Job
+
+
 0.74.41
 =======
 

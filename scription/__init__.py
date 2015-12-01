@@ -75,7 +75,7 @@ from sys import stdout, stderr
   - remove determines if this argument is removed from sys.argv
 """
 
-version = 0, 74, 41
+version = 0, 75, 0
 
 # data
 __all__ = (
@@ -304,7 +304,6 @@ class Job(object):
     signal = None
     terminated = False
     process = None
-    si = None
     closed = False
 
     def __init__(self, args, cwd=None, pty=None):
@@ -1771,89 +1770,3 @@ def InputFile(arg):
 
 def OutputFile(arg):
     return open(arg, 'w')
-
-
-
-        # if self.process and (is_win or passwords):
-        #     if passwords:
-        #         password = passwords[0]
-        #         for pwd in passwords[1:]:
-        #             password += pwd
-        #         password += input
-        #     stdout, stderr = process.communicate(input=password or input, timeout=timeout)
-            # else:
-            #     if timeout:
-            #         signal.signal(signal.SIGALRM, self.terminate)
-            #         signal.alarm(timeout)
-            #     try:
-            #         stdout, stderr = process.communicate(input=password)
-            #         if timeout:
-            #             signal.alarm(0)
-            #     except Exception:
-            #         if self.terminated:
-            #             stdout = ''.encode('utf-8')
-            #             stderr = ('<timeout: process failed to complete in %s second(s)>' % timeout).encode('utf-8')
-            #         else:
-            #             _print('strange')
-            #             stdout = ''.encode('utf-8')
-            #             stderr = str(sys.exc_info()[1]).encode('utf-8')
-            # self.stdout = stdout.decode('utf-8').replace('\r\n', '\n')
-            # self.stderr = stderr.decode('utf-8').replace('\r\n', '\n')
-            # if self.terminated:
-            #     self.stderr += ('\n<timeout: process failed to complete in %s second(s)>' % timeout).encode('utf-8').decode('utf-8')
-            # else:
-            #     self.returncode = process.returncode
-            #     self.closed = True
-            #     self.terminated = True
-            #     self.signal = None
-            # if interactive == 'echo':
-            #     if self.stdout:
-            #         print(self.stdout)
-            #     if self.stderr:
-            #         print(self.stderr, file=stderr)
-            # return
-        # self.error_available = False
-
-
-
-    # def read(self, size=1, timeout=0):
-    #     "non-blocking read  if timeout is None (parent method)"
-    #     if self.closed:
-    #         raise ValueError("I/O operation on closed file.")
-    #     entry = time.time()
-    #     while 'waiting for data to appear':
-    #         r, w, x = select.select([self.child_fd_out, self.child_fd_err], [], [], 0)
-    #         if self.child_fd_err in r:
-    # 
-    # 
-    #         if not r:
-    #             return unicode()
-    #     result = None
-    #     if self.child_fd_out in r:
-    #         try:
-    #             result = os.read(self.child_fd_out, size).decode('utf-8')
-    #         except OSError:
-    #             result = unicode()
-    #     if self.child_fd_err in r:
-    #         self.error_available = True
-    #         return result or unicode()
-    #     if result is not None:
-    #         return result
-    #     raise ExecuteError('unknown problem with read', process=self)
-    # 
-    # def _read_error(self):
-    #     "only call if error output is available (parent method)"
-    #     try:
-    #         result = os.read(self.child_fd_err, 1024)
-    #     except OSError:
-    #         result = '<unknown error>'.encode('latin1')
-    #     result = result.decode('utf-8')
-    #     if not result:
-    #         self.error_available = False
-    #     else:
-    #         self.stderr.append(result)
-
-            # if is_win:
-            #     # create STARTUPINFO object
-            #     self.si = STARTUPINFO()
-            #     self.si.dwFlags = STARTF_USESTDHANDLES | CREATE_NEW_PROCESS_GROUP
