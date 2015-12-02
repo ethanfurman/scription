@@ -94,7 +94,7 @@ features
 '''
 
 setup( name='scription',
-       version= '0.75.1',
+       version= '0.75.2',
        license='BSD License',
        description='simple script parameter parser',
        long_description=description,
