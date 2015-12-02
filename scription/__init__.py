@@ -287,20 +287,16 @@ class Command(object):
 
 def Execute(args, cwd=None, password=None, timeout=None, pty=None, interactive=None):
     job = Job(args, cwd, pty)
-    try:
-        job.communicate(timeout=timeout, interactive=interactive, password=password)
-    except TimeoutError:
-        while job.kill_signals:
-            try:
-                job.terminate()
-                job.communicate(timeout=1, interactive=interactive)
-            except:
-                if job.poll() is not None:
-                    return job
-    except:
-        exc = sys.exc_info()[1]
-        _print('received %r' % exc, file=stderr)
-        sys.stderr.flush()
+    while True:
+        try:
+            job.communicate(timeout=timeout, interactive=interactive, password=password)
+            return job
+        except TimeoutError:
+            if not job.kill_signals:
+                break
+            job.terminate()
+            timeout = 5
+            password = None
     return job
 
 
@@ -620,7 +616,7 @@ class Job(object):
         if self.is_alive() and self.kill_signals:
             sig = self.kill_signals.pop(0)
             os.kill(self.pid, sig)
-            time.sleep(0.1)
+            time.sleep(1)
 
     def write(self, data, block=True):
         'parent method'
