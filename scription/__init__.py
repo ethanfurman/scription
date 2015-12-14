@@ -287,14 +287,12 @@ class Command(object):
 
 def Execute(args, cwd=None, password=None, timeout=None, pty=None, interactive=None):
     job = Job(args, cwd, pty)
-    while True:
+    for signal in job.kill_signals:
         try:
             job.communicate(timeout=timeout, interactive=interactive, password=password)
             return job
         except TimeoutError:
-            if not job.kill_signals:
-                break
-            job.terminate()
+            job.send_signal(signal)
             timeout = 5
             password = None
     return job
@@ -334,6 +332,7 @@ class Job(object):
             self.poll = process.poll
             self.terminate = process.terminate
             self.kill = process.kill
+            self.send_signal = process.send_signal
         else:
             error_read, error_write = os.pipe()
             self.pid, self.child_fd = fork()
@@ -572,7 +571,7 @@ class Job(object):
     def kill(self):
         'parent method'
         if self.is_alive() and self.kill_signals:
-            sig = self.kill_signals.pop()
+            sig = self.kill_signals[-1]
             os.kill(self.pid, sig)
             time.sleep(0.1)
 
@@ -611,10 +610,15 @@ class Job(object):
             elif not block:
                 return None
 
+    def send_signal(self, signal):
+        "parent method"
+        os.kill(self.pid, signal)
+        time.sleep(0.1)
+
     def terminate(self):
         'parent method'
         if self.is_alive() and self.kill_signals:
-            sig = self.kill_signals.pop(0)
+            sig = self.kill_signals[0]
             os.kill(self.pid, sig)
             time.sleep(1)
 
