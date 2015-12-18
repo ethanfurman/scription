@@ -1,7 +1,7 @@
 from __future__ import print_function
-from scription import Script, Command, Run, Spec, InputFile, Bool, _usage, version, empty
+from scription import Script, Command, Run, Spec, InputFile, Bool, _usage, version, empty, get_response
 from scription import *
-from unittest import TestCase, main
+from unittest import TestCase as unittest_TestCase, main
 import datetime
 import os
 import scription
@@ -9,6 +9,8 @@ import shlex
 import shutil
 import sys
 import tempfile
+import warnings
+
 
 is_win = sys.platform.startswith('win')
 py_ver = sys.version_info[:2]
@@ -65,6 +67,18 @@ def test_func_docstrings(obj, func, docstring):
     finally:
         script_main = None
         script_commands = {}
+
+class TestCase(unittest_TestCase):
+    @classmethod
+    def setUpClass(cls, *args, **kwds):
+        super(TestCase, cls).setUpClass(*args, **kwds)
+        warnings.filterwarnings(
+                'ignore',
+                'inspect\.getargspec\(\) is deprecated',
+                DeprecationWarning,
+                'scription',
+                0,
+                )
 
 class TestCommandlineProcessing(TestCase):
 
