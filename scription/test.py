@@ -915,6 +915,23 @@ class TestExecution(TestCase):
                     )
             self.assertTrue(command.returncode)
 
+    def test_environ(self):
+        "test setting environment"
+        command = Execute(
+                [sys.executable, '-c', 'import os; print(os.environ["HAPPYDAY"])'],
+                timeout=1,
+                pty=False,
+                HAPPYDAY='fonzirelli',
+                )
+        self.assertIn('fonzirelli', command.stdout)
+        command = Execute(
+                [sys.executable, '-c', 'import os; print(os.environ["HAPPYDAY"])'],
+                timeout=1,
+                pty=True,
+                HAPPYDAY='fonzirelli',
+                )
+        self.assertIn('fonzirelli', command.stdout)
+
     def test_subprocess(self):
         command = Execute(
                 [sys.executable, self.good_file],

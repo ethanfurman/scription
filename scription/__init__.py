@@ -134,7 +134,7 @@ class NullHandler(logging.Handler):
     produced; to avoid this, the library developer simply needs to instantiate
     a NullHandler and add it to the top-level logger of the library module or
     package.
-    
+
     Taken from 2.7 lib.
     """
     def handle(self, record):
@@ -285,8 +285,8 @@ class Command(object):
         return func
 
 
-def Execute(args, cwd=None, password=None, timeout=None, pty=None, interactive=None):
-    job = Job(args, cwd, pty)
+def Execute(args, cwd=None, password=None, timeout=None, pty=None, interactive=None, env=None, **new_env_vars):
+    job = Job(args, cwd=cwd, pty=pty, env=env, **new_env_vars)
     for signal in job.kill_signals:
         try:
             job.communicate(timeout=timeout, interactive=interactive, password=password)
@@ -303,17 +303,19 @@ class Job(object):
     if pty is True runs command in a forked process, otherwise runs in a subprocess
     """
 
-    env = None
     returncode = None
     signal = None
     terminated = False
     process = None
     closed = False
 
-    def __init__(self, args, cwd=None, pty=None):
+    def __init__(self, args, cwd=None, pty=None, env=None, **new_env_vars):
         # args        -> command to run
         # cwd         -> directory to run in
         # pty         -> False = subprocess, True = fork
+        env = self.env = (env or os.environ).copy()
+        if new_env_vars:
+            env.update(new_env_vars)
         if pty and is_win:
             raise OSError("pty support for Job not currently implemented for Windows")
         self.kill_signals = list(KILL_SIGNALS)
@@ -324,7 +326,7 @@ class Job(object):
         if not pty:
             # use subprocess
             debug('subprocess args:', args)
-            self.process = process = Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE, cwd=cwd)
+            self.process = process = Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE, cwd=cwd, env=env)
             self.pid = process.pid
             self.child_fd_out = process.stdout
             self.child_fd_in = process.stdin
@@ -416,7 +418,7 @@ class Job(object):
         t = Thread(target=write_comm, name='stdin', args=(self.child_fd_in, self._all_input))
         t.daemon = True
         t.start()
-        
+
 
     def communicate(self, input=None, password=None, timeout=None, interactive=None, encoding='utf-8'):
         # password    -> single password or tuple of passwords (pty=True only)
@@ -1278,7 +1280,7 @@ def _add_annotations(func, annotations, script=False):
             annotations[spec]._global = True
         else:
             annotations[spec]._global = False
-    if errors:  
+    if errors:
         raise ScriptionError("names %r not in %s's signature" % (errors, func.__name__))
     func.__scription__ = annotations
     func.names = sorted(annotations.keys())
@@ -1349,7 +1351,7 @@ def _help(func):
     for i, name in enumerate(params + vararg + keywordarg):
         if name[0] == '_':
             # ignore private params
-            continue        
+            continue
         spec = annotations.get(name, None)
         pos = None
         if spec is None:
