@@ -1047,6 +1047,13 @@ def debug(*values, **kwds):
         return
     _print('scription> ', *values, **kwds)
 
+def error(*args, **kwds):
+    returncode = kwds.pop('returncode', None)
+    kwds['file'] = stderr
+    print(*args, **kwds)
+    if returncode:
+        abort(returncode=returncode)
+
 def get_response(
         question,
         validate=None,
