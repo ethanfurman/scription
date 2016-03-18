@@ -1031,9 +1031,10 @@ class Spec(object):
         return value
 
 
-def abort(msg, returncode=1):
+def abort(msg=None, returncode=1):
     "prints msg to stderr, raises SystemExit with returncode"
-    print('%s: %s' % (script_module['script_name'], msg), file=stderr)
+    if msg:
+        print('%s: %s' % (script_module['script_name'], msg), file=stderr)
     raise SystemExit(returncode)
 
 def debug(*values, **kwds):
