@@ -19,6 +19,7 @@ print('Scription %s.%s.%s' % version, verbose=0)
 
 if py_ver >= (3, 0):
     unicode = str
+    raw_input = input
 
 def test_func_parsing(obj, func, tests, test_type=False):
     global gubed, script_name, script_main, script_commands, script_command, script_commandname
@@ -1027,8 +1028,111 @@ class TestOrm(TestCase):
         self.assertTrue(type(hg.when) is Time)
 
 
+class TestResponse(TestCase):
+
+    class raw_input_cm(object):
+        'context manager for mocking raw_input'
+        def __init__(self, reply):
+            self.reply = reply
+        def __call__(self, prompt):
+            self.prompt = prompt
+            return self.reply
+        def __enter__(self):
+            scription.raw_input = self
+            return self
+        def __exit__(self, *args):
+            scription.raw_input = raw_input
+            return
+
+    def test_yesno(self):
+        for reply in ('y', 'Y', 'yes', 'Yes', 'YeS', 'YES', 't', 'trUE'):
+            with self.raw_input_cm(reply) as ri:
+                ans = get_response('Having fun?')
+            self.assertTrue(ans)
+        for reply in ('n', 'N', 'no', 'No', 'NO', 'f', 'fAlSe'):
+            with self.raw_input_cm(reply) as ri:
+                ans = get_response('Wanna quit?')
+            self.assertFalse(ans)
+
+    def test_multiple_choice_in_many_blocks(self):
+        for reply in ('y', 'yes', 'Yes'):
+            with self.raw_input_cm(reply) as ri:
+                ans = get_response('copy files? [y]es/[n]o/[a]ll/[m]aybe')
+                self.assertEqual(ans, 'yes')
+        for reply in ('n', 'no', 'No'):
+            with self.raw_input_cm(reply) as ri:
+                ans = get_response('copy files? [y]es/[n]o/[a]ll/[m]aybe')
+                self.assertEqual(ans, 'no')
+        for reply in ('a', 'all', 'All'):
+            with self.raw_input_cm(reply) as ri:
+                ans = get_response('copy files? [y]es/[n]o/[a]ll/[m]aybe')
+                self.assertEqual(ans, 'all')
+        for reply in ('m', 'maybe', 'MayBe'):
+            with self.raw_input_cm(reply) as ri:
+                ans = get_response('copy files? [y]es/[n]o/[a]ll/[m]aybe')
+                self.assertEqual(ans, 'maybe')
+
+    def test_multiple_choice_in_one_block(self):
+        for reply in ('y', 'yes', 'Yes'):
+            with self.raw_input_cm(reply) as ri:
+                ans = get_response('copy files? [yes/no/all/maybe]')
+                self.assertEqual(ans, 'yes')
+        for reply in ('n', 'no', 'No'):
+            with self.raw_input_cm(reply) as ri:
+                ans = get_response('copy files? [yes/no/all/maybe]')
+                self.assertEqual(ans, 'no')
+        for reply in ('a', 'all', 'All'):
+            with self.raw_input_cm(reply) as ri:
+                ans = get_response('copy files? [yes/no/all/maybe]')
+                self.assertEqual(ans, 'all')
+        for reply in ('m', 'maybe', 'MayBe'):
+            with self.raw_input_cm(reply) as ri:
+                ans = get_response('copy files? [yes/no/all/maybe]')
+                self.assertEqual(ans, 'maybe')
+
+    def test_anything_goes(self):
+        for reply in ('17', 'me', 'Right!'):
+            with self.raw_input_cm(reply) as ri:
+                ans = get_response('gimme sum data!')
+                self.assertEqual(ans, reply)
+
+    def test_default_yesno(self):
+        for default in ('y', 'Y', 'yes', 'Yes', 'YeS', 'YES', 't', 'trUE'):
+            with self.raw_input_cm(reply='') as ri:
+                ans = get_response('Having fun?', default=default)
+            self.assertTrue(ans)
+        for default in ('n', 'N', 'no', 'No', 'NO', 'f', 'fAlSe'):
+            with self.raw_input_cm(reply='') as ri:
+                ans = get_response('Wanna quit?', default=default)
+            self.assertFalse(ans)
+
+    def test_default_multiple_choice_in_one_block(self):
+        for default, output in (
+                ('yes', 'copy files? [-yes-/no/all/maybe] '),
+                ('no', 'copy files? [yes/-no-/all/maybe] '),
+                ('all', 'copy files? [yes/no/-all-/maybe] '),
+                ('maybe', 'copy files? [yes/no/all/-maybe-] '),
+                ):
+            with self.raw_input_cm(reply='') as ri:
+                ans = get_response('copy files? [yes/no/all/maybe]', default=default)
+                self.assertEqual(ans, default)
+                self.assertEqual(output, ri.prompt)
+
+    def test_default_multiple_choice_in_multiple_blocks(self):
+        for default, result, output in (
+                ('y', 'yes', 'copy files? [Y]es/[no]/[a]ll/[may]be '),
+                ('no', 'no', 'copy files? [y]es/[NO]/[a]ll/[may]be '),
+                ('a', 'all', 'copy files? [y]es/[no]/[A]ll/[may]be '),
+                ('may', 'maybe', 'copy files? [y]es/[no]/[a]ll/[MAY]be '),
+                ):
+            with self.raw_input_cm(reply='') as ri:
+                ans = get_response('copy files? [y]es/[no]/[a]ll/[may]be', default=default)
+                self.assertEqual(ans, result)
+                self.assertEqual(output, ri.prompt)
+
+
 # class TestVersion(TestCase):
-# 
+#
 #     def test_create(self):
 #         self.assertEqual(str(Version(0, 1)), '0.1')
 #         self.assertEqual(str(Version('0.1')), '0.1')
