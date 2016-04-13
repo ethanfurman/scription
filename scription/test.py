@@ -15,7 +15,7 @@ import warnings
 is_win = sys.platform.startswith('win')
 py_ver = sys.version_info[:2]
 gubed = False
-print('Scription %s.%s.%s' % version, verbose=0)
+print('Scription %s.%s.%s -- Python %d.%d' % (version + py_ver), verbose=0)
 
 if py_ver >= (3, 0):
     unicode = str

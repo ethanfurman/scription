@@ -76,7 +76,7 @@ from sys import stdout, stderr
   - remove determines if this argument is removed from sys.argv
 """
 
-version = 0, 75, 3
+version = 0, 75, 4
 
 # data
 __all__ = (

@@ -1,3 +1,32 @@
+0.75.4
+======
+
+message in abort() is now optional
+add error() alias to print to stderr
+add support for wheels
+improve get_response
+
+
+0.75.3
+======
+
+support new envs and/or env vars
+change method of killing timed-out jobs
+suppress warnings about inspect.getargspec
+
+
+0.75.2
+======
+
+redo Execute while loop
+
+
+0.75.1
+======
+
+flush output
+
+
 0.75.0
 ======
 
