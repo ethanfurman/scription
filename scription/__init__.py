@@ -120,6 +120,14 @@ else:
     basestring = str
     unicode = str
 
+class undefined(object):
+    def __repr__(self):
+        return '<undefined>'
+    def __bool__(self):
+        return False
+    __nonzero__ = __bool__
+undefined = undefined()
+
 # the __version__ and __VERSION__ are for compatibility with existing code,
 # but those names are reserved by the Python interpreter and should not be
 # used
@@ -1059,11 +1067,22 @@ def get_response(
         validate=None,
         type=None,
         retry='bad response, please try again',
+        default=undefined,
         ):
+    # True/False: no square brackets, ends with '?'
+    #   'Do you like green eggs and ham?'
+    # Multiple Choice: square brackets
+    #   'Delete files matching *.xml? [N/y/a]'
+    #   'Are hamburgers good? [Always/sometimes/never]'
+    # Anything: no square brackets, does not end in '?'
+    #   'name'
+    #   'age'
+    if default:
+        default = default.lower()
     if '[' not in question and question.rstrip().endswith('?'):
         # yes/no question
         if type is None:
-            type = lambda ans:ans.lower() in ('y', 'yes', 't', 'true')
+            type = lambda ans: ans.lower() in ('y', 'yes', 't', 'true')
         if validate is None:
             validate = lambda ans: ans.lower() in ('y', 'yes', 'n', 'no', 't', 'true', 'f', 'false')
     elif '[' not in question:
@@ -1073,35 +1092,83 @@ def get_response(
         if validate is None:
             validate = lambda ans: type(ans.strip())
     else:
-        # responses are embedded in question between '[]'
+        # two supported options:
+        #   'some question [always/maybe/never]'
+        # and
+        #   'some question:\n[a]ways\n[m]aybe\n[n]ever'
+        # responses are embedded in question between '[]' and consist
+        # of first letter if all lowercase, else first capital letter
         actual_question = []
         allowed_responses = {}
-        current_response = []
-        current_word = []
-        in_response = False
-        capture_word = False
-        for ch in question:
-            if ch == '[':
-                in_response = True
-                capture_word = True
-            elif ch == ']':
-                in_response = False
-                response = ''.join(current_response).lower()
-                allowed_responses[response] = response
-                current_response = []
-            elif ch not in ('abcdefghijklmnopqrstuvwxyz_ABCDEFGHIJKLMNOPQRSTUVWXYZ'):
-                if capture_word:
-                    allowed_responses[response] = ''.join(current_word)
-                capture_word = False
-                current_word = []
-            actual_question.append(ch)
-            if ch not in '[]':
-                if in_response:
-                    current_response.append(ch.lower())
-                if capture_word:
+        left_brackets = question.count('[')
+        right_brackets = question.count(']')
+        if left_brackets != right_brackets:
+            raise ScriptionError('mismatched [ ]')
+        elif left_brackets == 1:
+            # first option
+            current_word = []
+            in_response = False
+            for ch in question:
+                if ch == '[':
+                    in_response = True
+                elif in_response and ch not in ('abcdefghijklmnopqrstuvwxyz_ABCDEFGHIJKLMNOPQRSTUVWXYZ'):
+                    word = ''.join(current_word)
+                    current_word = []
+                    if not word:
+                        raise ScriptionError('empty choice')
+                    uppers = ''.join([l for l in word if l == l.upper()])
+                    word = word.lower()
+                    if not uppers:
+                        uppers = word[0]
+                    allowed_responses[word] = word
+                    allowed_responses[uppers] = word
+                    if default in (word, uppers):
+                        actual_question.append('-')
+                        actual_question.extend([c for c in word])
+                        actual_question.append('-')
+                    else:
+                        actual_question.extend([c for c in word])
+                    if ch == ']':
+                        in_response = False
+                elif in_response:
                     current_word.append(ch)
-        if in_response:
-            raise ScriptionError('question missing closing "]"')
+                    continue
+                actual_question.append(ch)
+        else:
+            # second option
+            current_response = []
+            current_word = []
+            in_response = False
+            capture_word = False
+            for ch in question+' ':
+                if ch == '[':
+                    in_response = True
+                    capture_word = True
+                elif ch == ']':
+                    in_response = False
+                    response = ''.join(current_response).lower()
+                    allowed_responses[response] = response
+                    current_response = []
+                    if response == default:
+                        response = response.upper()
+                    actual_question.extend([c for c in response])
+                elif ch not in ('abcdefghijklmnopqrstuvwxyz_ABCDEFGHIJKLMNOPQRSTUVWXYZ'):
+                    if capture_word:
+                        word = ''.join(current_word).lower()
+                        allowed_responses[response.lower()] = word
+                        allowed_responses[word] = word
+                    capture_word = False
+                    current_word = []
+                if ch not in '[]':
+                    if capture_word:
+                        current_word.append(ch)
+                    if in_response:
+                        current_response.append(ch.lower())
+                        # and skip adding to question
+                        continue
+                actual_question.append(ch)
+            if in_response:
+                raise ScriptionError('question missing closing "]"')
         question = ''.join(actual_question)
         if type is None:
             type = lambda ans: allowed_responses[ans.strip().lower()]
@@ -1112,12 +1179,15 @@ def get_response(
             validate = lambda ans: ans.strip().lower() in allowed_responses
     if not question[-1:] in (' ','\n', ''):
         question += ' '
+    # check that a supplied default is valid
+    if default and not validate(default):
+        raise ScriptionError('supplied default is not valid')
     # setup is done, ask question and get answer
     while 'answer is unacceptable':
         answer = raw_input(question)
+        answer = answer or default
         if validate(answer):
             break
-        _print(retry)
     return type(answer)
 
 def help(msg, returncode=1):
