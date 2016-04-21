@@ -1176,7 +1176,7 @@ def get_response(
             old_type = type
             type = lambda ans: old_type(allowed_responses[ans.strip().lower()])
         if validate is None:
-            validate = lambda ans: ans.strip().lower() in allowed_responses
+            validate = lambda ans: ans and ans.strip().lower() in allowed_responses
     if not question[-1:] in (' ','\n', ''):
         question += ' '
     # check that a supplied default is valid
