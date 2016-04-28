@@ -1,3 +1,9 @@
+0.77.0
+======
+
+backwards-incompatible change:  Truth -> Truthy, Falsth -> Falsey
+
+
 0.76.0
 ======
 

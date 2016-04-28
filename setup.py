@@ -96,7 +96,7 @@ features
 
 data = dict(
         name='scription',
-        version= '0.76.0',
+        version= '0.77.0',
         license='BSD License',
         description='simple script parameter parser',
         long_description=description,
