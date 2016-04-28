@@ -850,7 +850,8 @@ def Main():
     "calls Run() only if the script is being run as __main__"
     debug('Main entered')
     if script_module['__name__'] == '__main__':
-        return Run()
+        result = Run()
+        raise SystemExit(result)
 
 
 class OrmFile(object):
