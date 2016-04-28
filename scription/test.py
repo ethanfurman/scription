@@ -91,11 +91,11 @@ class TestCommandlineProcessing(TestCase):
             pass
         tests = (
                 ('copy'.split(), (), {}, (Unknown, ), {} ),
-                ('copy -b'.split(), (), {}, (Truth, ), {} ),
+                ('copy -b'.split(), (), {}, (Truthy, ), {} ),
                 ('copy -b'.split(), (), {}, (True, ), {} ),
-                ('copy --binary'.split(), (), {}, (Truth, ), {} ),
+                ('copy --binary'.split(), (), {}, (Truthy, ), {} ),
                 ('copy --binary'.split(), (), {}, (True, ), {} ),
-                ('copy --no-binary'.split(), (), {}, (Falsth, ), {} ),
+                ('copy --no-binary'.split(), (), {}, (Falsey, ), {} ),
                 ('copy --no-binary'.split(), (), {}, (False, ), {} ),
                 )
         test_func_parsing(self, copy, tests)
@@ -108,11 +108,11 @@ class TestCommandlineProcessing(TestCase):
             pass
         tests = (
                 ('copy'.split(), (), {}, (Unknown, ), {} ),
-                ('copy -b'.split(), (), {}, (Truth, ), {} ),
+                ('copy -b'.split(), (), {}, (Truthy, ), {} ),
                 ('copy -b'.split(), (), {}, (True, ), {} ),
-                ('copy --binary'.split(), (), {}, (Truth, ), {} ),
+                ('copy --binary'.split(), (), {}, (Truthy, ), {} ),
                 ('copy --binary'.split(), (), {}, (True, ), {} ),
-                ('copy --no-binary'.split(), (), {}, (Falsth, ), {} ),
+                ('copy --no-binary'.split(), (), {}, (Falsey, ), {} ),
                 ('copy --no-binary'.split(), (), {}, (False, ), {} ),
                 )
         test_func_parsing(self, copy, tests)

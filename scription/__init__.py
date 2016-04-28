@@ -90,7 +90,7 @@ __all__ = (
     'ScriptionError', 'ExecuteError', 'Execute', 'Job',
     'abort', 'get_response', 'help', 'mail', 'user_ids', 'print',
     'stdout', 'stderr', 'wait_and_check',
-    'Trivalent', 'Truth', 'Unknown', 'Falsth',
+    'Trivalent', 'Truthy', 'Unknown', 'Falsey',
     )
 
 VERBOSITY = 0
@@ -302,9 +302,9 @@ class Trivalent(object):
 
     Accepts values of True, False, or None/empty.
     boolean value of Unknown is Unknown, and will raise.
-    Truth value is +1
+    Truthy value is +1
     Unknown value is 0
-    Falsth value is -1
+    Falsey value is -1
     """
     def __new__(cls, value=None):
         if isinstance(value, cls):
@@ -479,16 +479,16 @@ class Trivalent(object):
 
 Trivalent.true = object.__new__(Trivalent)
 Trivalent.true.value = +1
-Trivalent.true.name = 'Truth'
+Trivalent.true.name = 'Truthy'
 Trivalent.false = object.__new__(Trivalent)
 Trivalent.false.value = -1
-Trivalent.false.name = 'Falsth'
+Trivalent.false.name = 'Falsey'
 Trivalent.unknown = object.__new__(Trivalent)
 Trivalent.unknown.value = 0
 Trivalent.unknown.name = 'Unknown'
-Truth = Trivalent.true
+Truthy = Trivalent.true
 Unknown = Trivalent.unknown
-Falsth = Trivalent.false
+Falsey = Trivalent.false
 
 def Execute(args, cwd=None, password=None, timeout=None, pty=None, interactive=None, env=None, **new_env_vars):
     job = Job(args, cwd=cwd, pty=pty, env=env, **new_env_vars)
