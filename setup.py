@@ -94,31 +94,36 @@ features
 [1] I use the suid-python program, available at http://selliott.org/python/suid-python.c
 '''
 
-setup( name='scription',
-       version= '0.75.5',
-       license='BSD License',
-       description='simple script parameter parser',
-       long_description=description,
-       url='https://bitbucket.org/stoneleaf/scription',
-       packages=['scription'],
-       package_data={
-            'scription': [
-                'CHANGES', 'LICENSE',
-                ],
-            },
-       author='Ethan Furman',
-       author_email='ethan@stoneleaf.us',
-       classifiers=[
-            'Development Status :: 4 - Beta',
-            'Intended Audience :: Developers',
-            'Intended Audience :: End Users/Desktop',
-            'Intended Audience :: System Administrators',
-            'License :: OSI Approved :: BSD License',
-            'Programming Language :: Python',
-            'Topic :: System :: Shells',
-            'Topic :: Utilities',
-            'Programming Language :: Python :: 2.7',
-            'Programming Language :: Python :: 3.3',
-            ],
+data = dict(
+        name='scription',
+        version= '0.75.5',
+        license='BSD License',
+        description='simple script parameter parser',
+        long_description=description,
+        url='https://bitbucket.org/stoneleaf/scription',
+        packages=['scription'],
+        package_data={
+             'scription': [
+                 'CHANGES', 'LICENSE',
+                 ],
+             },
+        author='Ethan Furman',
+        author_email='ethan@stoneleaf.us',
+        classifiers=[
+             'Development Status :: 4 - Beta',
+             'Intended Audience :: Developers',
+             'Intended Audience :: End Users/Desktop',
+             'Intended Audience :: System Administrators',
+             'License :: OSI Approved :: BSD License',
+             'Programming Language :: Python',
+             'Topic :: System :: Shells',
+             'Topic :: Utilities',
+             'Programming Language :: Python :: 2.7',
+             'Programming Language :: Python :: 3.3',
+             'Programming Language :: Python :: 3.4',
+             'Programming Language :: Python :: 3.5',
+             ],
     )
 
+if __name__ == '__main__':
+    setup(**data)
