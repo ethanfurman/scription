@@ -51,7 +51,7 @@ from functools import partial
 from sys import stdout, stderr
 
 """
-(help, kind, abbrev, type, choices, usage_name, remove)
+(help, kind, abbrev, type, choices, usage_name, remove, default)
 
   - help --> the help message
 
@@ -74,6 +74,9 @@ from sys import stdout, stderr
   - usage_name is used as the name of the parameter in the help message
 
   - remove determines if this argument is removed from sys.argv
+
+  - default is the default value, either converted with type if type is
+    specified, or type becomes the default value's type if unspecified
 """
 
 version = 0, 75, 5
