@@ -87,6 +87,7 @@ __all__ = (
     'ScriptionError', 'ExecuteError', 'Execute', 'Job',
     'abort', 'get_response', 'help', 'mail', 'user_ids', 'print',
     'stdout', 'stderr', 'wait_and_check',
+    'Trivalent', 'Truth', 'Unknown', 'Falsth',
     )
 
 VERBOSITY = 0
@@ -200,7 +201,7 @@ class SpecKind(DocEnum):
     REQUIRED = "required value"
     OPTION = "single value per name"
     MULTI = "multiple values per name (list form)"
-    FLAG = "boolean value per name"
+    FLAG = "boolean/trivalent value per name"
     KEYWORD = 'unknown options'
 SpecKind.export_to(module)
 
@@ -292,6 +293,199 @@ class Command(object):
         _help(func)
         return func
 
+class Trivalent(object):
+    """
+    three-value logic
+
+    Accepts values of True, False, or None/empty.
+    boolean value of Unknown is Unknown, and will raise.
+    Truth value is +1
+    Unknown value is 0
+    Falsth value is -1
+    """
+    def __new__(cls, value=None):
+        if isinstance(value, cls):
+            return value
+        elif value in (None, empty):
+            return cls.unknown
+        elif isinstance(value, bool):
+            return (cls.false, cls.true)[value]
+        elif value in (-1, 0, +1):
+            return (cls.unknown, cls.true, cls.false)[value]
+        elif isinstance(value, basestring):
+            if value.lower() in ('t', 'true', 'y', 'yes', 'on'):
+                return cls.true
+            elif value.lower() in ('f', 'false', 'n', 'no', 'off'):
+                return cls.false
+            elif value.lower() in ('?', 'unknown', 'null', 'none', ' ', ''):
+                return cls.unknown
+        raise ValueError('unknown value for %s: %s' % (cls.__name__, value))
+
+    def __hash__(x):
+        return hash(x.value)
+
+    def __index__(x):
+        return x.value
+
+    def __int__(x):
+        return x.value
+
+    def __invert__(x):
+        cls = x.__class__
+        if x is cls.true:
+            return cls.false
+        elif x is cls.false:
+            return cls.true
+        return x
+
+    def __and__(x, y):
+        """
+        AND (conjunction) x & y:
+        True iff both x,y are True
+        False iff at least one of x,y is False
+
+              F   U   T
+         ---+---+---+---
+         F  | F | F | F
+         ---+---+---+---
+         U  | F | U | U
+         ---+---+---+---
+         T  | F | U | T
+        """
+        cls = x.__class__
+        if not isinstance(y, cls) and y not in (None, empty, True, False):
+            return NotImplemented
+        y = cls(y)
+        if x == y == cls.true:
+            return cls.true
+        elif x is cls.false or y is cls.false:
+            return cls.false
+        else:
+            return cls.unknown
+    __rand__ = __and__
+
+    def __or__(x, y):
+        """
+        OR (disjunction): x | y:
+        True iff at least one of x,y is True
+        False iif both x,y are False
+
+              F   U   T
+         ---+---+---+---
+         F  | F | U | T
+         ---+---+---+---
+         U  | U | U | T
+         ---+---+---+---
+         T  | T | T | T
+        """
+        cls = x.__class__
+        if not isinstance(y, cls) and y not in (None, empty, True, False):
+            return NotImplemented
+        y = cls(y)
+        if x is y is cls.false:
+            return cls.false
+        elif x is cls.true or y is cls.true:
+            return cls.true
+        else:
+            return cls.unknown
+    __ror__ = __or__
+
+    def __xor__(x, y):
+        """
+        XOR (parity) x ^ y:
+        True iff only one of x,y is True and other of x,y is False
+        False iff both of x,y are False or both of x,y are True
+
+              F   U   T
+         ---+---+---+---
+         F  | F | U | T
+         ---+---+---+---
+         U  | U | U | U
+         ---+---+---+---
+         T  | T | U | F
+        """
+        cls = x.__class__
+        if not isinstance(y, cls) and y not in (None, empty, True, False):
+            return NotImplemented
+        y = cls(y)
+        if x is cls.unknown or y is cls.unknown:
+            return cls.unknown
+        elif x is cls.true and y is cls.false or x is cls.false and y is cls.true:
+            return cls.true
+        else:
+            return cls.false
+    __rxor__ = __xor__
+
+    def __bool__(x):
+        """
+        boolean value of Unknown is Unknown, and will raise
+        """
+        if x.value is 1:
+            return True
+        elif x.value is -1:
+            return False
+        else:
+            raise ValueError('cannot determine boolean value of Unknown')
+
+    def __eq__(x, y):
+        cls = x.__class__
+        if not isinstance(y, cls) and y not in (None, empty, True, False):
+            return NotImplemented
+        y = cls(y)
+        return x.value == y.value
+
+    def __ge__(x, y):
+        cls = x.__class__
+        if not isinstance(y, cls) and y not in (None, empty, True, False):
+            return NotImplemented
+        y = cls(y)
+        return x.value >= y.value
+
+    def __gt__(x, y):
+        cls = x.__class__
+        if not isinstance(y, cls) and y not in (None, empty, True, False):
+            return NotImplemented
+        y = cls(y)
+        return x.value > y.value
+
+    def __le__(x, y):
+        if not isinstance(y, cls) and y not in (None, empty, True, False):
+            return NotImplemented
+        y = cls(y)
+        return x.value <= y.value
+
+    def __lt__(x, y):
+        cls = x.__class__
+        if not isinstance(y, cls) and y not in (None, empty, True, False):
+            return NotImplemented
+        y = cls(y)
+        return x.value < y.value
+
+    def __ne__(x, y):
+        cls = x.__class__
+        if not isinstance(y, cls) and y not in (None, empty, True, False):
+            return NotImplemented
+        y = cls(y)
+        return x.value != y.value
+
+    def __repr__(x):
+        return "%s.%s: %r" % (x.__class__.__name__, x.name, x.value)
+
+    def __str__(x):
+        return x.name
+
+Trivalent.true = object.__new__(Trivalent)
+Trivalent.true.value = +1
+Trivalent.true.name = 'Truth'
+Trivalent.false = object.__new__(Trivalent)
+Trivalent.false.value = -1
+Trivalent.false.name = 'Falsth'
+Trivalent.unknown = object.__new__(Trivalent)
+Trivalent.unknown.value = 0
+Trivalent.unknown.name = 'Unknown'
+Truth = Trivalent.true
+Unknown = Trivalent.unknown
+Falsth = Trivalent.false
 
 def Execute(args, cwd=None, password=None, timeout=None, pty=None, interactive=None, env=None, **new_env_vars):
     job = Job(args, cwd=cwd, pty=pty, env=env, **new_env_vars)
@@ -931,7 +1125,7 @@ class Script(object):
                     # TODO:  allow this
                     raise ScriptionError('REQUIRED not (yet) allowed for Script')
             else:
-                if isinstance(annotation, bool):
+                if isinstance(annotation, (bool, Trivalent)):
                     kind = 'flag'
                 else:
                     kind = 'option'
@@ -1002,7 +1196,10 @@ class Spec(object):
         if kind not in ('required', 'option', 'multi', 'flag'):
             raise ScriptionError('unknown parameter kind: %r' % kind)
         if kind == 'flag':
-            arg_type_default = False
+            if type is Trivalent:
+                arg_type_default = Unknown
+            else:
+                arg_type_default = False
         elif kind == 'option':
             arg_type_default = None
         elif kind == 'multi':
@@ -1537,7 +1734,7 @@ def _help(func):
             continue
         example = annotations[param].usage
         if annotations[param].kind == 'flag':
-            print_params.append('--%s' % param)
+            print_params.append('--[no-]%s' % param)
         elif annotations[param].kind == 'option':
             print_params.append('--%s %s' % (param, example))
         elif annotations[param].kind == 'multi':

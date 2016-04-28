@@ -83,6 +83,40 @@ class TestCase(unittest_TestCase):
 
 class TestCommandlineProcessing(TestCase):
 
+    def test_trivalent_flag(self):
+        @Command(
+                binary=('copy in binary mode', 'flag', 'b', Trivalent),
+                )
+        def copy(binary):
+            pass
+        tests = (
+                ('copy'.split(), (), {}, (Unknown, ), {} ),
+                ('copy -b'.split(), (), {}, (Truth, ), {} ),
+                ('copy -b'.split(), (), {}, (True, ), {} ),
+                ('copy --binary'.split(), (), {}, (Truth, ), {} ),
+                ('copy --binary'.split(), (), {}, (True, ), {} ),
+                ('copy --no-binary'.split(), (), {}, (Falsth, ), {} ),
+                ('copy --no-binary'.split(), (), {}, (False, ), {} ),
+                )
+        test_func_parsing(self, copy, tests)
+
+    def test_trivalent_flag_type(self):
+        @Command(
+                binary=Spec('copy in binary mode', 'flag', default=Unknown),
+                )
+        def copy(binary):
+            pass
+        tests = (
+                ('copy'.split(), (), {}, (Unknown, ), {} ),
+                ('copy -b'.split(), (), {}, (Truth, ), {} ),
+                ('copy -b'.split(), (), {}, (True, ), {} ),
+                ('copy --binary'.split(), (), {}, (Truth, ), {} ),
+                ('copy --binary'.split(), (), {}, (True, ), {} ),
+                ('copy --no-binary'.split(), (), {}, (Falsth, ), {} ),
+                ('copy --no-binary'.split(), (), {}, (False, ), {} ),
+                )
+        test_func_parsing(self, copy, tests)
+
     def test_multi(self):
         @Command(
                 huh=('misc options', 'multi'),
@@ -1129,6 +1163,425 @@ class TestResponse(TestCase):
                 ans = get_response('copy files? [y]es/[no]/[a]ll/[may]be', default=default)
                 self.assertEqual(ans, result)
                 self.assertEqual(output, ri.prompt)
+
+
+class TestTrivalent(TestCase):
+    "Testing Trivalent"
+
+    def test_unknown(self):
+        "Unknown"
+        for unk in '', '?', ' ', None, Unknown, 0, empty:
+            huh = unknown = Trivalent(unk)
+            self.assertEqual(huh == None, True, "huh is %r from %r, which is not None" % (huh, unk))
+            self.assertEqual(huh != None, False, "huh is %r from %r, which is not None" % (huh, unk))
+            self.assertEqual(huh != True, True, "huh is %r from %r, which is not None" % (huh, unk))
+            self.assertEqual(huh == True, False, "huh is %r from %r, which is not None" % (huh, unk))
+            self.assertEqual(huh != False, True, "huh is %r from %r, which is not None" % (huh, unk))
+            self.assertEqual(huh == False, False, "huh is %r from %r, which is not None" % (huh, unk))
+            self.assertEqual((0, 1, -1)[huh], 0)
+
+    def test_true(self):
+        "true"
+        for true in 'True', 'yes', 't', 'Y', True, 1:
+            huh = Trivalent(true)
+            self.assertEqual(huh == True, True)
+            self.assertEqual(huh != True, False)
+            self.assertEqual(huh == False, False, "%r is not True" % true)
+            self.assertEqual(huh != False, True)
+            self.assertEqual(huh == None, False)
+            self.assertEqual(huh != None, True)
+            if py_ver >= (2, 5):
+                self.assertEqual((0, 1, -1)[huh], 1)
+
+    def test_false(self):
+        "false"
+        for false in 'false', 'No', 'F', 'n', -1, False:
+            huh = Trivalent(false)
+            self.assertEqual(huh != False, False)
+            self.assertEqual(huh == False, True)
+            self.assertEqual(huh != True, True)
+            self.assertEqual(huh == True, False)
+            self.assertEqual(huh != None, True)
+            self.assertEqual(huh == None, False)
+            if py_ver >= (2, 5):
+                self.assertEqual((0, 1, -1)[huh], -1)
+
+    def test_singletons(self):
+        "singletons"
+        heh = Trivalent(True)
+        hah = Trivalent('Yes')
+        ick = Trivalent(False)
+        ack = Trivalent(-1)
+        bla = Trivalent(None)
+        unk = Trivalent('?')
+        self.assertEqual(heh is hah, True)
+        self.assertEqual(ick is ack, True)
+        self.assertEqual(unk is bla, True)
+
+    def test_error(self):
+        "errors"
+        self.assertRaises(ValueError, Trivalent, 'wrong')
+        self.assertRaises(ValueError, Trivalent, [])
+
+    def test_and(self):
+        "and"
+        true = Trivalent(True)
+        false = Trivalent(False)
+        unknown = Trivalent(None)
+        self.assertEqual((true & true) is true, True)
+        self.assertEqual((true & false) is false, True)
+        self.assertEqual((false & true) is false, True)
+        self.assertEqual((false & false) is false, True)
+        self.assertEqual((true & unknown) is unknown, True)
+        self.assertEqual((false & unknown) is false, True)
+        self.assertEqual((unknown & true) is unknown, True)
+        self.assertEqual((unknown & false) is false, True)
+        self.assertEqual((unknown & unknown) is unknown, True)
+        self.assertEqual((true & True) is true, True)
+        self.assertEqual((true & False) is false, True)
+        self.assertEqual((false & True) is false, True)
+        self.assertEqual((false & False) is false, True)
+        self.assertEqual((true & None) is unknown, True)
+        self.assertEqual((false & None) is false, True)
+        self.assertEqual((unknown & True) is unknown, True)
+        self.assertEqual((unknown & False) is false, True)
+        self.assertEqual((unknown & None) is unknown, True)
+        self.assertEqual((True & true) is true, True)
+        self.assertEqual((True & false) is false, True)
+        self.assertEqual((False & true) is false, True)
+        self.assertEqual((False & false) is false, True)
+        self.assertEqual((True & unknown) is unknown, True)
+        self.assertEqual((False & unknown) is false, True)
+        self.assertEqual((None & true) is unknown, True)
+        self.assertEqual((None & false) is false, True)
+        self.assertEqual((None & unknown) is unknown, True)
+        t = true
+        t &= true
+        self.assertEqual(t is true, True)
+        t = true
+        t &= false
+        self.assertEqual(t is false, True)
+        f = false
+        f &= true
+        self.assertEqual(f is false, True)
+        f = false
+        f &= false
+        self.assertEqual(f is false, True)
+        t = true
+        t &= unknown
+        self.assertEqual(t is unknown, True)
+        f = false
+        f &= unknown
+        self.assertEqual(f is false, True)
+        u = unknown
+        u &= true
+        self.assertEqual(u is unknown, True)
+        u = unknown
+        u &= false
+        self.assertEqual(u is false, True)
+        u = unknown
+        u &= unknown
+        self.assertEqual(u is unknown, True)
+        t = true
+        t &= True
+        self.assertEqual(t is true, True)
+        t = true
+        t &= False
+        self.assertEqual(t is false, True)
+        f = false
+        f &= True
+        self.assertEqual(f is false, True)
+        f = false
+        f &= False
+        self.assertEqual(f is false, True)
+        t = true
+        t &= None
+        self.assertEqual(t is unknown, True)
+        f = false
+        f &= None
+        self.assertEqual(f is false, True)
+        u = unknown
+        u &= True
+        self.assertEqual(u is unknown, True)
+        u = unknown
+        u &= False
+        self.assertEqual(u is false, True)
+        u = unknown
+        u &= None
+        self.assertEqual(u is unknown, True)
+        t = True
+        t &= true
+        self.assertEqual(t is true, True)
+        t = True
+        t &= false
+        self.assertEqual(t is false, True)
+        f = False
+        f &= true
+        self.assertEqual(f is false, True)
+        f = False
+        f &= false
+        self.assertEqual(f is false, True)
+        t = True
+        t &= unknown
+        self.assertEqual(t is unknown, True)
+        f = False
+        f &= unknown
+        self.assertEqual(f is false, True)
+        u = None
+        u &= true
+        self.assertEqual(u is unknown, True)
+        u = None
+        u &= false
+        self.assertEqual(u is false, True)
+        u = None
+        u &= unknown
+        self.assertEqual(u is unknown, True)
+
+    def test_or(self):
+        "or"
+        true = Trivalent(True)
+        false = Trivalent(False)
+        unknown = Trivalent(None)
+        self.assertEqual((true | true) is true, True)
+        self.assertEqual((true | false) is true, True)
+        self.assertEqual((false | true) is true, True)
+        self.assertEqual((false | false) is false, True)
+        self.assertEqual((true | unknown) is true, True)
+        self.assertEqual((false | unknown) is unknown, True)
+        self.assertEqual((unknown | true) is true, True)
+        self.assertEqual((unknown | false) is unknown, True)
+        self.assertEqual((unknown | unknown) is unknown, True)
+        self.assertEqual((true | True) is true, True)
+        self.assertEqual((true | False) is true, True)
+        self.assertEqual((false | True) is true, True)
+        self.assertEqual((false | False) is false, True)
+        self.assertEqual((true | None) is true, True)
+        self.assertEqual((false | None) is unknown, True)
+        self.assertEqual((unknown | True) is true, True)
+        self.assertEqual((unknown | False) is unknown, True)
+        self.assertEqual((unknown | None) is unknown, True)
+        self.assertEqual((True | true) is true, True)
+        self.assertEqual((True | false) is true, True)
+        self.assertEqual((False | true) is true, True)
+        self.assertEqual((False | false) is false, True)
+        self.assertEqual((True | unknown) is true, True)
+        self.assertEqual((False | unknown) is unknown, True)
+        self.assertEqual((None | true) is true, True)
+        self.assertEqual((None | false) is unknown, True)
+        self.assertEqual((None | unknown) is unknown, True)
+        t = true
+        t |= true
+        self.assertEqual(t is true, True)
+        t = true
+        t |= false
+        self.assertEqual(t is true, True)
+        f = false
+        f |= true
+        self.assertEqual(f is true, True)
+        f = false
+        f |= false
+        self.assertEqual(f is false, True)
+        t = true
+        t |= unknown
+        self.assertEqual(t is true, True)
+        f = false
+        f |= unknown
+        self.assertEqual(f is unknown, True)
+        u = unknown
+        u |= true
+        self.assertEqual(u is true, True)
+        u = unknown
+        u |= false
+        self.assertEqual(u is unknown, True)
+        u = unknown
+        u |= unknown
+        self.assertEqual(u is unknown, True)
+        t = true
+        t |= True
+        self.assertEqual(t is true, True)
+        t = true
+        t |= False
+        self.assertEqual(t is true, True)
+        f = false
+        f |= True
+        self.assertEqual(f is true, True)
+        f = false
+        f |= False
+        self.assertEqual(f is false, True)
+        t = true
+        t |= None
+        self.assertEqual(t is true, True)
+        f = false
+        f |= None
+        self.assertEqual(f is unknown, True)
+        u = unknown
+        u |= True
+        self.assertEqual(u is true, True)
+        u = unknown
+        u |= False
+        self.assertEqual(u is unknown, True)
+        u = unknown
+        u |= None
+        self.assertEqual(u is unknown, True)
+        t = True
+        t |= true
+        self.assertEqual(t is true, True)
+        t = True
+        t |= false
+        self.assertEqual(t is true, True)
+        f = False
+        f |= true
+        self.assertEqual(f is true, True)
+        f = False
+        f |= false
+        self.assertEqual(f is false, True)
+        t = True
+        t |= unknown
+        self.assertEqual(t is true, True)
+        f = False
+        f |= unknown
+        self.assertEqual(f is unknown, True)
+        u = None
+        u |= true
+        self.assertEqual(u is true, True)
+        u = None
+        u |= false
+        self.assertEqual(u is unknown, True)
+        u = None
+        u |= unknown
+        self.assertEqual(u is unknown, True)
+
+    def test_xor(self):
+        "xor"
+        true = Trivalent(True)
+        false = Trivalent(False)
+        unknown = Trivalent(None)
+        self.assertEqual((true ^ true) is false, True)
+        self.assertEqual((true ^ false) is true, True)
+        self.assertEqual((false ^ true) is true, True)
+        self.assertEqual((false ^ false) is false, True)
+        self.assertEqual((true ^ unknown) is unknown, True)
+        self.assertEqual((false ^ unknown) is unknown, True)
+        self.assertEqual((unknown ^ true) is unknown, True)
+        self.assertEqual((unknown ^ false) is unknown, True)
+        self.assertEqual((unknown ^ unknown) is unknown, True)
+        self.assertEqual((true ^ True) is false, True)
+        self.assertEqual((true ^ False) is true, True)
+        self.assertEqual((false ^ True) is true, True)
+        self.assertEqual((false ^ False) is false, True)
+        self.assertEqual((true ^ None) is unknown, True)
+        self.assertEqual((false ^ None) is unknown, True)
+        self.assertEqual((unknown ^ True) is unknown, True)
+        self.assertEqual((unknown ^ False) is unknown, True)
+        self.assertEqual((unknown ^ None) is unknown, True)
+        self.assertEqual((True ^ true) is false, True)
+        self.assertEqual((True ^ false) is true, True)
+        self.assertEqual((False ^ true) is true, True)
+        self.assertEqual((False ^ false) is false, True)
+        self.assertEqual((True ^ unknown) is unknown, True)
+        self.assertEqual((False ^ unknown) is unknown, True)
+        self.assertEqual((None ^ true) is unknown, True)
+        self.assertEqual((None ^ false) is unknown, True)
+        self.assertEqual((None ^ unknown) is unknown, True)
+        t = true
+        t ^= true
+        self.assertEqual(t is false, True)
+        t = true
+        t ^= false
+        self.assertEqual(t is true, True)
+        f = false
+        f ^= true
+        self.assertEqual(f is true, True)
+        f = false
+        f ^= false
+        self.assertEqual(f is false, True)
+        t = true
+        t ^= unknown
+        self.assertEqual(t is unknown, True)
+        f = false
+        f ^= unknown
+        self.assertEqual(f is unknown, True)
+        u = unknown
+        u ^= true
+        self.assertEqual(u is unknown, True)
+        u = unknown
+        u ^= false
+        self.assertEqual(u is unknown, True)
+        u = unknown
+        u ^= unknown
+        self.assertEqual(u is unknown, True)
+        t = true
+        t ^= True
+        self.assertEqual(t is false, True)
+        t = true
+        t ^= False
+        self.assertEqual(t is true, True)
+        f = false
+        f ^= True
+        self.assertEqual(f is true, True)
+        f = false
+        f ^= False
+        self.assertEqual(f is false, True)
+        t = true
+        t ^= None
+        self.assertEqual(t is unknown, True)
+        f = false
+        f ^= None
+        self.assertEqual(f is unknown, True)
+        u = unknown
+        u ^= True
+        self.assertEqual(u is unknown, True)
+        u = unknown
+        u ^= False
+        self.assertEqual(u is unknown, True)
+        u = unknown
+        u ^= None
+        self.assertEqual(u is unknown, True)
+        t = True
+        t ^= true
+        self.assertEqual(t is false, True)
+        t = True
+        t ^= false
+        self.assertEqual(t is true, True)
+        f = False
+        f ^= true
+        self.assertEqual(f is true, True)
+        f = False
+        f ^= false
+        self.assertEqual(f is false, True)
+        t = True
+        t ^= unknown
+        self.assertEqual(t is unknown, True)
+        f = False
+        f ^= unknown
+        self.assertEqual(f is unknown, True)
+        u = None
+        u ^= true
+        self.assertEqual(u is unknown, True)
+        u = None
+        u ^= false
+        self.assertEqual(u is unknown, True)
+        u = None
+        u ^= unknown
+        self.assertEqual(u is unknown, True)
+
+    def test_invert(self):
+        "~ operator"
+        true = Trivalent(True)
+        false = Trivalent(False)
+        unknown = Trivalent(None)
+        self.assertEqual(~true, false)
+        self.assertEqual(~false, true)
+        self.assertEqual(~unknown, unknown)
+
+    def test_int(self):
+        "int"
+        true = Trivalent(True)
+        false = Trivalent(False)
+        unknown = Trivalent(None)
+        self.assertEqual(int(true), 1)
+        self.assertEqual(int(false), -1)
+        self.assertEqual(int(unknown), 0)
 
 
 # class TestVersion(TestCase):
