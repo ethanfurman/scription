@@ -932,6 +932,7 @@ class OrmFile(object):
                     export_to[name] = value
 
     def __getattr__(self, name):
+        name = name.lower()
         if name in self._settings.__dict__:
             return getattr(self._settings, name)
         raise IniError("'settings' has no section/default named %r" % name)
