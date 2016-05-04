@@ -979,6 +979,7 @@ class OrmFile(object):
         # anything else is fed through int()
         value = value.strip()
         if value[0] in ('"', "'"):
+            # definitely a string
             if value[0] != value[-1]:
                 raise IniError('string must be quoted at both ends [%r]' % value)
             start, end = 1, -1
@@ -988,6 +989,7 @@ class OrmFile(object):
                 start, end = 3, -3
             return self._str(value[start:end])
         elif '/' in value or '\\' in value:
+            # path
             return self._path(value)
         elif ':' in value and '-' in value:
             # datetime
@@ -1012,16 +1014,26 @@ class OrmFile(object):
             except ValueError:
                 raise IniError('invalid time value: %r' % value)
         elif '.' in value:
+            # float
             try:
                 value = self._float(value)
             except ValueError:
                 raise IniError('invalid float value: %r' % value)
         elif value.lower() == 'true':
+            # boolean - True
             return self._bool(True)
-        elif value.lower() == 'false':
+        elif value.lower() in ('false', ''):
+            # boolean - False
             return self._bool(False)
+        elif any(c.isdigit() for c in value):
+            # int
+            try:
+                return self._int(value)
+            except ValueError:
+                raise IniError('invalid integer value: %r' % value)
         else:
-            return self._int(value)
+            # must be a string
+            return value
 # deprecated, will remove at some point
 IniError = OrmError
 IniFile = OrmFile

@@ -1013,6 +1013,7 @@ class TestOrm(TestCase):
             orm_file.write(
                     "home = /usr/bin\n"
                     'who = "ethan"\n'
+            'why = why not?\n'
                     "\n"
                     "[hg]\n"
                     "home = /usr/local/bin\n"
@@ -1025,6 +1026,7 @@ class TestOrm(TestCase):
         complete = OrmFile(self.orm_file)
         self.assertEqual(complete.home, '/usr/bin')
         self.assertEqual(complete.who, 'ethan')
+        self.assertEqual(complete.why, 'why not?')
         self.assertEqual(complete.hg.home, '/usr/local/bin')
         self.assertEqual(complete.hg.who, 'ethan')
         self.assertEqual(complete.hg.when, datetime.time(12, 45))
