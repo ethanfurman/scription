@@ -846,10 +846,17 @@ class Job(object):
         os.write(self.error_pipe, data)
 
 
-def Main():
+def Main(module=None):
     "calls Run() only if the script is being run as __main__"
     debug('Main entered')
-    if script_module['__name__'] == '__main__':
+    # TODO: replace the frame hack if a blessed way to know the calling
+    # module is ever developed
+    if module is None:
+        try:
+            module = sys._getframe(1).f_globals['__name__']
+        except (AttributeError, KeyError):
+            module = script_module['__name__']
+    if module == '__main__':
         result = Run()
         raise SystemExit(result)
 
