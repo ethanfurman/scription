@@ -193,7 +193,7 @@ class ReturnCode(Enum):
     Failure = -1
     def __bool__(self):
         return self.value == 0
-    __nonzero__ == __bool__
+    __nonzero__ = __bool__
 
 
 @export(globals())
