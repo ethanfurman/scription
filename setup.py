@@ -93,6 +93,9 @@ features
 
 [1] I use the suid-python program, available at http://selliott.org/python/suid-python.c
 '''
+py2_only = ()
+py3_only = ()
+make = []
 
 data = dict(
         name='scription',
