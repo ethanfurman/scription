@@ -188,9 +188,13 @@ class DocEnum(Enum):
         return '<%s.%s>' % (self.__class__.__name__, self._name_)
 
 @export(globals())
-class ReturnCode(NamedConstant):
+class ReturnCode(Enum):
     Success = 0
     Failure = -1
+    def __bool__(self):
+        return self.value == 0
+    __nonzero__ == __bool__
+
 
 @export(globals())
 class SpecKind(DocEnum):
