@@ -46,7 +46,7 @@ import tempfile
 import textwrap
 import time
 import traceback
-from enum import Enum
+from aenum import Enum, AutoNumber, NamedConstant, export
 from functools import partial
 from sys import stdout, stderr
 
@@ -91,6 +91,7 @@ __all__ = (
     'abort', 'get_response', 'help', 'mail', 'user_ids', 'print',
     'stdout', 'stderr', 'wait_and_check',
     'Trivalent', 'Truthy', 'Unknown', 'Falsey',
+    'Success', 'Failure',
     )
 
 VERBOSITY = 0
@@ -162,28 +163,16 @@ logger = logging.getLogger('scription')
 logger.addHandler(NullHandler())
 
 class DocEnum(Enum):
-    """compares equal to all cased versions of its name
+    """
+    compares equal to all cased versions of its name
     accepts a doctring for each member
     """
+    _settings_ = AutoNumber
 
-    def __new__(cls, *args):
-        """Ignores arguments (will be handled in __init__)"""
-        obj = object.__new__(cls)
-        obj._value_ = None
-        return obj
-
-    def __init__(self, *args):
-        """Can handle 0 or 1 argument; more requires a custom __init__.
-        0  = auto-number w/o docstring
-        1  = auto-number w/ docstring
-        2+ = needs custom __init__
-        """
+    def __init__(self, value, doc=None):
         # first, fix _value_
         self._value_ = self._name_.lower()
-        if len(args) == 1 and isinstance(args[0], basestring):
-            self.__doc__ = args[0]
-        elif args:
-            raise TypeError('%s not dealt with -- need custom __init__' % (args,))
+        self.__doc__ = doc
 
     def __eq__(self, other):
         if isinstance(other, basestring):
@@ -195,18 +184,21 @@ class DocEnum(Enum):
     def __ne__(self, other):
         return not self == other
 
-    @classmethod
-    def export_to(cls, namespace):
-        namespace.update(cls.__members__)
+    def __repr__(self):
+        return '<%s.%s>' % (self.__class__.__name__, self._name_)
 
+@export(globals())
+class ReturnCode(NamedConstant):
+    Success = 0
+    Failure = -1
 
+@export(globals())
 class SpecKind(DocEnum):
     REQUIRED = "required value"
     OPTION = "single value per name"
-    MULTI = "multiple values per name (list form)"
+    MULTI = "multiple values per name (list form, no whitespace)"
     FLAG = "boolean/trivalent value per name"
     KEYWORD = 'unknown options'
-SpecKind.export_to(module)
 
 
 class ExecuteError(Exception):
