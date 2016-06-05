@@ -44,6 +44,7 @@ import smtplib
 import socket
 import tempfile
 import textwrap
+import threading
 import time
 import traceback
 from aenum import Enum, AutoNumber, NamedConstant, export
@@ -1191,19 +1192,20 @@ class Script(object):
 class Spec(object):
     """tuple with named attributes for representing a command-line paramter
 
-    help, kind, abbrev, type, choices, usage_name, remove, default
+    help, kind, abbrev, type, choices, usage_name, remove, default, envvar
     """
 
     def __init__(self,
             help=empty, kind=empty, abbrev=empty, type=empty,
             choices=empty, usage=empty, remove=False, default=empty,
+            envvar=empty,
             ):
         if isinstance(help, Spec):
             self.__dict__.update(help.__dict__)
             return
         if isinstance(help, tuple):
-            args = list(help) + [empty] * (8 - len(help))
-            help, kind, abbrev, type, choices, usage, remove, default = args
+            args = list(help) + [empty] * (9 - len(help))
+            help, kind, abbrev, type, choices, usage, remove, default, envvar = args
         if not help:
             help = ''
         if not kind:
@@ -1224,6 +1226,10 @@ class Spec(object):
             arg_type_default = None
         elif kind == 'multi':
             arg_type_default = tuple()
+        elif default is not empty:
+            arg_type_default = type(default)
+        if abbrev not in(empty, None) and not isinstance(abbrev, tuple):
+            abbrev = (abbrev, )
         self.help = help
         self.kind = kind
         self.abbrev = abbrev
@@ -1235,18 +1241,21 @@ class Spec(object):
         self._script_default = default
         self._type_default = arg_type_default
         self._global = False
+        self._envvar = envvar
 
     def __iter__(self):
-        return iter((self.help, self.kind, self.abbrev, self.type, self.choices, self.usage, self.remove, self._script_default))
+        return iter((self.help, self.kind, self.abbrev, self.type, self.choices, self.usage, self.remove, self._script_default, self._envvar))
 
     def __repr__(self):
-        return "Spec(help=%r, kind=%r, abbrev=%r, type=%r, choices=%r, usage=%r, remove=%r)" % (
-                self.help, self.kind, self.abbrev, self.type, self.choices, self.usage, self.remove)
+        return "Spec(help=%r, kind=%r, abbrev=%r, type=%r, choices=%r, usage=%r, remove=%r, default=%r, envvar=%r)" % (
+                self.help, self.kind, self.abbrev, self.type, self.choices, self.usage, self.remove, self._script_default, self._envvar)
 
     @property
     def value(self):
         if self._cli_value is not empty:
             value = self._cli_value
+        elif self._envvar is not empty and pocket(value=_os.environ.get(self._envvar)):
+            value = pocket.value
         elif self._script_default is not empty:
             value = self._script_default
         elif self._type_default is not empty:
@@ -1271,6 +1280,10 @@ def debug(*values, **kwds):
     if verbose_level > SCRIPTION_DEBUG:
         return
     _print('scription> ', *values, **kwds)
+
+def echo(*args, **kwds):
+    kwds['verbose'] = kwds.pop('verbose', 0)
+    print(*args, **kwds)
 
 def error(*args, **kwds):
     returncode = kwds.pop('returncode', None)
@@ -1501,11 +1514,33 @@ def mail(server=None, port=25, message=None):
                     smtp.quit()
     return errs
 
-_pocket_sentinel = object()
-def _pocket(value=_pocket_sentinel, _pocket=[]):
-    if value is not _pocket_sentinel:
-        _pocket[:] = [value]
-    return _pocket[0]
+class pocket(object):
+    '''
+    container to save values from intermediate expressions
+    '''
+    pocket = threading.local()
+
+    def __call__(self, **kwds):
+        res = []
+        setattr(self.pocket, 'data', {})
+        level = self.pocket.data
+        for names, value in kwds.items():
+            names = names.split('.')
+            for name in names[:-1]:
+                if name not in level:
+                    level[name] = {}
+                    level = level[name]
+            name = names[-1]
+            level[name] = value
+            res.append(value)
+        return tuple(res)
+
+    def __getattr__(self, name):
+        try:
+            return self.pocket.data[name]
+        except KeyError:
+            raise AttributeError('%s has not been saved' % name)
+pocket = pocket()
 
 def print(*values, **kwds):
     # kwds can contain sep (' '), end ('\n'), file (sys.stdout), and
@@ -1651,7 +1686,7 @@ def _help(func):
         pos = None
         if spec is None:
             raise ScriptionError('%s not annotated' % name)
-        help, kind, abbrev, arg_type, choices, usage_name, remove, default = spec
+        help, kind, abbrev, arg_type, choices, usage_name, remove, default, envvar = spec
         if name in vararg:
             spec._type_default = tuple()
             if kind is empty:
@@ -1665,13 +1700,13 @@ def _help(func):
             max_pos += 1
         elif kind == 'flag':
             if abbrev is empty:
-                abbrev = name[0]
+                abbrev = (name[0], )
         elif kind == 'option':
             if abbrev is empty:
-                abbrev = name[0]
+                abbrev = (name[0], )
         elif kind == 'multi':
             if abbrev is empty:
-                abbrev = name[0]
+                abbrev = (name[0], )
             if default:
                 if isinstance(default, list):
                     default = tuple(default)
@@ -1679,8 +1714,9 @@ def _help(func):
                     default = (default, )
         else:
             raise ValueError('unknown kind: %r' % kind)
-        if abbrev in annotations:
-            raise ScriptionError('duplicate abbreviations: %r' % abbrev)
+        for ab in abbrev or ():
+            if ab in annotations:
+               raise ScriptionError('duplicate abbreviations: %r' % abbrev)
         if usage_name is empty:
             usage_name = name.upper()
         if arg_type is _identity and default is not empty and default is not None:
@@ -1699,7 +1735,8 @@ def _help(func):
             annotations[i] = spec
         annotations[name] = spec
         if abbrev not in (None, empty):
-            annotations[abbrev] = spec
+            for ab in abbrev:
+                annotations[ab] = spec
     usage_max = 0
     help_max = 0
     for annote in annotations.values():
