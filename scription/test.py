@@ -1,5 +1,5 @@
 from __future__ import print_function
-from scription import Script, Command, Run, Spec, InputFile, Bool, _usage, version, empty, get_response
+from scription import Script, Command, Run, Spec, InputFile, Bool, _usage, version, empty, get_response, pocket
 from scription import *
 from unittest import TestCase as unittest_TestCase, main
 import datetime
@@ -10,6 +10,8 @@ import shutil
 import sys
 import tempfile
 import warnings
+from hypothesis import given, strategies as st, settings
+scription.VERBOSITY = 0
 
 
 is_win = sys.platform.startswith('win')
@@ -80,6 +82,17 @@ class TestCase(unittest_TestCase):
                 'scription',
                 0,
                 )
+
+class TestHypothesis(TestCase):
+
+    @given(a=st.integers(), b=st.none(), c=st.booleans(), d=st.floats())
+    def test_pocket(self, a, b, c, d):
+        for value  in (a, b, c, d, (a, b, c, d), (a, c), [b, d]):
+            def this_thing(val=pocket(value=value)):
+                return pocket.value
+            test_value = this_thing(value)
+            self.assertTrue(value is test_value or value == test_value)
+
 
 class TestCommandlineProcessing(TestCase):
 
@@ -469,6 +482,66 @@ class TestCommandlineProcessing(TestCase):
                 ('type_tester 9 --value2 31.25 --value6 71'.split(), (), {}, (9, 31.25, (3.0j, ), None, None, ('71', )), {}),
                 )
         test_func_parsing(self, type_tester, tests)
+
+    def test_abbreviations(self):
+        @Command(
+                value1=('some value', ),
+                value2=('another value', OPTION, 'b'),
+                value3=('and yet more values', MULTI, ('c', 'cee')),
+                value4=('possible None option', OPTION, ('d', 'Z')),
+                value5=('possible None multi', MULTI, 'value8'),
+                value6=('possible tuple multi', MULTI, ('source', 'q')),
+                value7=('i do not remember', OPTION, 'z'),
+                )
+        def type_tester(value1=7, value2=3.1415, value3=3.0j, value4=None, value5=None, value6=(), value7=None):
+            pass
+        tests = (
+                ('type_tester 9 -b 31.25 -c 14'.split(), (), {}, (9, 31.25, (14+0j, ), None, None, (), None), {}),
+                ('type_tester 9 -b 31.25 --cee=14'.split(), (), {}, (9, 31.25, (14+0j, ), None, None, (), None), {}),
+                ('type_tester 9 --value2 31.25 --value3=14,15+3j'.split(), (), {}, (9, 31.25, (14+0j, 15+3j), None, None, (), None), {}),
+                ('type_tester 9 -b 31.25 --value8=this,that'.split(), (), {}, (9, 31.25, (3.0j, ), None, ('this', 'that'), (), None), {}),
+                (shlex.split('type_tester 9 --value2 31.25 -Z "woo hoo"'), (), {}, (9, 31.25, (3.0j, ), 'woo hoo', None, (), None), {}),
+                ('type_tester 9 --value2 31.25 -z 71'.split(), (), {}, (9, 31.25, (3.0j, ), None, None, (), '71' ), {}),
+                )
+        test_func_parsing(self, type_tester, tests)
+
+    def test_param_type_from_spec(self):
+        @Command(
+                value1=Spec('some value', default=7),
+                value2=Spec('another value', OPTION, None, default=3.1415),
+                value3=Spec('and yet more values', MULTI, None, default=3.0j),
+                value4=Spec('possible None option', OPTION, None, default=None),
+                value5=Spec('possible None multi', MULTI, None, default=None),
+                value6=Spec('possible tuple multi', MULTI, None, default=()),
+                )
+        def type_tester(value1, value2, value3, value4, value5, value6):
+            pass
+        tests = (
+                ('type_tester 9 --value2 31.25 --value3 14'.split(), (), {}, (9, 31.25, (14+0j, ), None, None, ()), {}),
+                ('type_tester 9 --value2 31.25 --value3=14'.split(), (), {}, (9, 31.25, (14+0j, ), None, None, ()), {}),
+                ('type_tester 9 --value2 31.25 --value3=14,15+3j'.split(), (), {}, (9, 31.25, (14+0j, 15+3j), None, None, ()), {}),
+                ('type_tester 9 --value2 31.25 --value5=this,that'.split(), (), {}, (9, 31.25, (3.0j, ), None, ('this', 'that'), ()), {}),
+                (shlex.split('type_tester 9 --value2 31.25 --value4="woo hoo"'), (), {}, (9, 31.25, (3.0j, ), 'woo hoo', None, ()), {}),
+                ('type_tester 9 --value2 31.25 --value6 71'.split(), (), {}, (9, 31.25, (3.0j, ), None, None, ('71', )), {}),
+                )
+        test_func_parsing(self, type_tester, tests)
+
+    def test_varargs_with_regular_args(self):
+        @Command(
+                these=('some of these please', ),
+                those=('maybe those', 'flag', ),
+                them=('most important!', 'required'),
+                )
+        def sassy(these, those, *them):
+            pass
+        tests = (
+                ('sassy biscuit and gravy'.split(), (), {}, ('biscuit', False, 'and' ,'gravy'), {}),
+                ('sassy --those biscuit and gravy'.split(), (), {}, ('biscuit', True, 'and' ,'gravy'), {}),
+                ('sassy biscuit --those and gravy'.split(), (), {}, ('biscuit', True, 'and' ,'gravy'), {}),
+                ('sassy biscuit and --those gravy'.split(), (), {}, ('biscuit', True, 'and' ,'gravy'), {}),
+                ('sassy biscuit and gravy --those'.split(), (), {}, ('biscuit', True, 'and' ,'gravy'), {}),
+                )
+        test_func_parsing(self, sassy, tests)
 
 
 class TestParamRemoval(TestCase):
@@ -1584,28 +1657,6 @@ class TestTrivalent(TestCase):
         self.assertEqual(int(true), 1)
         self.assertEqual(int(false), -1)
         self.assertEqual(int(unknown), 0)
-
-
-# class TestVersion(TestCase):
-#
-#     def test_create(self):
-#         self.assertEqual(str(Version(0, 1)), '0.1')
-#         self.assertEqual(str(Version('0.1')), '0.1')
-#         self.assertEqual(str(Version((0, 1))), '0.1')
-#         self.assertEqual(str(Version(1, 0, 4, 'rc.1')), '1.0.4.rc1')
-#         self.assertEqual(str(Version(1, 0, 4, 'rc-1')), '1.0.4.rc1')
-#         self.assertEqual(str(Version(1, 0, 4, 'rc_1')), '1.0.4.rc1')
-#         self.assertEqual(str(Version('1.0.4.rc1')), '1.0.4.rc1')
-#         self.assertEqual(str(Version('1.0.4rc1')), '1.0.4.rc1')
-#         self.assertEqual(str(Version('1.0.4_rc1')), '1.0.4.rc1')
-#         self.assertEqual(str(Version('1.0.4-rc1')), '1.0.4.rc1')
-#         self.assertEqual(str(Version(5, 7, sub='dev3')), '5.7.dev3')
-#         self.assertEqual(str(Version(5, 7, 0, sub='dev3')), '5.7.dev3')
-#         self.assertEqual(str(Version(2, 9, sub='a2')), '2.9.a2')
-#         self.assertEqual(str(Version(9, 1, 3, local='blahyadda')), '9.1.3+blahyadda')
-#         self.assertEqual(str(Version(2, 3, 5)), '2.3.5')
-#         self.assertEqual(str(Version('2.3.5')), '2.3.5')
-#         self.assertEqual(str(Version('2.3.05')), '2.3.5')
 
 
 if __name__ == '__main__':
