@@ -1063,6 +1063,7 @@ def Run():
             # started with python -m, get actual package name for prog_name
             prog_name = os.path.split(prog_path)[1]
         debug(prog_name, verbose=2)
+        script_module['script_fullname'] = SYS_ARGS[0]
         script_module['script_name'] = prog_name
         prog_name = prog_name.replace('_','-')
         if not Command:
