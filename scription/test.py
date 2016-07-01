@@ -10,7 +10,11 @@ import shutil
 import sys
 import tempfile
 import warnings
-from hypothesis import given, strategies as st, settings
+try:
+    import hypothesis
+    from hypothesis import given, strategies as st, settings
+except ImportError:
+    hypothesis = None
 scription.VERBOSITY = 0
 
 
@@ -83,15 +87,33 @@ class TestCase(unittest_TestCase):
                 0,
                 )
 
-class TestHypothesis(TestCase):
+if hypothesis:
+    class TestHypothesis(TestCase):
 
-    @given(a=st.integers(), b=st.none(), c=st.booleans(), d=st.floats())
-    def test_pocket(self, a, b, c, d):
-        for value  in (a, b, c, d, (a, b, c, d), (a, c), [b, d]):
-            def this_thing(val=pocket(value=value)):
-                return pocket.value
-            test_value = this_thing(value)
-            self.assertTrue(value is test_value or value == test_value)
+        @given(a=st.integers(), b=st.none(), c=st.booleans(), d=st.floats())
+        def test_pocket(self, a, b, c, d):
+            for value  in (a, b, c, d, (a, b, c, d), (a, c), [b, d]):
+                def this_thing(val=pocket(value=value)):
+                    return pocket.value
+                test_value = this_thing(value)
+                self.assertTrue(value is test_value or value == test_value)
+
+class TestPocket(TestCase):
+
+    def test_single_arg_is_arg(self):
+        if (pocket(value=3)):
+            self.assertEqual(3, pocket.value)
+        if not (pocket(value=None)):
+            self.assertIs(None, pocket.value)
+
+    def test_multi_args(self):
+        val = pocket(value1=3, value2=7)
+        self.assertIs(type(val), tuple)
+        self.assertEqual(len(val), 2)
+        self.assertTrue(3 in val)
+        self.assertTrue(7 in val)
+        self.assertEqual(pocket.value1, 3)
+        self.assertEqual(pocket.value2, 7)
 
 
 class TestCommandlineProcessing(TestCase):

@@ -1254,8 +1254,10 @@ class Spec(object):
     def value(self):
         if self._cli_value is not empty:
             value = self._cli_value
-        elif self._envvar is not empty and pocket(value=_os.environ.get(self._envvar)):
+        elif self._envvar is not empty and pocket(value=os.environ.get(self._envvar)):
             value = pocket.value
+            if self.kind == 'multi':
+                value = tuple(_split_on_comma(value))
         elif self._script_default is not empty:
             value = self._script_default
         elif self._type_default is not empty:
@@ -1517,6 +1519,8 @@ def mail(server=None, port=25, message=None):
 class pocket(object):
     '''
     container to save values from intermediate expressions
+
+    nb: return value is unordered
     '''
     pocket = threading.local()
 
@@ -1533,7 +1537,11 @@ class pocket(object):
             name = names[-1]
             level[name] = value
             res.append(value)
-        return tuple(res)
+        if len(res) == 1:
+            [res] = res
+        else:
+            res = tuple(res)
+        return res
 
     def __getattr__(self, name):
         try:
