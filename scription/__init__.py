@@ -80,7 +80,7 @@ from sys import stdout, stderr
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 77, 0
+version = 0, 77, 1
 
 # data
 __all__ = (
