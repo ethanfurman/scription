@@ -63,10 +63,12 @@ def test_func_parsing(obj, func, tests, test_type=False):
                 spec._cli_value = empty
     finally:
         script_name = '<unknown>'
+        script_fullname = '<unknown>'
         script_main = None
         script_commands = {}
         script_command = None
         script_commandname = ''
+        script_exception_lines = ''
 
 def test_func_docstrings(obj, func, docstring):
     try:

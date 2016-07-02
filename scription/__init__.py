@@ -98,7 +98,8 @@ __all__ = (
 VERBOSITY = 0
 SCRIPTION_DEBUG = 0
 LOCALE_ENCODING = locale.getpreferredencoding() or 'utf-8'
-
+THREAD_STORAGE = threading.local()
+THREAD_STORAGE.script_main = None
 
 # bootstrap SCRIPTION_DEBUG
 for arg in sys.argv:
@@ -253,13 +254,14 @@ class Alias(object):
         debug('recording aliases', aliases, verbose=2)
         self.aliases = aliases
     def __call__(self, func):
-        debug('applying aliases to', func, verbose=2)
+        debug('applying aliases to', func.__name__, verbose=2)
         global script_module
         if script_module is None:
+            debug('creating script_module', verbose=2)
             script_module = _func_globals(func)
             script_module['module'] = _namespace(script_module)
             script_module['script_name'] = '<unknown>'
-            script_module['script_main'] = None
+            script_module['script_main'] = THREAD_STORAGE.script_main
             script_module['script_commands'] = {}
         for alias in self.aliases:
             alias_name = alias.replace('_', '-')
@@ -277,13 +279,14 @@ class Command(object):
             annotations[name] = spec
         self.annotations = annotations
     def __call__(self, func):
-        debug('Command -> applying to', func, verbose=1)
+        debug('Command -> applying to', func.__name__, verbose=1)
         global script_module
         if script_module is None:
+            debug('creating script_module', verbose=2)
             script_module = _func_globals(func)
             script_module['module'] = _namespace(script_module)
             script_module['script_name'] = '<unknown>'
-            script_module['script_main'] = None
+            script_module['script_main'] = THREAD_STORAGE.script_main
             script_module['script_commands'] = {}
         if func.__doc__ is not None:
             func.__doc__ = textwrap.dedent(func.__doc__).strip()
@@ -292,6 +295,7 @@ class Command(object):
         script_module['script_commands'][func_name] = func
         _help(func)
         return func
+
 
 class Trivalent(object):
     """
@@ -1129,14 +1133,16 @@ def Run():
         exc = sys.exc_info()[1]
         debug(exc)
         result = log_exception()
-        script_module['exception_lines'] = result
+        script_module['script_exception_lines'] = result
         if isinstance(exc, ScriptionError):
             raise SystemExit(str(exc))
         raise
 
 
 class Script(object):
-    "adds __scription__ to decorated function, and stores func in self.command"
+    """
+    adds __scription__ to decorated function, and stores func in self.command
+    """
     def __init__(self, **settings):
         debug('Script -> recording', verbose=1)
         debug(settings, verbose=2)
@@ -1160,16 +1166,23 @@ class Script(object):
         num_keys = len(self.names)
         for i, name in enumerate(self.names):
             settings[name]._order = i + num_keys
-        def psyche():
+        def dummy():
             pass
-        _add_annotations(psyche, settings, script=True)
-        _help(psyche)
-        self.names = psyche.names
-        self.__usage__ = psyche.__usage__.strip()
+        _add_annotations(dummy, settings, script=True)
+        _help(dummy)
+        # self.names = dummy.names
+        self.__usage__ = dummy.__usage__.strip()
+        self.command = dummy
+        self.all_params = dummy.all_params
+        self.named_params = dummy.named_params
+        self.settings = dummy.__scription__
+        THREAD_STORAGE.script_main = self
     def __call__(self, func):
         debug('Script -> applying to', func, verbose=1)
+        THREAD_STORAGE.script_main = None
         global script_module
         if script_module is None:
+            debug('creating script_module', verbose=2)
             script_module = _func_globals(func)
             script_module['module'] = _namespace(script_module)
             script_module['script_name'] = '<unknown>'
@@ -1271,7 +1284,11 @@ class Spec(object):
 def abort(msg=None, returncode=1):
     "prints msg to stderr, raises SystemExit with returncode"
     if msg:
-        print('%s: %s' % (script_module['script_name'], msg), file=stderr)
+        if VERBOSITY > 0:
+            progname = script_module['script_fullname']
+        else:
+            progname = script_module['script_name']
+        print('%s: %s' % (progname, msg), file=stderr)
     raise SystemExit(returncode)
 
 def debug(*values, **kwds):
@@ -1527,8 +1544,8 @@ class pocket(object):
 
     def __call__(self, **kwds):
         res = []
-        setattr(self.pocket, 'data', {})
-        level = self.pocket.data
+        # setattr(self.pocket, 'data', {})
+        level = self.pocket.data = {}
         for names, value in kwds.items():
             names = names.split('.')
             for name in names[:-1]:
@@ -2010,7 +2027,7 @@ def _usage(func, param_line_args):
             elif Script and item in Script.settings:
                 annote = Script.settings[item]
             elif item in ('SCRIPTION_DEBUG', ):
-                SCRIPTION_DEBUG = value
+                SCRIPTION_DEBUG = int(value)
                 value = None
                 continue
             else:
