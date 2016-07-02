@@ -1,3 +1,18 @@
+0.77.1
+======
+
+OrmFile
+- keys are case-insensitive
+- fall-through type is now str (was int)
+
+use `aenum` for Enumerations instead of `enum34`
+add ReturnCode Enumeration
+multiple abbreviations allowed for switches
+environment variables supported for argument values
+pocket returns single item for single item, tuple for multiple items
+add `script_fullname` which contains path and script name
+
+
 0.77.0
 ======
 
