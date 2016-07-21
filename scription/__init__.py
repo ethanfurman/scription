@@ -701,6 +701,8 @@ class Job(object):
                     sys.stderr.flush()
             else:
                 raise Exception('unknown stream: %r' % stream)
+        # close the child's stdin
+        self.write(None)
         self.stdout = ''.join(self._stdout).replace('\r\n', '\n')
         self.stderr = ''.join(self._stderr).replace('\r\n', '\n')
         try:
