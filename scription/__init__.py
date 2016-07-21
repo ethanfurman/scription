@@ -49,6 +49,7 @@ import time
 import traceback
 from aenum import Enum, AutoNumber, NamedConstant, export
 from functools import partial
+from math import floor
 from sys import stdout, stderr
 
 """
@@ -1045,6 +1046,78 @@ class OrmFile(object):
 # deprecated, will remove at some point
 IniError = OrmError
 IniFile = OrmFile
+
+
+class ProgressView(object):
+    """
+    Displays progress as a bar or a numeric count.
+    """
+
+    ViewType = Enum('ViewType', (('Bar', 'bar'), ('Percent', 'percent')))
+    export(ViewType, vars())
+
+    def __init__(self, total, view_type, message=None, bar_char='*'):
+        if VERBOSITY < 1:
+            self.blank = True
+            return
+        self.blank = False
+        self.current_count = 0
+        self.total = total
+        self.blockcount = 0
+        self.bar_char = bar_char
+        self.view_type = self.ViewType(view_type)
+        self.last_written = 0
+        self.f = sys.stdout
+        if message is not None:
+            self.f.write('\n%s' % message)
+        if self.view_type is self.Percent:
+            self.f.write(':   0%')
+        elif self.view_type is self.Bar:
+            self.f.write('\n-------------------- % Progress ---------------- 1\n')
+            self.f.write('    1    2    3    4    5    6    7    8    9    0\n')
+            self.f.write('    0    0    0    0    0    0    0    0    0    0\n')
+        else:
+            raise Exception('unknown value for view_type: %r' % self.view_type)
+        self.f.flush()
+
+    def progress(self, count):
+        """
+        Calculate current percent, update views.
+        """
+        if self.blank:
+            return
+        self.current_count = count
+        count = min(count, self.total)
+        if self.total == count or not self.total:
+            complete = 100
+        else:
+            complete = int(floor(100.0*count/self.total))
+        if complete <= self.last_written:
+            return
+        self.last_written = complete
+        if self.view_type is self.Percent:
+            self.f.write('%3d%%' % complete)
+        elif self.view_type is self.Bar:
+            blockcount = int(complete//2)
+            if blockcount <= self.blockcount:
+                return
+            for i in range(self.blockcount, blockcount):
+                self.f.write(self.bar_char)
+            self.blockcount = blockcount
+        else:
+            raise Exception('unknow value for view_type: %r' % self.view_type)
+        if complete == 100:
+            self.f.write('\n')
+        self.f.flush()
+
+    def tick(self):
+        """
+        Add one to counter, possibly update view.
+        """
+        if self.blank:
+            return
+        self.current_count += 1
+        self.progress(self.current_count)
 
 
 def Run():
