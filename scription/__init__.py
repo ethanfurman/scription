@@ -660,7 +660,7 @@ class Job(object):
                     passwords = []
                 else:
                     # pty -- look for echo off first
-                    while self.get_echo():
+                    while self.get_echo() and self.is_alive():
                         if timeout is not None and time.time() - start >= timeout:
                             message = '\nTIMEOUT: process failed to complete in %s seconds\n' % timeout
                             self._stderr.append(message)
@@ -835,6 +835,8 @@ class Job(object):
 
     def write(self, data, block=True):
         'parent method'
+        if not self.is_alive():
+            return 0
         if not isinstance(data, bytes):
             data = data.encode('utf-8')
         self._all_input.put(data)
