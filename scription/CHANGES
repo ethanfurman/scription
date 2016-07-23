@@ -1,3 +1,17 @@
+0.77.3
+======
+
+fix closing stdin
+
+
+0.77.2
+======
+
+only do passwords and writes if child process is still alive
+terminate stdin thread when child jobs finishes
+add ProgressView to display either a bar graph or an increasing numeric
+
+
 0.77.1
 ======
 
