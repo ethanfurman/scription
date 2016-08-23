@@ -702,7 +702,7 @@ class Job(object):
             else:
                 raise Exception('unknown stream: %r' % stream)
         # close the child's stdin
-        self.write('')
+        self.write('', block=False)
         self.stdout = ''.join(self._stdout).replace('\r\n', '\n')
         self.stderr = ''.join(self._stderr).replace('\r\n', '\n')
         try:
@@ -2235,3 +2235,4 @@ def InputFile(arg):
 
 def OutputFile(arg):
     return open(arg, 'w')
+
