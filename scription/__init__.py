@@ -631,84 +631,86 @@ class Job(object):
         # password    -> single password or tuple of passwords (pty=True only)
         # timeout     -> raise exception of not complete in timeout seconds
         # interactive -> False = record only, 'echo' = echo output as we get it
-        passwords = []
-        if input is not None and not isinstance(input, bytes):
-            input = input.encode('utf-8')
-        if password is None:
-            password = ()
-        elif isinstance(password, basestring):
-            password = (password, )
-        for pwd in password:
-            if not isinstance(pwd, bytes):
-                passwords.append((pwd + '\n').encode('utf-8'))
-            else:
-                passwords.append(pwd + '\n'.encode('utf-8'))
-        self._discarded = []
-        error = None
-
-        # loop to read output
-        start = time.time()
-        if self.poll() is None and (passwords or input is not None):
-            while passwords:
-                if self.process:
-                    # feed all passwords at once, after a short delay
-                    time.sleep(0.1)
-                    pwd = passwords[0]
-                    for next_pwd in passwords[1:]:
-                        pwd += next_pwd
-                    self.write(pwd, block=False)
-                    passwords = []
+        try:
+            passwords = []
+            if input is not None and not isinstance(input, bytes):
+                input = input.encode('utf-8')
+            if password is None:
+                password = ()
+            elif isinstance(password, basestring):
+                password = (password, )
+            for pwd in password:
+                if not isinstance(pwd, bytes):
+                    passwords.append((pwd + '\n').encode('utf-8'))
                 else:
-                    # pty -- look for echo off first
-                    while self.get_echo() and self.is_alive():
-                        if timeout is not None and time.time() - start >= timeout:
-                            message = '\nTIMEOUT: process failed to complete in %s seconds\n' % timeout
-                            self._stderr.append(message)
-                            raise TimeoutError(message, process=self.process)
+                    passwords.append(pwd + '\n'.encode('utf-8'))
+            self._discarded = []
+            error = None
+
+            # loop to read output
+            start = time.time()
+            if self.poll() is None and (passwords or input is not None):
+                while passwords:
+                    if self.process:
+                        # feed all passwords at once, after a short delay
+                        time.sleep(0.1)
+                        pwd = passwords[0]
+                        for next_pwd in passwords[1:]:
+                            pwd += next_pwd
+                        self.write(pwd, block=False)
+                        passwords = []
+                    else:
+                        # pty -- look for echo off first
+                        while self.get_echo() and self.is_alive():
+                            if timeout is not None and time.time() - start >= timeout:
+                                message = '\nTIMEOUT: process failed to complete in %s seconds\n' % timeout
+                                self._stderr.append(message)
+                                raise TimeoutError(message, process=self.process)
+                            time.sleep(0.01)
+                        pw, passwords = passwords[0], passwords[1:]
+                        self.write(pw, block=False)
                         time.sleep(0.01)
-                    pw, passwords = passwords[0], passwords[1:]
+                if input is not None:
                     self.write(pw, block=False)
                     time.sleep(0.01)
-            if input is not None:
-                self.write(pw, block=False)
-                time.sleep(0.01)
-        active = 2
-        while active:
-            if not self.get_echo():
-                # looking for a password? we have none
-                raise FailedPassword
-            if timeout is not None and time.time() - start >= timeout:
-                message = '\nTIMEOUT: process failed to complete in %s seconds\n' % timeout
-                self._stderr.append(message)
-                raise TimeoutError(message, process=self.process)
-            if not self._all_output.qsize():
-                time.sleep(0.1)
-                continue
-            stream, data = self._all_output.get()
-            if not data:
-                active -= 1
-            if encoding is not None:
-                data = data.decode(encoding)
-            if stream == 'stdout':
-                self._stdout.append(data)
-                if interactive == 'echo':
-                    _print(data, end='')
-                    sys.stdout.flush()
-            elif stream == 'stderr':
-                self._stderr.append(data)
-                if interactive == 'echo':
-                    _print(data, end='', file=stderr)
-                    sys.stderr.flush()
-            else:
-                raise Exception('unknown stream: %r' % stream)
-        # close the child's stdin
-        self.write('', block=False)
-        self.stdout = ''.join(self._stdout).replace('\r\n', '\n')
-        self.stderr = ''.join(self._stderr).replace('\r\n', '\n')
-        try:
-            self.close()
-        except ExecuteError:
-            pass
+            active = 2
+            while active:
+                if not self.get_echo():
+                    # looking for a password? we have none
+                    raise FailedPassword
+                if timeout is not None and time.time() - start >= timeout:
+                    message = '\nTIMEOUT: process failed to complete in %s seconds\n' % timeout
+                    self._stderr.append(message)
+                    raise TimeoutError(message, process=self.process)
+                if not self._all_output.qsize():
+                    time.sleep(0.1)
+                    continue
+                stream, data = self._all_output.get()
+                if not data:
+                    active -= 1
+                if encoding is not None:
+                    data = data.decode(encoding)
+                if stream == 'stdout':
+                    self._stdout.append(data)
+                    if interactive == 'echo':
+                        _print(data, end='')
+                        sys.stdout.flush()
+                elif stream == 'stderr':
+                    self._stderr.append(data)
+                    if interactive == 'echo':
+                        _print(data, end='', file=stderr)
+                        sys.stderr.flush()
+                else:
+                    raise Exception('unknown stream: %r' % stream)
+        finally:
+            # close the child's stdin
+            self.write('', block=False)
+            self.stdout = ''.join(self._stdout).replace('\r\n', '\n')
+            self.stderr = ''.join(self._stderr).replace('\r\n', '\n')
+            try:
+                self.close()
+            except ExecuteError:
+                pass
 
     def close(self, force=True):
         'parent method'
