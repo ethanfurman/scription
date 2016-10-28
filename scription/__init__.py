@@ -499,9 +499,15 @@ def Execute(args, cwd=None, password=None, timeout=None, pty=None, interactive=N
             job.communicate(timeout=timeout, interactive=interactive, password=password)
             return job
         except TimeoutError:
-            job.send_signal(signal)
             timeout = 5
             password = None
+            try:
+                job.send_signal(signal)
+            except OSError:
+                exc = sys.exc_info()[1]
+                if exc.errno == errno.ESRCH:
+                    break
+                raise
     return job
 
 
@@ -515,6 +521,8 @@ class Job(object):
     terminated = False
     process = None
     closed = False
+    stdout = None
+    stderr = None
 
     def __init__(self, args, cwd=None, pty=None, env=None, **new_env_vars):
         # args        -> command to run
@@ -584,24 +592,18 @@ class Job(object):
             try:
                 if isinstance(channel, int):
                     read = lambda size: os.read(channel, size)
-                    close = os.close
                 else:
                     read = channel.read
-                    close = channel.close
-                i = 0
                 while True:
                     data = read(1024)
-                    i += 1
                     q.put((name, data))
                     if not data:
-                        # close(channel)
                         break
             except Exception:
                 q.put((name, ''.encode('utf-8')))
                 exc = sys.exc_info()[1]
-                if not isinstance(exc, OSError) or exc.errno != 5:
+                if not isinstance(exc, OSError) or exc.errno != errno.EIO:
                     raise
-                # close(channel)
         def write_comm(channel, q):
             if isinstance(channel, int):
                 write = lambda data: os.write(channel, data)
@@ -611,10 +613,9 @@ class Job(object):
                 flush = channel.flush
             while True:
                 data = q.get()
-                if not data:
-                    # os.close(channel)
+                if data is None:
                     break
-                size = write(data)
+                write(data)
                 flush()
         t = Thread(target=read_comm, name='stdout', args=('stdout', self.child_fd_out, self._all_output))
         t.daemon = True
@@ -703,8 +704,6 @@ class Job(object):
                 else:
                     raise Exception('unknown stream: %r' % stream)
         finally:
-            # close the child's stdin
-            self.write('', block=False)
             self.stdout = ''.join(self._stdout).replace('\r\n', '\n')
             self.stderr = ''.join(self._stderr).replace('\r\n', '\n')
             try:
@@ -715,24 +714,6 @@ class Job(object):
     def close(self, force=True):
         'parent method'
         if not self.closed:
-            if isinstance(self.child_fd_in, int):
-                os.close(self.child_fd_in)
-            else:
-                self.child_fd_in.close()
-            if isinstance(self.child_fd_out, int):
-                # os.close(self.child_fd_out)
-                pass
-            else:
-                self.child_fd_out.close()
-            if isinstance(self.child_fd_err, int):
-                os.close(self.child_fd_err)
-            else:
-                self.child_fd_err.close()
-            self.child_fd = -1
-            self.child_fd_in = -1
-            self.child_fd_out = -1
-            time.sleep(0.1)
-            self.closed = True
             if self.is_alive():
                 self.terminate()
                 time.sleep(0.1)
@@ -740,6 +721,29 @@ class Job(object):
                     self.kill()
                     time.sleep(0.1)
                     self.is_alive()
+            # shutdown stdin thread
+            self._all_input.put(None)
+            # close handles and pipes
+            if self.process is not None:
+                self.child_fd_in.close()
+                self.child_fd_out.close()
+                self.child_fd_err.close()
+            else:
+                for fd in (self.child_fd, self.child_fd_err):
+                    try:
+                        os.close(self.child_fd)
+                    except OSError:
+                        exc_type, exc = sys.exc_info()[:2]
+                        if exc_type is OSError and exc.errno == errno.EBADF:
+                            pass
+                        else:
+                            raise
+            self.child_fd = -1
+            self.child_fd_in = -1
+            self.child_fd_out = -1
+            self.child_fd_err = -1
+            time.sleep(0.1)
+            self.closed = True
 
     def fileno(self):
         'parent method'
@@ -787,6 +791,7 @@ class Job(object):
             sig = self.kill_signals[-1]
             os.kill(self.pid, sig)
             time.sleep(0.1)
+        self.close()
 
     def poll(self):
         if self.is_alive():
@@ -814,6 +819,7 @@ class Job(object):
                 if self._stdout:
                     break
             if self._stdout:
+                # TODO: make test case to expose below bug (self.pop)
                 data = self.pop(0)
                 if len(data) > max_size:
                     # trim
@@ -834,11 +840,12 @@ class Job(object):
             sig = self.kill_signals[0]
             os.kill(self.pid, sig)
             time.sleep(1)
+            self.close()
 
     def write(self, data, block=True):
         'parent method'
         if not self.is_alive():
-            return 0
+            raise IOError(errno.EPIPE, 'Broken pipe.')
         if not isinstance(data, bytes):
             data = data.encode('utf-8')
         self._all_input.put(data)
