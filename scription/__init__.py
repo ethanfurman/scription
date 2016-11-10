@@ -492,11 +492,11 @@ Truthy = Trivalent.true
 Unknown = Trivalent.unknown
 Falsey = Trivalent.false
 
-def Execute(args, cwd=None, password=None, timeout=None, pty=None, interactive=None, env=None, **new_env_vars):
+def Execute(args, cwd=None, password=None, input=None, timeout=None, pty=None, interactive=None, env=None, **new_env_vars):
     job = Job(args, cwd=cwd, pty=pty, env=env, **new_env_vars)
     for signal in job.kill_signals:
         try:
-            job.communicate(timeout=timeout, interactive=interactive, password=password)
+            job.communicate(timeout=timeout, interactive=interactive, password=password, input=input)
             return job
         except TimeoutError:
             timeout = 5
@@ -634,8 +634,9 @@ class Job(object):
         # interactive -> False = record only, 'echo' = echo output as we get it
         try:
             passwords = []
-            if input is not None and not isinstance(input, bytes):
-                input = input.encode('utf-8')
+            if input is not None:
+                if not isinstance(input, bytes):
+                    input = input.encode('utf-8')
             if password is None:
                 password = ()
             elif isinstance(password, basestring):
@@ -672,8 +673,9 @@ class Job(object):
                         self.write(pw, block=False)
                         time.sleep(0.01)
                 if input is not None:
-                    self.write(pw, block=False)
-                    time.sleep(0.01)
+                    time.sleep(0.1)
+                    self.write(input, block=False)
+                    time.sleep(0.1)
             active = 2
             while active:
                 if not self.get_echo():
