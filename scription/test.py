@@ -9,6 +9,7 @@ import shlex
 import shutil
 import sys
 import tempfile
+import threading
 import warnings
 try:
     import hypothesis
@@ -1262,6 +1263,100 @@ class TestResponse(TestCase):
                 ans = get_response('copy files? [y]es/[no]/[a]ll/[may]be', default=default)
                 self.assertEqual(ans, result)
                 self.assertEqual(output, ri.prompt)
+
+
+class TestThreads(TestCase):
+    "Testing thread generation and reaping"
+
+    template = (
+            "from __future__ import print_function\n"
+            "import sys\n"
+            "sys.path.insert(0, %r)\n"
+            # "from scription import *\n"
+            "\n"
+            "%s\n"
+            # "\n"
+            # "Main()"
+            )
+
+    def write_script(self, script):
+        target_dir = os.path.join(os.getcwd(), os.path.split(os.path.split(scription.__file__)[0])[0])
+        file_path = os.path.join(tempdir, 'test_threads')
+        file = open(file_path, 'w')
+        try:
+            file.write(self.template % (target_dir, script))
+            return file_path
+        finally:
+            file.close()
+
+    def test_noninteractive_process(self):
+        thread_count = threading.active_count()
+        Execute('ls -lad', pty=False)
+        self.assertEqual(thread_count, threading.active_count())
+
+    def test_noninteractive_pty(self):
+        thread_count = threading.active_count()
+        Execute('ls -lad', pty=True)
+        self.assertEqual(thread_count, threading.active_count())
+
+    def test_interactive_process(self):
+        thread_count = threading.active_count()
+        test_file = self.write_script('print(raw_input("howdy! "))')
+        result = Execute([sys.executable, test_file], pty=False, timeout=10, input='Bye!\n')
+        self.assertEqual(result.stdout.strip(), 'howdy! Bye!', result.stdout + '\n' + result.stderr)
+        self.assertEqual(thread_count, threading.active_count())
+
+    def test_interactive_pty(self):
+        thread_count = threading.active_count()
+        test_file = self.write_script(
+                '''from getpass import getpass\n'''
+                '''print(getpass('howdy!'))\n'''
+                )
+        result = Execute([sys.executable, test_file], pty=True, timeout=10, input='Bye!\n')
+        self.assertEqual(result.stdout.strip().replace('\n', ' '), 'howdy! Bye!', '\n out: %r\n err: %r' % (result.stdout, result.stderr))
+        self.assertEqual(thread_count, threading.active_count())
+
+    def test_killed_process(self):
+        thread_count = threading.active_count()
+        test_file = self.write_script(
+                '''import time\n'''
+                '''time.sleep(5)\n'''
+                )
+        result = Execute([sys.executable, test_file], pty=False, timeout=1)
+        self.assertEqual(result.stderr.strip(), 'TIMEOUT: process failed to complete in 1 seconds')
+        self.assertEqual(thread_count, threading.active_count())
+
+    def test_killed_pty(self):
+        thread_count = threading.active_count()
+        test_file = self.write_script(
+                '''import time\n'''
+                '''time.sleep(5)\n'''
+                )
+        result = Execute([sys.executable, test_file], pty=True, timeout=1)
+        self.assertEqual(result.stderr.strip(), 'TIMEOUT: process failed to complete in 1 seconds')
+        self.assertEqual(thread_count, threading.active_count())
+
+    def test_died_process(self):
+        thread_count = threading.active_count()
+        test_file = self.write_script(
+                '''import time\n'''
+                '''def hello(x\n'''
+                '''time.sleep(5)\n'''
+                )
+        result = Execute([sys.executable, test_file], pty=False, timeout=1)
+        self.assertTrue('TIMEOUT: process failed to complete in 1 seconds' not in result.stdout)
+        self.assertEqual(thread_count, threading.active_count())
+
+    def test_died_pty(self):
+        thread_count = threading.active_count()
+        test_file = self.write_script(
+                '''import time\n'''
+                '''def hello(x\n'''
+                '''time.sleep(5)\n'''
+                )
+        result = Execute([sys.executable, test_file], pty=True, timeout=1)
+        self.assertTrue('TIMEOUT: process failed to complete in 1 seconds' not in result.stdout)
+        self.assertEqual(thread_count, threading.active_count())
 
 
 class TestTrivalent(TestCase):
