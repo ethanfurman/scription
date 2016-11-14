@@ -52,6 +52,10 @@ from functools import partial
 from math import floor
 from sys import stdout, stderr
 
+# locks, etc.
+print_lock = threading.RLock()
+io_lock = threading.Lock()
+
 """
 (help, kind, abbrev, type, choices, usage_name, remove, default)
 
@@ -493,21 +497,17 @@ Unknown = Trivalent.unknown
 Falsey = Trivalent.false
 
 def Execute(args, cwd=None, password=None, input=None, timeout=None, pty=None, interactive=None, env=None, **new_env_vars):
+    debug('creating job:', args)
     job = Job(args, cwd=cwd, pty=pty, env=env, **new_env_vars)
-    for signal in job.kill_signals:
-        try:
-            job.communicate(timeout=timeout, interactive=interactive, password=password, input=input)
-            return job
-        except TimeoutError:
-            timeout = 5
-            password = None
-            try:
-                job.send_signal(signal)
-            except OSError:
-                exc = sys.exc_info()[1]
-                if exc.errno == errno.ESRCH:
-                    break
-                raise
+    try:
+        debug('communicating')
+        job.communicate(timeout=timeout, interactive=interactive, password=password, input=input)
+    except TimeoutError:
+        debug('TimeoutError')
+        pass
+    finally:
+        job.close()
+    debug('returning')
     return job
 
 
@@ -516,18 +516,26 @@ class Job(object):
     if pty is True runs command in a forked process, otherwise runs in a subprocess
     """
 
-    returncode = None
-    signal = None
-    terminated = False
+    # subprocess is used record the process
     process = None
+    returncode = None
+    # if killed by a signal, record it
+    signal = None
+    # if job is no longer alive
+    terminated = False
+    # if job has been closed
     closed = False
+    # str of stdout and stderr from job
     stdout = None
     stderr = None
+    # any exception that occured (just the first one)
+    exception = None
 
     def __init__(self, args, cwd=None, pty=None, env=None, **new_env_vars):
         # args        -> command to run
         # cwd         -> directory to run in
         # pty         -> False = subprocess, True = fork
+        self._process_thread = None
         env = self.env = (env or os.environ).copy()
         if new_env_vars:
             env.update(new_env_vars)
@@ -595,28 +603,43 @@ class Job(object):
                 else:
                     read = channel.read
                 while True:
+                    debug('reading', name)
                     data = read(1024)
-                    q.put((name, data))
-                    if not data:
-                        break
+                    with io_lock:
+                        debug('putting %s %r (%d bytes)' % (name, data, len(data)))
+                        if not data:
+                            data = None
+                        q.put((name, data))
+                        if data is None:
+                            break
             except Exception:
-                q.put((name, ''.encode('utf-8')))
                 exc = sys.exc_info()[1]
-                if not isinstance(exc, OSError) or exc.errno != errno.EIO:
-                    raise
+                with io_lock:
+                    q.put((name, None))
+                    debug('dying %s (from exception %s)' % (name, exc))
+                    if not isinstance(exc, OSError) or exc.errno != errno.EIO:
+                        raise self._set_exc(exc)
         def write_comm(channel, q):
-            if isinstance(channel, int):
-                write = lambda data: os.write(channel, data)
-                flush = lambda: ''
-            else:
-                write = channel.write
-                flush = channel.flush
-            while True:
-                data = q.get()
-                if data is None:
-                    break
-                write(data)
-                flush()
+            try:
+                if isinstance(channel, int):
+                    write = lambda data: os.write(channel, data)
+                    flush = lambda: ''
+                else:
+                    write = channel.write
+                    flush = channel.flush
+                while True:
+                    debug('stdin waiting')
+                    data = q.get()
+                    with io_lock:
+                        if data is None:
+                            debug('dying stdin')
+                            break
+                        debug('stdin writing', repr(data))
+                        write(data)
+                        flush()
+            except Exception:
+                exc = sys.exc_info()[1]
+                raise self._set_exc(exc)
         t = Thread(target=read_comm, name='stdout', args=('stdout', self.child_fd_out, self._all_output))
         t.daemon = True
         t.start()
@@ -626,126 +649,149 @@ class Job(object):
         t = Thread(target=write_comm, name='stdin', args=(self.child_fd_in, self._all_input))
         t.daemon = True
         t.start()
+        # do not add the stdin thread to the list of threads that automatically die if the job dies, as
+        # it has to be manually ended
 
+    def _set_exc(self, exc):
+        'sets self.exception if not already set, or unsets if exc is None'
+        if self.exception is None or exc is None:
+            self.exception = exc
+        return exc
 
     def communicate(self, input=None, password=None, timeout=None, interactive=None, encoding='utf-8'):
         # password    -> single password or tuple of passwords (pty=True only)
         # timeout     -> raise exception of not complete in timeout seconds
         # interactive -> False = record only, 'echo' = echo output as we get it
-        try:
-            passwords = []
-            if input is not None:
-                if not isinstance(input, bytes):
-                    input = input.encode('utf-8')
-            if password is None:
-                password = ()
-            elif isinstance(password, basestring):
-                password = (password, )
-            for pwd in password:
-                if not isinstance(pwd, bytes):
-                    passwords.append((pwd + '\n').encode('utf-8'))
-                else:
-                    passwords.append(pwd + '\n'.encode('utf-8'))
-            self._discarded = []
-            error = None
-
-            # loop to read output
-            start = time.time()
-            if self.poll() is None and (passwords or input is not None):
-                while passwords:
-                    if self.process:
-                        # feed all passwords at once, after a short delay
-                        time.sleep(0.1)
-                        pwd = passwords[0]
-                        for next_pwd in passwords[1:]:
-                            pwd += next_pwd
-                        self.write(pwd, block=False)
-                        passwords = []
-                    else:
-                        # pty -- look for echo off first
-                        while self.get_echo() and self.is_alive():
-                            if timeout is not None and time.time() - start >= timeout:
-                                message = '\nTIMEOUT: process failed to complete in %s seconds\n' % timeout
-                                self._stderr.append(message)
-                                raise TimeoutError(message, process=self.process)
-                            time.sleep(0.01)
-                        pw, passwords = passwords[0], passwords[1:]
-                        self.write(pw, block=False)
-                        time.sleep(0.01)
-                if input is not None:
-                    time.sleep(0.1)
-                    self.write(input, block=False)
-                    time.sleep(0.1)
-            active = 2
-            while active:
-                if not self.get_echo():
-                    # looking for a password? we have none
-                    raise FailedPassword
-                if timeout is not None and time.time() - start >= timeout:
-                    message = '\nTIMEOUT: process failed to complete in %s seconds\n' % timeout
+        deadman_switch = None
+        if timeout is not None:
+            def prejudice():
+                debug('timed out')
+                message = '\nTIMEOUT: process failed to complete in %s seconds\n' % timeout
+                with io_lock:
                     self._stderr.append(message)
-                    raise TimeoutError(message, process=self.process)
-                if not self._all_output.qsize():
-                    time.sleep(0.1)
-                    continue
-                stream, data = self._all_output.get()
-                if not data:
-                    active -= 1
-                if encoding is not None:
-                    data = data.decode(encoding)
-                if stream == 'stdout':
-                    self._stdout.append(data)
-                    if interactive == 'echo':
-                        _print(data, end='')
-                        sys.stdout.flush()
-                elif stream == 'stderr':
-                    self._stderr.append(data)
-                    if interactive == 'echo':
-                        _print(data, end='', file=stderr)
-                        sys.stderr.flush()
-                else:
-                    raise Exception('unknown stream: %r' % stream)
+                self._set_exc(TimeoutError(message.strip()))
+                self.kill()
+            deadman_switch = threading.Timer(timeout, prejudice)
+            deadman_switch.name = 'deadman'
+            deadman_switch.start()
+        if self._process_thread is None:
+            def process_comm():
+                active = 2
+                while active:
+                    # check if any threads still alive
+                    stream, data = self._all_output.get()
+                    with io_lock:
+                        if data is None:
+                            active -= 1
+                            debug('dead thread:', stream)
+                            continue
+                        if encoding is not None:
+                            data = data.decode(encoding)
+                        debug('adding %r to %s' % (data, stream))
+                        if stream == 'stdout':
+                            self._stdout.append(data)
+                            if interactive == 'echo':
+                                echo(data, end='')
+                                sys.stdout.flush()
+                        elif stream == 'stderr':
+                            self._stderr.append(data)
+                            if interactive == 'echo':
+                                echo(data, end='', file=stderr)
+                                sys.stderr.flush()
+                        else:
+                            self._set_exc(Exception('unknown stream: %r' % stream))
+                            self.kill()
+                            # raise self._set_exc(Exception('unknown stream: %r' % stream))
+            process_thread = self._process_thread = Thread(target=process_comm, name='process')
+            process_thread.start()
+        try:
+            if self.is_alive():
+                passwords = []
+                if input is not None:
+                    if not isinstance(input, bytes):
+                        input = input.encode('utf-8')
+                if password is None:
+                    password = ()
+                elif isinstance(password, basestring):
+                    password = (password, )
+                for pwd in password:
+                    if not isinstance(pwd, bytes):
+                        passwords.append((pwd + '\n').encode('utf-8'))
+                    else:
+                        passwords.append(pwd + '\n'.encode('utf-8'))
+                if self.poll() is None and (passwords or input is not None):
+                    while passwords:
+                        if self.process:
+                            # feed all passwords at once, after a short delay
+                            time.sleep(0.1)
+                            pwd = passwords[0]
+                            for next_pwd in passwords[1:]:
+                                pwd += next_pwd
+                            self.write(pwd, block=False)
+                            passwords = []
+                        else:
+                            # pty -- look for echo off first
+                            while self.get_echo() and self.is_alive():
+                                time.sleep(0.01)
+                            pw, passwords = passwords[0], passwords[1:]
+                            self.write(pw, block=False)
+                    if input is not None:
+                        time.sleep(0.1)
+                        self.write(input, block=False)
+                        time.sleep(0.1)
+            debug('joining process thread...')
+            process_thread.join()
+            debug('process thread joined')
         finally:
-            self.stdout = ''.join(self._stdout).replace('\r\n', '\n')
-            self.stderr = ''.join(self._stderr).replace('\r\n', '\n')
-            try:
-                self.close()
-            except ExecuteError:
-                pass
+            debug('cancelling deadman switch')
+            if deadman_switch is not None:
+                deadman_switch.cancel()
+                deadman_switch.join()
+            debug('closing job')
+            self.close()
+            if self.exception is not None:
+                raise self.exception
 
     def close(self, force=True):
         'parent method'
-        if not self.closed:
-            if self.is_alive():
-                self.terminate()
-                time.sleep(0.1)
-                if force and self.is_alive():
-                    self.kill()
+        try:
+            if not self.closed:
+                if self.is_alive():
+                    self.terminate()
                     time.sleep(0.1)
-                    self.is_alive()
-            # shutdown stdin thread
-            self._all_input.put(None)
-            # close handles and pipes
-            if self.process is not None:
-                self.child_fd_in.close()
-                self.child_fd_out.close()
-                self.child_fd_err.close()
-            else:
-                for fd in (self.child_fd, self.child_fd_err):
-                    try:
-                        os.close(self.child_fd)
-                    except OSError:
-                        exc_type, exc = sys.exc_info()[:2]
-                        if exc_type is OSError and exc.errno == errno.EBADF:
-                            pass
-                        else:
-                            raise
-            self.child_fd = -1
-            self.child_fd_in = -1
-            self.child_fd_out = -1
-            self.child_fd_err = -1
-            time.sleep(0.1)
-            self.closed = True
+                    if force and self.is_alive():
+                        self.kill()
+                        time.sleep(0.1)
+                        self.is_alive()
+                # shutdown stdin thread
+                self._all_input.put(None)
+                # close handles and pipes
+                if self.process is not None:
+                    self.child_fd_in.close()
+                    self.child_fd_out.close()
+                    self.child_fd_err.close()
+                else:
+                    for fd in (self.child_fd, self.child_fd_err):
+                        try:
+                            os.close(self.child_fd)
+                        except OSError:
+                            exc_type, exc = sys.exc_info()[:2]
+                            if exc_type is OSError and exc.errno == errno.EBADF:
+                                pass
+                            else:
+                                raise self._set_exc(exc)
+                self.child_fd = -1
+                self.child_fd_in = -1
+                self.child_fd_out = -1
+                self.child_fd_err = -1
+                time.sleep(0.1)
+                self.closed = True
+        finally:
+            with io_lock:
+                debug('saving stdout')
+                self.stdout = ''.join(self._stdout).replace('\r\n', '\n')
+                debug('saving stderr')
+                self.stderr = ''.join(self._stderr).replace('\r\n', '\n')
 
     def fileno(self):
         'parent method'
@@ -776,7 +822,8 @@ class Job(object):
             exc = sys.exc_info()[1]
             if isinstance(exc, OSError) and exc.errno == errno.ECHILD:
                 return False
-            raise ExecuteError(str(exc))
+            exc = ExecuteError(str(exc))
+            raise self._set_exc(exc)
         if pid != 0:
             self.signal = status % 256
             if self.signal:
@@ -787,13 +834,32 @@ class Job(object):
             return False
         return True
 
-    def kill(self):
-        'parent method'
-        if self.is_alive() and self.kill_signals:
-            sig = self.kill_signals[-1]
-            os.kill(self.pid, sig)
-            time.sleep(0.1)
-        self.close()
+    def kill(self, exc=None):
+        '''kills child job, and self if child will not die
+
+        records exc in self.exception if self.exception not already set
+        parent method'''
+        if exc and self.exception is not None:
+            self.exception = exc
+        for s in self.kill_signals:
+            try:
+                debug('checking job for life')
+                if not self.is_alive():
+                    debug('dead, exiting')
+                    break
+                debug('killing with', s)
+                self.send_signal(s)
+                time.sleep(1)
+            except Exception:
+                cls, exc = sys.exc_info()[:2]
+                debug('received', exc)
+                if cls in (IOError, OSError) and exc.errno in (errno.ESRCH, errno.ECHILD):
+                    break
+        else:
+            # unable to kill job
+            message = message[:-1] + '; unable to kill job -- killing self\n'
+            error(message)
+            os.kill(os.getpid(), signal.SIGKILL)
 
     def poll(self):
         if self.is_alive():
@@ -817,7 +883,7 @@ class Job(object):
                 elif stream == 'stderr':
                     self._stderr.append(data)
                 else:
-                    raise Exception('unknown stream: %r' % stream)
+                    raise self._set_exc(Exception('unknown stream: %r' % stream))
                 if self._stdout:
                     break
             if self._stdout:
@@ -842,12 +908,11 @@ class Job(object):
             sig = self.kill_signals[0]
             os.kill(self.pid, sig)
             time.sleep(1)
-            self.close()
 
     def write(self, data, block=True):
         'parent method'
         if not self.is_alive():
-            raise IOError(errno.EPIPE, 'Broken pipe.')
+            raise self._set_exc(IOError(errno.EPIPE, 'Broken pipe.'))
         if not isinstance(data, bytes):
             data = data.encode('utf-8')
         self._all_input.put(data)
@@ -1371,34 +1436,39 @@ class Spec(object):
 
 def abort(msg=None, returncode=1):
     "prints msg to stderr, raises SystemExit with returncode"
-    if msg:
-        if VERBOSITY > 0:
-            progname = script_module['script_fullname']
-        else:
-            progname = script_module['script_name']
-        print('%s: %s' % (progname, msg), file=stderr)
-    raise SystemExit(returncode)
+    with print_lock:
+        if msg:
+            if VERBOSITY > 0:
+                progname = script_module['script_fullname']
+            else:
+                progname = script_module['script_name']
+            print('%s: %s' % (progname, msg), file=stderr)
+        raise SystemExit(returncode)
 
 def debug(*values, **kwds):
-    # kwds can contain sep (' ), end ('\n'), file (sys.stdout), and
+    # kwds can contain sep (' '), end ('\n'), file (sys.stdout), and
     # verbose (1)
-    verbose_level = kwds.pop('verbose', 1)
-    if 'file' not in kwds:
-        kwds['file'] = stderr
-    if verbose_level > SCRIPTION_DEBUG:
-        return
-    _print('scription> ', *values, **kwds)
+    with print_lock:
+        verbose_level = kwds.pop('verbose', 1)
+        if 'file' not in kwds:
+            kwds['file'] = stderr
+        if verbose_level > SCRIPTION_DEBUG:
+            return
+        _print('scription> ', *values, **kwds)
 
 def echo(*args, **kwds):
-    kwds['verbose'] = kwds.pop('verbose', 0)
-    print(*args, **kwds)
+    with print_lock:
+        kwds['verbose'] = kwds.pop('verbose', 0)
+        print(*args, **kwds)
 
 def error(*args, **kwds):
-    returncode = kwds.pop('returncode', None)
-    kwds['file'] = stderr
-    print(*args, **kwds)
-    if returncode:
-        abort(returncode=returncode)
+    with print_lock:
+        returncode = kwds.pop('returncode', None)
+        kwds['file'] = stderr
+        kwds.pop('verbose', 0)
+        print(*args, **kwds)
+        if returncode:
+            abort(returncode=returncode)
 
 def get_response(
         question,
@@ -1536,9 +1606,9 @@ def help(msg, returncode=1):
 
 def log_exception(tb=None):
     if tb is None:
-        exc, err, tb = sys.exc_info()
+        cls, exc, tb = sys.exc_info()
         lines = traceback.format_list(traceback.extract_tb(tb))
-        lines.append('%s: %s\n' % (exc.__name__, err))
+        lines.append('%s: %s\n' % (cls.__name__, exc))
         logger.critical('Traceback (most recent call last):')
     else:
         lines = tb.split('\\n')
@@ -1659,15 +1729,16 @@ pocket = pocket()
 def print(*values, **kwds):
     # kwds can contain sep (' '), end ('\n'), file (sys.stdout), and
     # verbose (1)
-    verbose_level = kwds.pop('verbose', 1)
-    target = kwds.get('file')
-    if verbose_level > VERBOSITY and target is not stderr:
-        return
-    _print(*values, **kwds)
-    if target:
-        target.flush()
-    else:
-        sys.stdout.flush()
+    with print_lock:
+        verbose_level = kwds.pop('verbose', 1)
+        target = kwds.get('file')
+        if verbose_level > VERBOSITY and target is not stderr:
+            return
+        _print(*values, **kwds)
+        if target:
+            target.flush()
+        else:
+            sys.stdout.flush()
 
 class user_ids(object):
     """
