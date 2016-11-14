@@ -1265,14 +1265,17 @@ class TestResponse(TestCase):
                 self.assertEqual(output, ri.prompt)
 
 
-class TestThreads(TestCase):
+class TestExecutionThreads(TestCase):
     "Testing thread generation and reaping"
 
     template = (
             "from __future__ import print_function\n"
             "import sys\n"
             "sys.path.insert(0, %r)\n"
-            # "from scription import *\n"
+            "try:\n"
+            "    raw_input\n"
+            "except NameError:\n"
+            "    raw_input = input\n"
             "\n"
             "%s\n"
             # "\n"
@@ -1291,20 +1294,23 @@ class TestThreads(TestCase):
 
     def test_noninteractive_process(self):
         thread_count = threading.active_count()
-        Execute('ls -lad', pty=False)
+        job = Execute('ls -lad', pty=False)
         self.assertEqual(thread_count, threading.active_count())
+        self.assertEqual(job.returncode, 0)
 
     def test_noninteractive_pty(self):
         thread_count = threading.active_count()
-        Execute('ls -lad', pty=True)
+        job = Execute('ls -lad', pty=True)
         self.assertEqual(thread_count, threading.active_count())
+        self.assertEqual(job.returncode, 0)
 
     def test_interactive_process(self):
         thread_count = threading.active_count()
         test_file = self.write_script('print(raw_input("howdy! "))')
-        result = Execute([sys.executable, test_file], pty=False, timeout=10, input='Bye!\n')
-        self.assertEqual(result.stdout.strip(), 'howdy! Bye!', result.stdout + '\n' + result.stderr)
+        job = Execute([sys.executable, test_file], pty=False, timeout=1, input='Bye!\n')
         self.assertEqual(thread_count, threading.active_count())
+        self.assertEqual(job.stdout.strip(), 'howdy! Bye!', '\n out: %r\n err: %r' % (job.stdout, job.stderr))
+        self.assertEqual(job.returncode, 0)
 
     def test_interactive_pty(self):
         thread_count = threading.active_count()
@@ -1312,9 +1318,10 @@ class TestThreads(TestCase):
                 '''from getpass import getpass\n'''
                 '''print(getpass('howdy!'))\n'''
                 )
-        result = Execute([sys.executable, test_file], pty=True, timeout=10, input='Bye!\n')
-        self.assertEqual(result.stdout.strip().replace('\n', ' '), 'howdy! Bye!', '\n out: %r\n err: %r' % (result.stdout, result.stderr))
+        job = Execute([sys.executable, test_file], pty=True, timeout=1, input='Bye!\n')
         self.assertEqual(thread_count, threading.active_count())
+        self.assertEqual(job.stdout.strip().replace('\n', ' '), 'howdy! Bye!', '\n out: %r\n err: %r' % (job.stdout, job.stderr))
+        self.assertEqual(job.returncode, 0)
 
     def test_killed_process(self):
         thread_count = threading.active_count()
@@ -1322,9 +1329,10 @@ class TestThreads(TestCase):
                 '''import time\n'''
                 '''time.sleep(5)\n'''
                 )
-        result = Execute([sys.executable, test_file], pty=False, timeout=1)
-        self.assertEqual(result.stderr.strip(), 'TIMEOUT: process failed to complete in 1 seconds')
+        job = Execute([sys.executable, test_file], pty=False, timeout=1)
         self.assertEqual(thread_count, threading.active_count())
+        self.assertEqual(job.stderr.strip(), 'TIMEOUT: process failed to complete in 1 seconds', '\n out: %r\n err: %r' % (job.stdout, job.stderr))
+        self.assertNotEqual(job.returncode, 0)
 
     def test_killed_pty(self):
         thread_count = threading.active_count()
@@ -1332,9 +1340,10 @@ class TestThreads(TestCase):
                 '''import time\n'''
                 '''time.sleep(5)\n'''
                 )
-        result = Execute([sys.executable, test_file], pty=True, timeout=1)
-        self.assertEqual(result.stderr.strip(), 'TIMEOUT: process failed to complete in 1 seconds')
+        job = Execute([sys.executable, test_file], pty=True, timeout=1)
         self.assertEqual(thread_count, threading.active_count())
+        self.assertEqual(job.stderr.strip(), 'TIMEOUT: process failed to complete in 1 seconds', '\n out: %r\n err: %r' % (job.stdout, job.stderr))
+        self.assertNotEqual(job.returncode, 0)
 
     def test_died_process(self):
         thread_count = threading.active_count()
@@ -1343,9 +1352,10 @@ class TestThreads(TestCase):
                 '''def hello(x\n'''
                 '''time.sleep(5)\n'''
                 )
-        result = Execute([sys.executable, test_file], pty=False, timeout=1)
-        self.assertTrue('TIMEOUT: process failed to complete in 1 seconds' not in result.stdout)
+        job = Execute([sys.executable, test_file], pty=False, timeout=1)
         self.assertEqual(thread_count, threading.active_count())
+        self.assertTrue('TIMEOUT: process failed to complete in 1 seconds' not in job.stdout)
+        self.assertNotEqual(job.returncode, 0)
 
     def test_died_pty(self):
         thread_count = threading.active_count()
@@ -1354,9 +1364,10 @@ class TestThreads(TestCase):
                 '''def hello(x\n'''
                 '''time.sleep(5)\n'''
                 )
-        result = Execute([sys.executable, test_file], pty=True, timeout=1)
-        self.assertTrue('TIMEOUT: process failed to complete in 1 seconds' not in result.stdout)
+        job = Execute([sys.executable, test_file], pty=True, timeout=1)
         self.assertEqual(thread_count, threading.active_count())
+        self.assertTrue('TIMEOUT: process failed to complete in 1 seconds' not in job.stdout)
+        self.assertNotEqual(job.returncode, 0)
 
 
 class TestTrivalent(TestCase):
