@@ -90,14 +90,12 @@ version = 0, 78, 0
 # data
 __all__ = (
     'Alias', 'Command', 'Script', 'Main', 'Run', 'Spec',
-    'Bool','InputFile', 'OutputFile',
-    'IniError', 'IniFile', 'OrmError', 'OrmFile',
+    'Bool','InputFile', 'OutputFile', 'IniError', 'IniFile', 'OrmError', 'OrmFile',
     'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'REQUIRED',
-    'ScriptionError', 'ExecuteError', 'Execute', 'Job',
-    'abort', 'get_response', 'help', 'mail', 'user_ids', 'print',
+    'ScriptionError', 'ExecuteError', 'Execute', 'Job', 'ProgressView',
+    'abort', 'echo', 'error', 'get_response', 'help', 'mail', 'user_ids', 'print',
     'stdout', 'stderr', 'wait_and_check',
-    'Trivalent', 'Truthy', 'Unknown', 'Falsey',
-    'Success', 'Failure',
+    'Trivalent', 'Truthy', 'Unknown', 'Falsey', 'Success', 'Failure',
     )
 
 VERBOSITY = 0
@@ -662,49 +660,49 @@ class Job(object):
         # password    -> single password or tuple of passwords (pty=True only)
         # timeout     -> raise exception of not complete in timeout seconds
         # interactive -> False = record only, 'echo' = echo output as we get it
-        deadman_switch = None
-        if timeout is not None:
-            def prejudice():
-                debug('timed out')
-                message = '\nTIMEOUT: process failed to complete in %s seconds\n' % timeout
-                with io_lock:
-                    self._stderr.append(message)
-                self._set_exc(TimeoutError(message.strip()))
-                self.kill()
-            deadman_switch = threading.Timer(timeout, prejudice)
-            deadman_switch.name = 'deadman'
-            deadman_switch.start()
-        if self._process_thread is None:
-            def process_comm():
-                active = 2
-                while active:
-                    # check if any threads still alive
-                    stream, data = self._all_output.get()
-                    with io_lock:
-                        if data is None:
-                            active -= 1
-                            debug('dead thread:', stream)
-                            continue
-                        if encoding is not None:
-                            data = data.decode(encoding)
-                        debug('adding %r to %s' % (data, stream))
-                        if stream == 'stdout':
-                            self._stdout.append(data)
-                            if interactive == 'echo':
-                                echo(data, end='')
-                                sys.stdout.flush()
-                        elif stream == 'stderr':
-                            self._stderr.append(data)
-                            if interactive == 'echo':
-                                echo(data, end='', file=stderr)
-                                sys.stderr.flush()
-                        else:
-                            self._set_exc(Exception('unknown stream: %r' % stream))
-                            self.kill()
-                            # raise self._set_exc(Exception('unknown stream: %r' % stream))
-            process_thread = self._process_thread = Thread(target=process_comm, name='process')
-            process_thread.start()
         try:
+            deadman_switch = None
+            if timeout is not None:
+                def prejudice():
+                    debug('timed out')
+                    message = '\nTIMEOUT: process failed to complete in %s seconds\n' % timeout
+                    with io_lock:
+                        self._stderr.append(message)
+                    self._set_exc(TimeoutError(message.strip()))
+                    self.kill()
+                deadman_switch = threading.Timer(timeout, prejudice)
+                deadman_switch.name = 'deadman'
+                deadman_switch.start()
+            if self._process_thread is None:
+                def process_comm():
+                    active = 2
+                    while active:
+                        # check if any threads still alive
+                        stream, data = self._all_output.get()
+                        with io_lock:
+                            if data is None:
+                                active -= 1
+                                debug('dead thread:', stream)
+                                continue
+                            if encoding is not None:
+                                data = data.decode(encoding)
+                            debug('adding %r to %s' % (data, stream))
+                            if stream == 'stdout':
+                                self._stdout.append(data)
+                                if interactive == 'echo':
+                                    echo(data, end='')
+                                    sys.stdout.flush()
+                            elif stream == 'stderr':
+                                self._stderr.append(data)
+                                if interactive == 'echo':
+                                    echo(data, end='', file=stderr)
+                                    sys.stderr.flush()
+                            else:
+                                self._set_exc(Exception('unknown stream: %r' % stream))
+                                self.kill()
+                                # raise self._set_exc(Exception('unknown stream: %r' % stream))
+                process_thread = self._process_thread = Thread(target=process_comm, name='process')
+                process_thread.start()
             if self.is_alive():
                 passwords = []
                 if input is not None:
