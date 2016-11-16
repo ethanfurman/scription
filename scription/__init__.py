@@ -738,23 +738,16 @@ class Job(object):
                         pwd = passwords[0]
                         for next_pwd in passwords[1:]:
                             pwd += next_pwd
-                        try:
-                            self.write(pwd, block=False)
-                        except IOError:
-                            # ignore write errors (probably due to password not needed and job finishing)
-                            self._set_exc(None)
+                        self._all_input.put(pwd)
                         passwords = []
                     else:
                         # pty -- look for echo off first
                         while self.get_echo() and self.is_alive():
                             time.sleep(0.01)
-                        pw, passwords = passwords[0], passwords[1:]
-                        try:
-                            self.write(pw, block=False)
-                        except IOError:
-                            # ignore write errors (probably due to password not needed and job finishing)
-                            self._set_exc(None)
+                        if not self.is_alive():
                             break
+                        pw, passwords = passwords[0], passwords[1:]
+                        self._all_input.put(pw)
                 if input is not None:
                     time.sleep(0.1)
                     self.write(input, block=False)
