@@ -1,3 +1,26 @@
+0.78.1
+======
+
+include traceback in thread exceptions
+guard entire communicate function with try/except
+
+
+0.78.0
+======
+
+rework thread support
+fix input for Execute
+add tests for thread control
+
+
+0.77.4
+======
+
+properly shutdown and close IO threads and handles
+always close comm channels
+do not block on write when shutting down child
+
+
 0.77.3
 ======
 
