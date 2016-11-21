@@ -48,19 +48,6 @@ from functools import partial
 from math import floor
 from sys import stdout, stderr
 
-if py_ver < (3, 0):
-    from __builtin__ import print as _print
-    exec(textwrap.dedent('''\
-        def raise_with_traceback(exc, tb):
-            raise exc, None, tb
-            '''))
-else:
-    from builtins import print as _print
-    exec(textwrap.dedent('''\
-        def raise_with_traceback(exc, tb):
-            raise exc.with_traceback(tb)
-            '''))
-
 # locks, etc.
 print_lock = threading.RLock()
 io_lock = threading.Lock()
@@ -103,7 +90,7 @@ __all__ = (
     'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'REQUIRED',
     'ScriptionError', 'ExecuteError', 'Execute', 'Job', 'ProgressView',
     'abort', 'echo', 'error', 'get_response', 'help', 'mail', 'user_ids', 'print',
-    'stdout', 'stderr', 'wait_and_check',
+    'stdout', 'stderr', 'wait_and_check', 'b', 'u'
     'Trivalent', 'Truthy', 'Unknown', 'Falsey', 'Success', 'Failure',
     )
 
@@ -132,12 +119,27 @@ script_module = None
 registered = False
 run_once = False
 
+# py 2/3 compatibility shims
 if py_ver < (3, 0):
     bytes = str
+    b = str
+    u = unicode
+    from __builtin__ import print as _print
+    exec(textwrap.dedent('''\
+        def raise_with_traceback(exc, tb):
+            raise exc, None, tb
+            '''))
 else:
     raw_input = input
     basestring = str
     unicode = str
+    b = bytes
+    u = unicode
+    from builtins import print as _print
+    exec(textwrap.dedent('''\
+        def raise_with_traceback(exc, tb):
+            raise exc.with_traceback(tb)
+            '''))
 
 class undefined(object):
     def __repr__(self):
