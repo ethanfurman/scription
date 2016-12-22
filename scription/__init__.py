@@ -90,7 +90,7 @@ __all__ = (
     'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'REQUIRED',
     'ScriptionError', 'ExecuteError', 'Execute', 'Job', 'ProgressView',
     'abort', 'echo', 'error', 'get_response', 'help', 'mail', 'user_ids', 'print',
-    'stdout', 'stderr', 'wait_and_check', 'b', 'u'
+    'stdout', 'stderr', 'wait_and_check', 'b', 'u',
     'Trivalent', 'Truthy', 'Unknown', 'Falsey', 'Success', 'Failure',
     )
 
@@ -1758,11 +1758,17 @@ def print(*values, **kwds):
         target = kwds.get('file')
         if verbose_level > VERBOSITY and target is not stderr:
             return
-        _print(*values, **kwds)
-        if target:
-            target.flush()
-        else:
-            sys.stdout.flush()
+        try:
+            _print(*values, **kwds)
+            if target:
+                target.flush()
+            else:
+                sys.stdout.flush()
+        except IOError:
+            cls, exc, tb = sys.exc_info()
+            if exc.errno == errno.EPIPE:
+                raise SystemExt
+            raise
 
 class user_ids(object):
     """
