@@ -1,9 +1,11 @@
 from __future__ import print_function
 from scription import Script, Command, Run, Spec, InputFile, Bool, _usage, version, empty, get_response, pocket
 from scription import *
-from unittest import TestCase as unittest_TestCase, main
+from unittest import SkipTest, TestCase as unittest_TestCase, main
 import datetime
+import functools
 import os
+import pty
 import scription
 import shlex
 import shutil
@@ -1370,6 +1372,70 @@ class TestExecutionThreads(TestCase):
         self.assertNotEqual(job.returncode, 0)
 
 
+if not is_win:
+    class TestExecutionPtys(TestCase):
+        "test interaction with ptys"
+
+        ok = True
+
+        @classmethod
+        def setUpClass(cls, *args, **kwds):
+            with open('/proc/sys/kernel/pty/max') as pty_num:
+                cls.total_pty = int(pty_num.read())
+
+        def skipIfPointless(func):
+            @functools.wraps(func)
+            def check_if_pointless(self, *args, **kwds):
+                if self.ok:
+                    try:
+                        return func(self, *args, **kwds)
+                    except OSError:
+                        _, exc, _ = sys.exc_info()
+                        if 'out of pty devices' in str(exc):
+                            self.__class__.ok = False
+                        raise
+                else:
+                    raise SkipTest('all ptys have been used')
+            return check_if_pointless
+
+        @skipIfPointless
+        def test_00_pty_acquire_and_release(self):
+            "use all ptys, release all, use again"
+            used = []
+            for i in range(self.total_pty):
+                try:
+                    pid, fd = pty.fork()
+                except OSError:
+                    break
+                else:
+                    if pid == 0:
+                        # child
+                        time.sleep(60)
+                        os._exit(0)
+                    used.append(fd)
+            for fd in used:
+                os.close(fd)
+            used[:] = []
+            pid, fd = pty.fork()
+            if pid == 0:
+                os._exit(0)
+            os.close(fd)
+
+        @skipIfPointless
+        def test_01_finished_pty(self):
+            "finished ptys don't leave dangling pipes"
+            for i in range(self.total_pty + 100):
+                Execute('bash -c exit', pty=True)
+
+        @skipIfPointless
+        def test_errored_pty(self):
+            "errored ptys don't leave dangling pipes"
+            for i in range(self.total_pty + 100):
+                Execute('bashh -c exit', pty=True)
+
+        del skipIfPointless
+
+
 class TestTrivalent(TestCase):
     "Testing Trivalent"
 
@@ -1795,4 +1861,7 @@ if __name__ == '__main__':
     try:
         main()
     finally:
-        shutil.rmtree(tempdir)
+        try:
+            shutil.rmtree(tempdir)
+        except OSError:
+            pass
