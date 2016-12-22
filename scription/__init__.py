@@ -792,13 +792,13 @@ class Job(object):
                 else:
                     for fd in (self.child_fd, self.child_fd_err):
                         try:
-                            os.close(self.child_fd)
+                            os.close(fd)
                         except OSError:
                             exc_type, exc, tb = sys.exc_info()
                             if exc_type is OSError and exc.errno == errno.EBADF:
                                 pass
                             else:
-                                raise self._set_exc(exc, tb)
+                                self._set_exc(exc, tb)
                 self.child_fd = -1
                 self.child_fd_in = -1
                 self.child_fd_out = -1
