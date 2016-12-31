@@ -1,7 +1,7 @@
 from __future__ import print_function
 from scription import Script, Command, Run, Spec, InputFile, Bool, _usage, version, empty, get_response, pocket
 from scription import *
-from unittest import SkipTest, TestCase as unittest_TestCase, main
+from unittest import skipIf, SkipTest, TestCase as unittest_TestCase, main
 import datetime
 import functools
 import os
@@ -20,6 +20,15 @@ except ImportError:
     hypothesis = None
 scription.VERBOSITY = 0
 
+remove = []
+SKIP_SLOW = False
+for i, arg in enumerate(sys.argv):
+    if arg.lower().replace('_','-') == '--skip-slow':
+        remove.append(i)
+        SKIP_SLOW = True
+for i in remove[::-1]:
+    sys.argv.pop(i)
+del remove
 
 is_win = sys.platform.startswith('win')
 py_ver = sys.version_info[:2]
@@ -1382,6 +1391,7 @@ class TestExecutionThreads(TestCase):
 
 
 if not is_win:
+    @skipIf(SKIP_SLOW, 'skipping slow tests')
     class TestExecutionPtys(TestCase):
         "test interaction with ptys"
 
