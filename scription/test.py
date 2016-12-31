@@ -81,9 +81,14 @@ def test_func_docstrings(obj, func, docstring):
         script_commands = {}
 
 class TestCase(unittest_TestCase):
+
+    run_so_far = []
+
     @classmethod
     def setUpClass(cls, *args, **kwds):
+        cls.run_so_far.append(cls.__name__)
         super(TestCase, cls).setUpClass(*args, **kwds)
+        # filter warnings
         warnings.filterwarnings(
                 'ignore',
                 'inspect\.getargspec\(\) is deprecated',
@@ -91,6 +96,10 @@ class TestCase(unittest_TestCase):
                 'scription',
                 0,
                 )
+        # double check existence of temp dir
+        if not os.path.exists(tempdir):
+            echo('\n'.join(cls.run_so_far))
+            raise SystemExit('tempdir is missing')
 
 if hypothesis:
     class TestHypothesis(TestCase):
@@ -1298,21 +1307,21 @@ class TestExecutionThreads(TestCase):
         thread_count = threading.active_count()
         job = Execute('ls -lad', pty=False)
         self.assertEqual(thread_count, threading.active_count())
-        self.assertEqual(job.returncode, 0)
+        self.assertEqual(job.returncode, 0, '\n"ls -lad"\n-- stdout --\n%s\n-- stderr --\n%s' % (job.stdout, job.stderr))
 
     def test_noninteractive_pty(self):
         thread_count = threading.active_count()
         job = Execute('ls -lad', pty=True)
         self.assertEqual(thread_count, threading.active_count())
-        self.assertEqual(job.returncode, 0)
+        self.assertEqual(job.returncode, 0, 'ls -lad:\n-- stdout --\n%s\n-- stderr --\n%s' % (job.stdout, job.stderr))
 
     def test_interactive_process(self):
         thread_count = threading.active_count()
         test_file = self.write_script('print(raw_input("howdy! "))')
-        job = Execute([sys.executable, test_file], pty=False, timeout=1, input='Bye!\n')
+        job = Execute([sys.executable, test_file], pty=False, timeout=10, input='Bye!\n')
         self.assertEqual(thread_count, threading.active_count())
         self.assertEqual(job.stdout.strip(), 'howdy! Bye!', '\n out: %r\n err: %r' % (job.stdout, job.stderr))
-        self.assertEqual(job.returncode, 0)
+        self.assertEqual(job.returncode, 0, '-- stdout --\n%s\n-- stderr --\n%s' % (job.stdout, job.stderr))
 
     def test_interactive_pty(self):
         thread_count = threading.active_count()
@@ -1320,10 +1329,10 @@ class TestExecutionThreads(TestCase):
                 '''from getpass import getpass\n'''
                 '''print(getpass('howdy!'))\n'''
                 )
-        job = Execute([sys.executable, test_file], pty=True, timeout=1, input='Bye!\n')
+        job = Execute([sys.executable, test_file], pty=True, timeout=10, input='Bye!\n')
         self.assertEqual(thread_count, threading.active_count())
         self.assertEqual(job.stdout.strip().replace('\n', ' '), 'howdy! Bye!', '\n out: %r\n err: %r' % (job.stdout, job.stderr))
-        self.assertEqual(job.returncode, 0)
+        self.assertEqual(job.returncode, 0, '-- stdout --\n%s\n-- stderr --\n%s' % (job.stdout, job.stderr))
 
     def test_killed_process(self):
         thread_count = threading.active_count()
@@ -1334,7 +1343,7 @@ class TestExecutionThreads(TestCase):
         job = Execute([sys.executable, test_file], pty=False, timeout=1)
         self.assertEqual(thread_count, threading.active_count())
         self.assertEqual(job.stderr.strip(), 'TIMEOUT: process failed to complete in 1 seconds', '\n out: %r\n err: %r' % (job.stdout, job.stderr))
-        self.assertNotEqual(job.returncode, 0)
+        self.assertNotEqual(job.returncode, 0, '-- stdout --\n%s\n-- stderr --\n%s' % (job.stdout, job.stderr))
 
     def test_killed_pty(self):
         thread_count = threading.active_count()
@@ -1345,7 +1354,7 @@ class TestExecutionThreads(TestCase):
         job = Execute([sys.executable, test_file], pty=True, timeout=1)
         self.assertEqual(thread_count, threading.active_count())
         self.assertEqual(job.stderr.strip(), 'TIMEOUT: process failed to complete in 1 seconds', '\n out: %r\n err: %r' % (job.stdout, job.stderr))
-        self.assertNotEqual(job.returncode, 0)
+        self.assertNotEqual(job.returncode, 0, '-- stdout --\n%s\n-- stderr --\n%s' % (job.stdout, job.stderr))
 
     def test_died_process(self):
         thread_count = threading.active_count()
@@ -1357,7 +1366,7 @@ class TestExecutionThreads(TestCase):
         job = Execute([sys.executable, test_file], pty=False, timeout=1)
         self.assertEqual(thread_count, threading.active_count())
         self.assertTrue('TIMEOUT: process failed to complete in 1 seconds' not in job.stdout)
-        self.assertNotEqual(job.returncode, 0)
+        self.assertNotEqual(job.returncode, 0, '-- stdout --\n%s\n-- stderr --\n%s' % (job.stdout, job.stderr))
 
     def test_died_pty(self):
         thread_count = threading.active_count()
@@ -1369,7 +1378,7 @@ class TestExecutionThreads(TestCase):
         job = Execute([sys.executable, test_file], pty=True, timeout=1)
         self.assertEqual(thread_count, threading.active_count())
         self.assertTrue('TIMEOUT: process failed to complete in 1 seconds' not in job.stdout)
-        self.assertNotEqual(job.returncode, 0)
+        self.assertNotEqual(job.returncode, 0, '-- stdout --\n%s\n-- stderr --\n%s' % (job.stdout, job.stderr))
 
 
 if not is_win:
@@ -1380,6 +1389,7 @@ if not is_win:
 
         @classmethod
         def setUpClass(cls, *args, **kwds):
+            super(TestExecutionPtys, cls).setUpClass(*args, **kwds)
             with open('/proc/sys/kernel/pty/max') as pty_num:
                 cls.total_pty = int(pty_num.read())
 
@@ -1863,5 +1873,5 @@ if __name__ == '__main__':
     finally:
         try:
             shutil.rmtree(tempdir)
-        except OSError:
+        except:
             pass
