@@ -82,7 +82,7 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 79, 0, 0
+version = 0, 79, 0, 1
 
 # data
 __all__ = (
@@ -93,6 +93,17 @@ __all__ = (
     'abort', 'echo', 'error', 'get_response', 'help', 'mail', 'user_ids', 'print',
     'stdout', 'stderr', 'wait_and_check', 'b', 'u',
     'Trivalent', 'Truthy', 'Unknown', 'Falsey', 'Success', 'Failure',
+    # the following are actually injected directly into the calling module, but are
+    # added here as well for pylakes' benefit
+    'script_main',          # Script decorator instance if used
+    'script_commands',      # defined commands
+    'script_command',       # chosen command function from commandline
+    'script_command_name',  # name of above
+    'script_full_name',     # sys.argv[0]
+    'script_name',          # above without path
+    'script_verbosity',     # vebosity level from command line
+    'script_module',        # module that imported scription
+    'module',               # same as above
     )
 
 VERBOSITY = 0
@@ -114,8 +125,8 @@ for arg in sys.argv:
         elif arg[17:] == '=5':
             SCRIPTION_DEBUG = 5
 
-module = globals()
-script_module = None
+module = script_module = script_main = script_commands = None
+script_full_name = script_name = script_verbosity = script_command = script_command_name = None
 
 registered = False
 run_once = False
@@ -1022,10 +1033,10 @@ def Run():
     "parses command-line and compares with either func or, if None, script_module['script_main']"
     global SYS_ARGS
     debug('Run entered')
-    if module.get('HAS_BEEN_RUN'):
+    if globals().get('HAS_BEEN_RUN'):
         debug('Run already called once, returning')
         return
-    module['HAS_BEEN_RUN'] = True
+    globals()['HAS_BEEN_RUN'] = True
     if py_ver < (3, 0):
         SYS_ARGS = [arg.decode(LOCALE_ENCODING) for arg in sys.argv]
     else:
