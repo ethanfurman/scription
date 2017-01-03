@@ -1,7 +1,7 @@
 from __future__ import print_function
 from scription import Script, Command, Run, Spec, InputFile, Bool, _usage, version, empty, get_response, pocket
 from scription import *
-from unittest import skipIf, SkipTest, TestCase as unittest_TestCase, main
+from unittest import skip, skipIf, SkipTest, TestCase as unittest_TestCase, main
 import datetime
 import functools
 import os
@@ -21,11 +21,13 @@ except ImportError:
 scription.VERBOSITY = 0
 
 remove = []
-SKIP_SLOW = False
+SKIP_SLOW = UNITTEST_VERBOSE = False
 for i, arg in enumerate(sys.argv):
     if arg.lower().replace('_','-') == '--skip-slow':
         remove.append(i)
         SKIP_SLOW = True
+    elif arg.lower() == '-v':
+        UNITTEST_VERBOSE = True
 for i in remove[::-1]:
     sys.argv.pop(i)
 del remove
@@ -41,8 +43,12 @@ if py_ver >= (3, 0):
 
 def test_func_parsing(obj, func, tests, test_type=False):
     global gubed, script_name, script_main, script_commands, script_command, script_commandname
+    i = 0
     try:
         for params, main_args, main_kwds, sub_args, sub_kwds in tests:
+            if UNITTEST_VERBOSE:
+                echo(i, end=' ')
+            i += 1
             have_gubed = verbose = False
             if '--gubed' in params:
                 have_gubed = True
@@ -289,6 +295,42 @@ class TestCommandlineProcessing(TestCase):
                 ( 'tester'.split(), (), {}, ((7, ), ), {} ),
                 ( 'tester --huh=1'.split(), (), {}, ((1, ), ), {} ),
                 ( 'tester -h 11 -h 13'.split(), (), {}, ((11, 13), ), {} ),
+                )
+        test_func_parsing(self, tester, tests)
+
+    def test_option_with_default_in_command(self):
+        @Command(
+                huh=('misc options', 'option'),
+                wow=Spec('oh yeah', 'option', default='spam!'),
+                )
+        def tester(huh, wow):
+            pass
+        tests = (
+                ( 'tester'.split(), (), {}, (None, None), {} ),
+                ( 'tester -w'.split(), (), {}, (None, 'spam!'), {} ),
+                ( 'tester -w google'.split(), (), {}, (None, 'google'), {} ),
+                ( 'tester -h file1'.split(), (), {}, ('file1', None), {} ),
+                ( 'tester -h file1 -w'.split(), (), {}, ('file1', 'spam!'), {} ),
+                ( 'tester -h file1 -w google'.split(), (), {}, ('file1', 'google'), {} ),
+                ( 'tester -h file2 -w frizzle'.split(), (), {}, ('file2', 'frizzle'), {} ),
+                )
+        test_func_parsing(self, tester, tests)
+
+    def test_option_with_default_in_header(self):
+        @Command(
+                huh=('misc options', 'option'),
+                wow=Spec('oh yeah', 'option'),
+                )
+        def tester(huh, wow='eggs!'):
+            pass
+        tests = (
+                ( 'tester'.split(), (), {}, (None, 'eggs!'), {} ),
+                ( 'tester -w'.split(), (), {}, (None, 'eggs!'), {} ),
+                ( 'tester -w google'.split(), (), {}, (None, 'google'), {} ),
+                ( 'tester -h file1'.split(), (), {}, ('file1', 'eggs!'), {} ),
+                ( 'tester -h file1 -w'.split(), (), {}, ('file1', 'eggs!'), {} ),
+                ( 'tester -h file1 -w google'.split(), (), {}, ('file1', 'google'), {} ),
+                ( 'tester -h file2 -w frizzle'.split(), (), {}, ('file2', 'frizzle'), {} ),
                 )
         test_func_parsing(self, tester, tests)
 
@@ -655,6 +697,25 @@ class TestParamRemoval(TestCase):
         test_file = self.write_script('MULTI')
         result = Execute([sys.executable, test_file, '--test', 'boo', '--test', 'hoo'], timeout=10)
         self.assertEqual(result.stdout, 'success!\n', result.stdout + '\n' + result.stderr)
+
+    @skip('not implemented')
+    def test_with_default_in_command(self):
+        @Command(
+                huh=('misc options', 'option'),
+                wow=Spec('oh yeah', 'option', default='spam!'),
+                )
+        def tester(huh, wow):
+            pass
+        tests = (
+                ( 'tester'.split(), (), {}, (None, None), {} ),
+                ( 'tester -w'.split(), (), {}, (None, 'spam!'), {} ),
+                ( 'tester -w google'.split(), (), {}, (None, 'google'), {} ),
+                ( 'tester -h file1'.split(), (), {}, ('file1', None), {} ),
+                ( 'tester -h file1 -w'.split(), (), {}, ('file1', 'spam!'), {} ),
+                ( 'tester -h file1 -w google'.split(), (), {}, ('file1', 'google'), {} ),
+                ( 'tester -h file2 -w frizzle'.split(), (), {}, ('file2', 'frizzle'), {} ),
+                )
+        test_func_parsing(self, tester, tests)
 
 class TestCommandNames(TestCase):
 

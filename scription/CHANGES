@@ -1,3 +1,15 @@
+0.79.0
+======
+
+add 'b' and 'u' compatibility shims
+improvements in Job
+add test switch to skip slow tests
+
+backwards-incompatible change:
+- defaults in function header are always used
+- defaults in Script or Command decorators are only used if option is selected
+
+
 0.78.1
 ======
 

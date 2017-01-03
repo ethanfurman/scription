@@ -82,7 +82,7 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 78, 1
+version = 0, 79, 0, 0
 
 # data
 __all__ = (
@@ -338,7 +338,7 @@ def _get_all_versions(from_module, _try_other=True):
 
 def _help(func):
     '''
-    create help from __scription__ annotations
+    create help from __scription__ annotations and header defaults
     '''
     params, vararg, keywordarg, defaults = inspect.getargspec(func)
     params = func.params = list(params)
@@ -429,6 +429,7 @@ def _help(func):
                 # default specified in two places
                 raise ScriptionError('default value for %s specified in Spec and in header (%r, %r)' %
                         (name, annote._script_default, dflt))
+            annote._use_default = True
             if annote.kind != 'multi':
                 if annote.type is _identity and dflt is not None:
                     annote.type = type(dflt)
@@ -485,8 +486,10 @@ def _help(func):
             continue
         annote = annotations[name]
         choices = ''
-        if annote._script_default is empty or annote._script_default is None or '[default: ' in annote.help:
+        if annote._script_default in (empty, None) or '[default: ' in annote.help:
             posi = ''
+        elif not annote._use_default:
+            posi = '[option default: ' + repr(annote._script_default) + ']'
         else:
             posi = '[default: ' + repr(annote._script_default) + ']'
         if annote.choices:
@@ -614,8 +617,13 @@ def _usage(func, param_line_args):
         original_item = item
         if value is not None:
             if item is None or item.startswith('-') or '=' in item:
-                help('%s has no value' % last_item)
-            if annote.remove:
+                # check for default
+                if annote._script_default:
+                    item = annote._script_default
+                else:
+                    help('%s has no value' % last_item)
+            elif annote.remove:
+                # only remove if not using the annotation default
                 to_be_removed.append(offset)
             value = item
             if annote.kind == 'option':
@@ -960,6 +968,7 @@ class Spec(object):
         self._cli_value = empty
         self._script_default = default
         self._type_default = arg_type_default
+        self._use_default = False
         self._global = False
         self._envvar = envvar
 
@@ -978,7 +987,7 @@ class Spec(object):
             value = pocket.value
             if self.kind == 'multi':
                 value = tuple(_split_on_comma(value))
-        elif self._script_default is not empty:
+        elif self._script_default is not empty and self._use_default:
             value = self._script_default
         elif self._type_default is not empty:
             value = self._type_default
@@ -2330,6 +2339,7 @@ class pocket(object):
         except KeyError:
             raise AttributeError('%s has not been saved' % name)
 pocket = pocket()
+
 class user_ids(object):
     """
     maintains root as one of the ids
