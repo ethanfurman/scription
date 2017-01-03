@@ -166,7 +166,7 @@ class TestCommandlineProcessing(TestCase):
 
     def test_trivalent_flag_type(self):
         @Command(
-                binary=Spec('copy in binary mode', 'flag', default=Unknown),
+                binary=Spec('copy in binary mode', 'flag', force_default=Unknown),
                 )
         def copy(binary):
             pass
@@ -261,7 +261,7 @@ class TestCommandlineProcessing(TestCase):
 
     def test_multi_with_Spec_default_str(self):
         @Command(
-                huh=Spec('misc options', 'multi', default='woo'),
+                huh=Spec('misc options', 'multi', default='woo', force_default=True),
                 )
         def tester(huh):
             pass
@@ -274,7 +274,7 @@ class TestCommandlineProcessing(TestCase):
 
     def test_multi_with_Spec_default_tuple(self):
         @Command(
-                huh=Spec('misc options', 'multi', default=('woo', )),
+                huh=Spec('misc options', 'multi', default=('woo', ), force_default=True),
                 )
         def tester(huh):
             pass
@@ -287,7 +287,7 @@ class TestCommandlineProcessing(TestCase):
 
     def test_multi_with_Spec_default_int(self):
         @Command(
-                huh=Spec('misc options', 'multi', default=(7, )),
+                huh=Spec('misc options', 'multi', default=(7, ), force_default=True),
                 )
         def tester(huh):
             pass
@@ -594,12 +594,12 @@ class TestCommandlineProcessing(TestCase):
 
     def test_param_type_from_spec(self):
         @Command(
-                value1=Spec('some value', default=7),
-                value2=Spec('another value', OPTION, None, default=3.1415),
-                value3=Spec('and yet more values', MULTI, None, default=3.0j),
-                value4=Spec('possible None option', OPTION, None, default=None),
-                value5=Spec('possible None multi', MULTI, None, default=None),
-                value6=Spec('possible tuple multi', MULTI, None, default=()),
+                value1=Spec('some value', default=7, force_default=True),
+                value2=Spec('another value', OPTION, None, default=3.1415, force_default=True),
+                value3=Spec('and yet more values', MULTI, None, default=3.0j, force_default=True),
+                value4=Spec('possible None option', OPTION, None, default=None, force_default=True),
+                value5=Spec('possible None multi', MULTI, None, default=None, force_default=True),
+                value6=Spec('possible tuple multi', MULTI, None, default=(), force_default=True),
                 )
         def type_tester(value1, value2, value3, value4, value5, value6):
             pass

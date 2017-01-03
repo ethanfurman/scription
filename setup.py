@@ -110,6 +110,7 @@ data = dict(
                  'CHANGES', 'LICENSE',
                  ],
              },
+        install_requires=['aenum'],
         author='Ethan Furman',
         author_email='ethan@stoneleaf.us',
         classifiers=[

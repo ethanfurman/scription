@@ -926,14 +926,14 @@ class Spec(object):
     def __init__(self,
             help=empty, kind=empty, abbrev=empty, type=empty,
             choices=empty, usage=empty, remove=False, default=empty,
-            envvar=empty,
+            envvar=empty, force_default=empty,
             ):
         if isinstance(help, Spec):
             self.__dict__.update(help.__dict__)
             return
         if isinstance(help, tuple):
-            args = list(help) + [empty] * (9 - len(help))
-            help, kind, abbrev, type, choices, usage, remove, default, envvar = args
+            args = list(help) + [empty] * (10 - len(help))
+            help, kind, abbrev, type, choices, usage, remove, default, envvar, force_default = args
         if not help:
             help = ''
         if not kind:
@@ -943,6 +943,14 @@ class Spec(object):
         if not choices:
             choices = []
         arg_type_default = empty
+        use_default = False
+        if default is not empty and force_default == True:
+            # support use of force_default as flag for default
+            use_default = True
+        elif force_default is not empty:
+            # otherwise force_default is the always used default itself
+            default = force_default
+            use_default = True
         if kind not in ('required', 'option', 'multi', 'flag'):
             raise ScriptionError('unknown parameter kind: %r' % kind)
         if kind == 'flag':
@@ -968,7 +976,7 @@ class Spec(object):
         self._cli_value = empty
         self._script_default = default
         self._type_default = arg_type_default
-        self._use_default = False
+        self._use_default = use_default
         self._global = False
         self._envvar = envvar
 
