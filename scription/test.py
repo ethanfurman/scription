@@ -592,6 +592,20 @@ class TestCommandlineProcessing(TestCase):
                 )
         test_func_parsing(self, type_tester, tests)
 
+    def test_no_option(self):
+        @Command(
+                some=Spec('an option with a forced default', OPTION, force_default='hi mom!'),
+                )
+        def some_default(some):
+            pass
+        tests = (
+                ('some_default'.split(), (), {}, ('hi mom!',), {}),
+                ('some_default -s'.split(), (), {}, ('hi mom!',), {}),
+                ('some_default -s none'.split(), (), {}, ('none',), {}),
+                ('some_default --some thing'.split(), (), {}, ('thing',), {}),
+                ('some_default --no-some'.split(), (), {}, (None,), {}),
+                )
+
     def test_param_type_from_spec(self):
         @Command(
                 value1=Spec('some value', default=7, force_default=True),

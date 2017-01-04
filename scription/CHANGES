@@ -4,6 +4,7 @@
 add 'b' and 'u' compatibility shims
 improvements in Job
 add test switch to skip slow tests
+add injected variables to __all__
 
 backwards-incompatible change:
 - defaults in function header are always used
