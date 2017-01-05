@@ -97,7 +97,7 @@ __all__ = (
     # added here as well for pylakes' benefit
     'script_main',          # Script decorator instance if used
     'script_commands',      # defined commands
-    'script_command',       # chosen command function from commandline
+    'script_command',       # callback to run chosen command function
     'script_command_name',  # name of above
     'script_full_name',     # sys.argv[0]
     'script_name',          # above without path
@@ -1106,7 +1106,7 @@ def Run():
         main_cmd = Script and Script.command
         subcommand = _run_once(func, sub_args, sub_kwds)
         script_module['script_command'] = subcommand
-        script_module['script_command_name'] = func_name
+        script_module['script_command_name'] = func.__name__
         script_module['script_verbosity'] = VERBOSITY
         if main_cmd:
             main_cmd(*main_args, **main_kwds)
