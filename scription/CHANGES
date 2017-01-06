@@ -1,3 +1,9 @@
+0.79.2
+======
+
+fix negative option handling (i.e. --no-option)
+
+
 0.79.1
 ======
 
