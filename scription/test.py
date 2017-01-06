@@ -1,6 +1,6 @@
 from __future__ import print_function
-from scription import Script, Command, Run, Spec, InputFile, Bool, _usage, version, empty, get_response, pocket
 from scription import *
+from scription import _usage, version, empty, pocket
 from unittest import skip, skipIf, SkipTest, TestCase as unittest_TestCase, main
 import datetime
 import functools
@@ -12,10 +12,11 @@ import shutil
 import sys
 import tempfile
 import threading
+import time
 import warnings
 try:
     import hypothesis
-    from hypothesis import given, strategies as st, settings
+    from hypothesis import given as st # strategies as settings
 except ImportError:
     hypothesis = None
 scription.VERBOSITY = 0
@@ -87,6 +88,7 @@ def test_func_parsing(obj, func, tests, test_type=False):
         script_command = None
         script_commandname = ''
         script_exception_lines = ''
+        script_fullname, script_exception_lines
 
 def test_func_docstrings(obj, func, docstring):
     try:
@@ -94,6 +96,7 @@ def test_func_docstrings(obj, func, docstring):
     finally:
         script_main = None
         script_commands = {}
+        script_main, script_commands
 
 class TestCase(unittest_TestCase):
 
@@ -119,7 +122,7 @@ class TestCase(unittest_TestCase):
 if hypothesis:
     class TestHypothesis(TestCase):
 
-        @given(a=st.integers(), b=st.none(), c=st.booleans(), d=st.floats())
+        @hypothesis.given(a=st.integers(), b=st.none(), c=st.booleans(), d=st.floats())
         def test_pocket(self, a, b, c, d):
             for value  in (a, b, c, d, (a, b, c, d), (a, c), [b, d]):
                 def this_thing(val=pocket(value=value)):
@@ -605,6 +608,22 @@ class TestCommandlineProcessing(TestCase):
                 ('some_default --some thing'.split(), (), {}, ('thing',), {}),
                 ('some_default --no-some'.split(), (), {}, (None,), {}),
                 )
+        test_func_parsing(self, some_default, tests)
+
+    def test_no_option_with_choices(self):
+        @Command(
+                some=Spec('an option with a forced default', OPTION, force_default='mom', choices=['mom', 'none', 'thing']),
+                )
+        def some_default(some):
+            pass
+        tests = (
+                ('some_default'.split(), (), {}, ('mom',), {}),
+                ('some_default -s'.split(), (), {}, ('mom',), {}),
+                ('some_default -s none'.split(), (), {}, ('none',), {}),
+                ('some_default --some thing'.split(), (), {}, ('thing',), {}),
+                ('some_default --no-some'.split(), (), {}, (None,), {}),
+                )
+        test_func_parsing(self, some_default, tests)
 
     def test_param_type_from_spec(self):
         @Command(
@@ -626,23 +645,6 @@ class TestCommandlineProcessing(TestCase):
                 ('type_tester 9 --value2 31.25 --value6 71'.split(), (), {}, (9, 31.25, (3.0j, ), None, None, ('71', )), {}),
                 )
         test_func_parsing(self, type_tester, tests)
-
-    def test_varargs_with_regular_args(self):
-        @Command(
-                these=('some of these please', ),
-                those=('maybe those', 'flag', ),
-                them=('most important!', 'required'),
-                )
-        def sassy(these, those, *them):
-            pass
-        tests = (
-                ('sassy biscuit and gravy'.split(), (), {}, ('biscuit', False, 'and' ,'gravy'), {}),
-                ('sassy --those biscuit and gravy'.split(), (), {}, ('biscuit', True, 'and' ,'gravy'), {}),
-                ('sassy biscuit --those and gravy'.split(), (), {}, ('biscuit', True, 'and' ,'gravy'), {}),
-                ('sassy biscuit and --those gravy'.split(), (), {}, ('biscuit', True, 'and' ,'gravy'), {}),
-                ('sassy biscuit and gravy --those'.split(), (), {}, ('biscuit', True, 'and' ,'gravy'), {}),
-                )
-        test_func_parsing(self, sassy, tests)
 
 
 class TestParamRemoval(TestCase):
@@ -1275,63 +1277,63 @@ class TestResponse(TestCase):
 
     def test_yesno(self):
         for reply in ('y', 'Y', 'yes', 'Yes', 'YeS', 'YES', 't', 'trUE'):
-            with self.raw_input_cm(reply) as ri:
+            with self.raw_input_cm(reply):
                 ans = get_response('Having fun?')
             self.assertTrue(ans)
         for reply in ('n', 'N', 'no', 'No', 'NO', 'f', 'fAlSe'):
-            with self.raw_input_cm(reply) as ri:
+            with self.raw_input_cm(reply):
                 ans = get_response('Wanna quit?')
             self.assertFalse(ans)
 
     def test_multiple_choice_in_many_blocks(self):
         for reply in ('y', 'yes', 'Yes'):
-            with self.raw_input_cm(reply) as ri:
+            with self.raw_input_cm(reply):
                 ans = get_response('copy files? [y]es/[n]o/[a]ll/[m]aybe')
                 self.assertEqual(ans, 'yes')
         for reply in ('n', 'no', 'No'):
-            with self.raw_input_cm(reply) as ri:
+            with self.raw_input_cm(reply):
                 ans = get_response('copy files? [y]es/[n]o/[a]ll/[m]aybe')
                 self.assertEqual(ans, 'no')
         for reply in ('a', 'all', 'All'):
-            with self.raw_input_cm(reply) as ri:
+            with self.raw_input_cm(reply):
                 ans = get_response('copy files? [y]es/[n]o/[a]ll/[m]aybe')
                 self.assertEqual(ans, 'all')
         for reply in ('m', 'maybe', 'MayBe'):
-            with self.raw_input_cm(reply) as ri:
+            with self.raw_input_cm(reply):
                 ans = get_response('copy files? [y]es/[n]o/[a]ll/[m]aybe')
                 self.assertEqual(ans, 'maybe')
 
     def test_multiple_choice_in_one_block(self):
         for reply in ('y', 'yes', 'Yes'):
-            with self.raw_input_cm(reply) as ri:
+            with self.raw_input_cm(reply):
                 ans = get_response('copy files? [yes/no/all/maybe]')
                 self.assertEqual(ans, 'yes')
         for reply in ('n', 'no', 'No'):
-            with self.raw_input_cm(reply) as ri:
+            with self.raw_input_cm(reply):
                 ans = get_response('copy files? [yes/no/all/maybe]')
                 self.assertEqual(ans, 'no')
         for reply in ('a', 'all', 'All'):
-            with self.raw_input_cm(reply) as ri:
+            with self.raw_input_cm(reply):
                 ans = get_response('copy files? [yes/no/all/maybe]')
                 self.assertEqual(ans, 'all')
         for reply in ('m', 'maybe', 'MayBe'):
-            with self.raw_input_cm(reply) as ri:
+            with self.raw_input_cm(reply):
                 ans = get_response('copy files? [yes/no/all/maybe]')
                 self.assertEqual(ans, 'maybe')
 
     def test_anything_goes(self):
         for reply in ('17', 'me', 'Right!'):
-            with self.raw_input_cm(reply) as ri:
+            with self.raw_input_cm(reply):
                 ans = get_response('gimme sum data!')
                 self.assertEqual(ans, reply)
 
     def test_default_yesno(self):
         for default in ('y', 'Y', 'yes', 'Yes', 'YeS', 'YES', 't', 'trUE'):
-            with self.raw_input_cm(reply='') as ri:
+            with self.raw_input_cm(reply=''):
                 ans = get_response('Having fun?', default=default)
             self.assertTrue(ans)
         for default in ('n', 'N', 'no', 'No', 'NO', 'f', 'fAlSe'):
-            with self.raw_input_cm(reply='') as ri:
+            with self.raw_input_cm(reply=''):
                 ans = get_response('Wanna quit?', default=default)
             self.assertFalse(ans)
 
@@ -1537,7 +1539,7 @@ class TestTrivalent(TestCase):
     def test_unknown(self):
         "Unknown"
         for unk in '', '?', ' ', None, Unknown, 0, empty:
-            huh = unknown = Trivalent(unk)
+            huh = Trivalent(unk)
             self.assertEqual(huh == None, True, "huh is %r from %r, which is not None" % (huh, unk))
             self.assertEqual(huh != None, False, "huh is %r from %r, which is not None" % (huh, unk))
             self.assertEqual(huh != True, True, "huh is %r from %r, which is not None" % (huh, unk))

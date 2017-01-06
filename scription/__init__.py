@@ -13,15 +13,15 @@ is_win = sys.platform.startswith('win')
 if is_win:
     import signal
     KILL_SIGNALS = [getattr(signal, sig) for sig in ('SIGTERM') if hasattr(signal, sig)]
-    from subprocess import Popen, PIPE, STDOUT, STARTUPINFO, STARTF_USESTDHANDLES, CREATE_NEW_PROCESS_GROUP
+    from subprocess import Popen, PIPE
 else:
     from pty import fork
     import resource
     import termios
-    from syslog import syslog
+    # from syslog import syslog
     import signal
     KILL_SIGNALS = [getattr(signal, sig) for sig in ('SIGTERM', 'SIGQUIT', 'SIGKILL') if hasattr(signal, sig)]
-    from subprocess import Popen, PIPE, STDOUT
+    from subprocess import Popen, PIPE
 from threading import Thread
 try:
     from Queue import Queue
@@ -35,17 +35,14 @@ import locale
 import logging
 import os
 import re
-import select
 import shlex
 import smtplib
 import socket
-import tempfile
 import textwrap
 import threading
 import time
 import traceback
-from aenum import Enum, AutoNumber, NamedConstant, export
-from functools import partial
+from aenum import Enum, AutoNumber, export
 from math import floor
 from sys import stdout, stderr
 
@@ -82,7 +79,7 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 79, 1
+version = 0, 79, 2, 1
 
 # data
 __all__ = (
@@ -99,7 +96,7 @@ __all__ = (
     'script_commands',      # defined commands
     'script_command',       # callback to run chosen command function
     'script_command_name',  # name of above
-    'script_full_name',     # sys.argv[0]
+    'script_fullname',     # sys.argv[0]
     'script_name',          # above without path
     'script_verbosity',     # vebosity level from command line
     'script_module',        # module that imported scription
@@ -126,12 +123,13 @@ for arg in sys.argv:
             SCRIPTION_DEBUG = 5
 
 module = script_module = script_main = script_commands = None
-script_full_name = script_name = script_verbosity = script_command = script_command_name = None
+script_fullname = script_name = script_verbosity = script_command = script_command_name = None
 
 registered = False
 run_once = False
 
 # py 2/3 compatibility shims
+raise_with_traceback = None
 if py_ver < (3, 0):
     bytes = str
     b = str
@@ -355,8 +353,8 @@ def _help(func):
     params = func.params = list(params)
     vararg = func.vararg = [vararg] if vararg else []
     keywordarg = func.keywordarg = [keywordarg] if keywordarg else []
-    vararg_type = _identity
-    keywordarg_type = _identity
+    # vararg_type = _identity
+    # keywordarg_type = _identity
     annotations = func.__scription__
     pos = None
     max_pos = 0
@@ -457,14 +455,14 @@ def _help(func):
                     for d in dflt:
                         new_dflt.append(annote.type(d))
                     annote._script_default = tuple(new_dflt)
-    if vararg:
-        vararg_type = annotations[vararg[0]].type
-    if keywordarg:
-        kywd_func = annotations[keywordarg[0]].type
-        if isinstance(kywd_func, tuple):
-            keywordarg_type = lambda k, v: (kywd_func[0](k), kywd_func[1](v))
-        else:
-            keywordarg_type = lambda k, v: (k, kywd_func(v))
+    # if vararg:
+    #     vararg_type = annotations[vararg[0]].type
+    # if keywordarg:
+    #     kywd_func = annotations[keywordarg[0]].type
+    #     if isinstance(kywd_func, tuple):
+    #         keywordarg_type = lambda k, v: (kywd_func[0](k), kywd_func[1](v))
+    #     else:
+    #         keywordarg_type = lambda k, v: (k, kywd_func(v))
     # also prepare help for global options
     global_params = [n for n in func.names if n not in func.all_params]
     print_params = []
@@ -605,7 +603,7 @@ def _split_on_comma(text):
 def _usage(func, param_line_args):
     global VERBOSITY, SCRIPTION_DEBUG
     Script = script_module['script_main']
-    Command = script_module['script_commands']
+    # Command = script_module['script_commands']
     program, param_line_args = param_line_args[0], _rewrite_args(param_line_args[1:])
     pos = 0
     max_pos = func.max_pos
@@ -624,6 +622,7 @@ def _usage(func, param_line_args):
         kwd_arg_spec._cli_value = {}
     to_be_removed = []
     all_to_varargs = False
+    annote = last_item = None
     for offset, item in enumerate(param_line_args + [None]):
         original_item = item
         if value is not None:
@@ -746,7 +745,7 @@ def _usage(func, param_line_args):
                 if var_arg_spec is None:
                     help("don't know what to do with %r" % item)
                 var_arg_spec._cli_value += (var_arg_spec.type(item), )
-    exc = None
+    # exc = None
     if print_help:
         _print()
         if Script and Script.__usage__:
@@ -827,6 +826,7 @@ class Alias(object):
             debug('creating script_module', verbose=2)
             script_module = _func_globals(func)
             script_module['module'] = _namespace(script_module)
+            script_module['script_module'] = script_module['module']
             script_module['script_name'] = '<unknown>'
             script_module['script_main'] = THREAD_STORAGE.script_main
             script_module['script_commands'] = {}
@@ -852,6 +852,7 @@ class Command(object):
             debug('creating script_module', verbose=2)
             script_module = _func_globals(func)
             script_module['module'] = _namespace(script_module)
+            script_module['script_module'] = script_module['module']
             script_module['script_name'] = '<unknown>'
             script_module['script_main'] = THREAD_STORAGE.script_main
             script_module['script_commands'] = {}
@@ -910,6 +911,7 @@ class Script(object):
             debug('creating script_module', verbose=2)
             script_module = _func_globals(func)
             script_module['module'] = _namespace(script_module)
+            script_module['script_module'] = script_module['module']
             script_module['script_name'] = '<unknown>'
             script_module['script_commands'] = {}
         func_name = func.__name__.replace('_', '-')
@@ -1501,7 +1503,11 @@ class Job(object):
                     break
         else:
             # unable to kill job
-            message = message[:-1] + '; unable to kill job -- killing self\n'
+            if self.exception is not None:
+                message = self.exception[0].args[0]
+            else:
+                message = ''
+            message = message.strip() + '; unable to kill job -- killing self\n'
             error(message)
             os.kill(os.getpid(), signal.SIGKILL)
 
@@ -1990,6 +1996,7 @@ class Trivalent(object):
         return x.value > y.value
 
     def __le__(x, y):
+        cls = x.__class__
         if not isinstance(y, cls) and y not in (None, empty, True, False):
             return NotImplemented
         y = cls(y)
@@ -2103,7 +2110,7 @@ def print(*values, **kwds):
         except IOError:
             cls, exc, tb = sys.exc_info()
             if exc.errno == errno.EPIPE:
-                raise SystemExt
+                raise SystemExit
             raise
 
 def log_exception(tb=None):
