@@ -573,7 +573,7 @@ def _run_once(func, args, kwds):
     return later
 
 def _split_on_comma(text):
-    debug('_split_on_comma(%r)' % text, verbose=2)
+    debug('_split_on_comma(%r)' % (text,), verbose=2)
     if ',' not in text:
         debug('  -> %r' % ([text], ), verbose=2)
         return [text]
@@ -629,22 +629,23 @@ def _usage(func, param_line_args):
             if item is None or item.startswith('-') or '=' in item:
                 # check for default
                 if annote._script_default:
-                    item = annote._script_default
+                    annote._cli_value = annote._script_default
                 else:
                     help('%s has no value' % last_item)
-            elif annote.remove:
-                # only remove if not using the annotation default
-                to_be_removed.append(offset)
-            value = item
-            if annote.kind == 'option':
-                annote._cli_value = annote.type(value)
-            elif annote.kind == 'multi':
-                values = [annote.type(a) for a in _split_on_comma(value)]
-                annote._cli_value += tuple(values)
             else:
-                raise ScriptionError("Error: %s's kind %r not in (multi, option)" % (last_item, annote.kind))
-            value = None
-            continue
+                if annote.remove:
+                    # only remove if not using the annotation default
+                    to_be_removed.append(offset)
+                value = item
+                if annote.kind == 'option':
+                    annote._cli_value = annote.type(value)
+                elif annote.kind == 'multi':
+                    values = [annote.type(a) for a in _split_on_comma(value)]
+                    annote._cli_value += tuple(values)
+                else:
+                    raise ScriptionError("Error: %s's kind %r not in (multi, option)" % (last_item, annote.kind))
+                value = None
+                continue
         last_item = item
         if item is None:
             break
@@ -698,9 +699,11 @@ def _usage(func, param_line_args):
             if annote.remove:
                 to_be_removed.append(offset)
             if annote.kind in ('multi', 'option'):
-                if value in (True, False):
-                    value = []
+                if value is True:
                     last_item = item
+                elif value is False:
+                    annote._cli_value = annote._type_default
+                    value = None
                 else:
                     if annote.kind == 'option':
                         annote._cli_value = annote.type(value)

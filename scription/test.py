@@ -191,6 +191,7 @@ class TestCommandlineProcessing(TestCase):
         def tester(huh):
             pass
         tests = (
+                ( 'tester'.split(), (), {}, (tuple(), ), {} ),
                 ( 'tester -h file1'.split(), (), {}, (('file1', ), ), {} ),
                 ( 'tester -h file1 -h file2'.split(), (), {}, (('file1', 'file2'), ), {} ),
                 )
@@ -595,6 +596,51 @@ class TestCommandlineProcessing(TestCase):
                 )
         test_func_parsing(self, type_tester, tests)
 
+    def test_no_multi(self):
+        @Command(
+                some=Spec('an option with a forced default', MULTI, force_default=('hi mom!', 'hi dad!')),
+                )
+        def some_default(some):
+            pass
+        tests = (
+                ('some_default'.split(), (), {}, (('hi mom!', 'hi dad!'),), {}),
+                ('some_default -s'.split(), (), {}, (('hi mom!', 'hi dad!'),), {}),
+                ('some_default -s none'.split(), (), {}, (('none',),), {}),
+                ('some_default --some thing'.split(), (), {}, (('thing',),), {}),
+                ('some_default --no-some'.split(), (), {}, (tuple(), ), {}),
+                )
+        test_func_parsing(self, some_default, tests)
+
+    def test_no_multi_with_header_default(self):
+        @Command(
+                some=Spec('an option with a header default', MULTI),
+                )
+        def some_default(some=('hi mom!', 'hi dad!')):
+            pass
+        tests = (
+                ('some_default'.split(), (), {}, (('hi mom!', 'hi dad!'),), {}),
+                ('some_default -s'.split(), (), {}, (('hi mom!', 'hi dad!'),), {}),
+                ('some_default -s none'.split(), (), {}, (('none',),), {}),
+                ('some_default --some thing'.split(), (), {}, (('thing',),), {}),
+                ('some_default --no-some'.split(), (), {}, (tuple(),), {}),
+                )
+        test_func_parsing(self, some_default, tests)
+
+    def test_no_option_option_default(self):
+        @Command(
+                some=Spec('an option with a forced default', OPTION, default='howdy'),
+                thing=Spec('an option without a default', OPTION),
+                )
+        def some_default(some, thing):
+            pass
+        tests = (
+                ('some_default'.split(), (), {}, (None, None), {}),
+                ('some_default -s'.split(), (), {}, ('howdy', None), {}),
+                ('some_default -s none'.split(), (), {}, ('none', None), {}),
+                ('some_default --some --thing else'.split(), (), {}, ('howdy', 'else'), {}),
+                )
+        test_func_parsing(self, some_default, tests)
+
     def test_no_option(self):
         @Command(
                 some=Spec('an option with a forced default', OPTION, force_default='hi mom!'),
@@ -604,6 +650,21 @@ class TestCommandlineProcessing(TestCase):
         tests = (
                 ('some_default'.split(), (), {}, ('hi mom!',), {}),
                 ('some_default -s'.split(), (), {}, ('hi mom!',), {}),
+                ('some_default -s none'.split(), (), {}, ('none',), {}),
+                ('some_default --some thing'.split(), (), {}, ('thing',), {}),
+                ('some_default --no-some'.split(), (), {}, (None,), {}),
+                )
+        test_func_parsing(self, some_default, tests)
+
+    def test_no_option_with_header_default(self):
+        @Command(
+                some=Spec('an option with a forced default', OPTION),
+                )
+        def some_default(some='hi dad!'):
+            pass
+        tests = (
+                ('some_default'.split(), (), {}, ('hi dad!',), {}),
+                ('some_default -s'.split(), (), {}, ('hi dad!',), {}),
                 ('some_default -s none'.split(), (), {}, ('none',), {}),
                 ('some_default --some thing'.split(), (), {}, ('thing',), {}),
                 ('some_default --no-some'.split(), (), {}, (None,), {}),
