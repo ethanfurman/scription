@@ -79,14 +79,14 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 79, 2
+version = 0, 79, 3, 1
 
 # data
 __all__ = (
     'Alias', 'Command', 'Script', 'Main', 'Run', 'Spec',
     'Bool','InputFile', 'OutputFile', 'IniError', 'IniFile', 'OrmError', 'OrmFile',
     'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'REQUIRED',
-    'ScriptionError', 'ExecuteError', 'Execute', 'Job', 'ProgressView',
+    'ScriptionError', 'ExecuteError', 'FailedPassword', 'TimeoutError', 'Execute', 'Job', 'ProgressView',
     'abort', 'echo', 'error', 'get_response', 'help', 'mail', 'user_ids', 'print',
     'stdout', 'stderr', 'wait_and_check', 'b', 'u',
     'Trivalent', 'Truthy', 'Unknown', 'Falsey', 'Success', 'Failure',

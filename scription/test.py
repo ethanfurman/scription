@@ -1,7 +1,7 @@
 from __future__ import print_function
 from scription import *
 from scription import _usage, version, empty, pocket
-from unittest import skip, skipIf, SkipTest, TestCase as unittest_TestCase, main
+from unittest import skip, skipUnless, SkipTest, TestCase as unittest_TestCase, main
 import datetime
 import functools
 import os
@@ -22,11 +22,11 @@ except ImportError:
 scription.VERBOSITY = 0
 
 remove = []
-SKIP_SLOW = UNITTEST_VERBOSE = False
+INCLUDE_SLOW = UNITTEST_VERBOSE = False
 for i, arg in enumerate(sys.argv):
-    if arg.lower().replace('_','-') == '--skip-slow':
+    if arg.lower().replace('_','-') == '--include-slow':
         remove.append(i)
-        SKIP_SLOW = True
+        INCLUDE_SLOW = True
     elif arg.lower() == '-v':
         UNITTEST_VERBOSE = True
 for i in remove[::-1]:
@@ -1529,7 +1529,7 @@ class TestExecutionThreads(TestCase):
 
 
 if not is_win:
-    @skipIf(SKIP_SLOW, 'skipping slow tests')
+    @skipUnless(INCLUDE_SLOW, 'skipping slow tests')
     class TestExecutionPtys(TestCase):
         "test interaction with ptys"
 

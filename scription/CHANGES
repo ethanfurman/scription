@@ -1,3 +1,9 @@
+0.79.3
+======
+
+include FailedPassword and TimeoutError in __all__
+
+
 0.79.2
 ======
 
