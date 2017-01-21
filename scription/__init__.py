@@ -79,7 +79,7 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 79, 3
+version = 0, 79, 4, 1
 
 # data
 __all__ = (
@@ -974,6 +974,8 @@ class Spec(object):
                 arg_type_default = Unknown
             else:
                 arg_type_default = False
+                if type is _identity:
+                    type = Bool
         elif kind == 'option':
             arg_type_default = None
         elif kind == 'multi':

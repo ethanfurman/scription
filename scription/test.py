@@ -44,12 +44,10 @@ if py_ver >= (3, 0):
 
 def test_func_parsing(obj, func, tests, test_type=False):
     global gubed, script_name, script_main, script_commands, script_command, script_commandname
-    i = 0
     try:
-        for params, main_args, main_kwds, sub_args, sub_kwds in tests:
+        for i, (params, main_args, main_kwds, sub_args, sub_kwds) in enumerate(tests):
             if UNITTEST_VERBOSE:
                 echo(i, end=' ')
-            i += 1
             have_gubed = verbose = False
             if '--gubed' in params:
                 have_gubed = True
@@ -58,10 +56,22 @@ def test_func_parsing(obj, func, tests, test_type=False):
             elif '-vv' in params or '--verbose=2' in params:
                 verbose = 2
             res_main_args, res_main_kwds, res_sub_args, res_sub_kwds = _usage(func, params)
-            obj.assertEqual(res_main_args, main_args)
-            obj.assertEqual(res_main_kwds, main_kwds)
-            obj.assertEqual(res_sub_args, sub_args)
-            obj.assertEqual(res_sub_kwds, sub_kwds)
+            obj.assertEqual(
+                    res_main_args, main_args,
+                    "[main args] expected: %r, got: %r  (iteration %d)" % (main_args, res_main_args, i),
+                    )
+            obj.assertEqual(
+                    res_main_kwds, main_kwds,
+                    "[main kwds] expected: %r, got: %r  (iteration %d)" % (main_kwds, res_main_kwds, i),
+                    )
+            obj.assertEqual(
+                    res_sub_args, sub_args,
+                    "[sub args] expected: %r, got: %r  (iteration %d)" % (sub_args, res_sub_args, i),
+                    )
+            obj.assertEqual(
+                    res_sub_kwds, sub_kwds,
+                    "[sub kwds] expected: %r, got: %r  (iteration %d)" % (sub_kwds, res_sub_kwds, i),
+                    )
             if have_gubed:
                 obj.assertTrue(gubed)
             if verbose:
@@ -335,6 +345,25 @@ class TestCommandlineProcessing(TestCase):
                 ( 'tester -h file1 -w'.split(), (), {}, ('file1', 'eggs!'), {} ),
                 ( 'tester -h file1 -w google'.split(), (), {}, ('file1', 'google'), {} ),
                 ( 'tester -h file2 -w frizzle'.split(), (), {}, ('file2', 'frizzle'), {} ),
+                )
+        test_func_parsing(self, tester, tests)
+
+    def test_flags(self):
+        @Command(
+                cardboard=('use cardboard', 'flag'),
+                plastic=('use plastic', 'flag'),
+                )
+        def tester(cardboard, plastic=True):
+            pass
+        tests = (
+                ( 'tester'.split(), (), {}, (False, True), {} ),
+                ( 'tester -c'.split(), (), {}, (True, True), {} ),
+                ( 'tester -p'.split(), (), {}, (False, True), {} ),
+                ( 'tester -c -p'.split(), (), {}, (True, True), {} ),
+                ( 'tester --cardboard --plastic'.split(), (), {}, (True, True), {} ),
+                ( 'tester --cardboard=yes --plastic'.split(), (), {}, (True, True), {} ),
+                ( 'tester --no-plastic'.split(), (), {}, (False, False), {} ),
+                ( 'tester --plastic=off'.split(), (), {}, (False, False), {} ),
                 )
         test_func_parsing(self, tester, tests)
 
