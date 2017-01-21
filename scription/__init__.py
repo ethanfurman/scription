@@ -79,7 +79,7 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 79, 4, 1
+version = 0, 79, 4, 2
 
 # data
 __all__ = (
@@ -1012,7 +1012,9 @@ class Spec(object):
         elif self._envvar is not empty and pocket(value=os.environ.get(self._envvar)):
             value = pocket.value
             if self.kind == 'multi':
-                value = tuple(_split_on_comma(value))
+                value = tuple([self.type(v) for v in _split_on_comma(value)])
+            else:
+                value = self.type(value)
         elif self._script_default is not empty and self._use_default:
             value = self._script_default
         elif self._type_default is not empty:

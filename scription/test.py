@@ -160,6 +160,30 @@ class TestPocket(TestCase):
 
 class TestCommandlineProcessing(TestCase):
 
+    def test_envvar(self):
+        @Command(
+                req=Spec('something goes here', 'required', envvar='SCRIPTION-TEST-REQ'),
+                maybe=Spec('and a flag here', 'flag', envvar='SCRIPTION-TEST-MAYBE'),
+                centi=Spec('an option here', 'option', envvar='SCRIPTION-TEST-CENTI'),
+                pedes=Spec('many options here', 'multi', envvar='SCRIPTION-TEST-PEDES', type=float),
+                )
+        def tester(req, maybe, centi, pedes):
+            pass
+        tests = (
+                ('tester'.split(), (), {}, ('scription', True, 'python', (2.7, 3.3, 3.6)), {} ),
+                )
+        try:
+            os.environ['SCRIPTION-TEST-REQ'] = 'scription'
+            os.environ['SCRIPTION-TEST-MAYBE'] = 'on'
+            os.environ['SCRIPTION-TEST-CENTI'] = 'python'
+            os.environ['SCRIPTION-TEST-PEDES'] = '2.7,3.3,3.6'
+            test_func_parsing(self, tester, tests)
+        finally:
+            del os.environ['SCRIPTION-TEST-REQ']
+            del os.environ['SCRIPTION-TEST-MAYBE']
+            del os.environ['SCRIPTION-TEST-CENTI']
+            del os.environ['SCRIPTION-TEST-PEDES']
+
     def test_trivalent_flag(self):
         @Command(
                 binary=('copy in binary mode', 'flag', 'b', Trivalent),
