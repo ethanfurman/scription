@@ -544,8 +544,6 @@ class TestCommandlineProcessing(TestCase):
                 ('sassy biscuit and gravy'.split(), (), {}, ('biscuit', False, 'and' ,'gravy'), {}),
                 ('sassy --those biscuit and gravy'.split(), (), {}, ('biscuit', True, 'and' ,'gravy'), {}),
                 ('sassy biscuit --those and gravy'.split(), (), {}, ('biscuit', True, 'and' ,'gravy'), {}),
-                ('sassy biscuit and --those gravy'.split(), (), {}, ('biscuit', True, 'and' ,'gravy'), {}),
-                ('sassy biscuit and gravy --those'.split(), (), {}, ('biscuit', True, 'and' ,'gravy'), {}),
                 )
         test_func_parsing(self, sassy, tests)
 
@@ -561,10 +559,22 @@ class TestCommandlineProcessing(TestCase):
                 ('sassy biscuit and gravy'.split(), (), {}, ('biscuit', False, 'and' ,'gravy'), {}),
                 ('sassy --those biscuit and gravy'.split(), (), {}, ('biscuit', True, 'and' ,'gravy'), {}),
                 ('sassy biscuit --those and gravy'.split(), (), {}, ('biscuit', True, 'and' ,'gravy'), {}),
-                ('sassy biscuit and --those gravy'.split(), (), {}, ('biscuit', True, 'and' ,'gravy'), {}),
-                ('sassy biscuit and gravy --those'.split(), (), {}, ('biscuit', True, 'and' ,'gravy'), {}),
                 )
         test_func_parsing(self, sassy, tests)
+
+    def test_varargs_autoconsume_after_first(self):
+        @Command(
+                job=('job, job args, etc',),
+                )
+        def do_job(*job):
+            pass
+        tests = (
+                ('do_job hg st'.split(), (), {}, ('hg', 'st'), {}),
+                ('do_job hg diff -r 199'.split(), (), {}, ('hg', 'diff', '-r', '199'), {}),
+                ('do_job hg diff -c 201'.split(), (), {}, ('hg', 'diff', '-c', '201'), {}),
+                (shlex.split('do_job hg commit -m "a message"'), (), {}, ('hg', 'commit', '-m', 'a message'), {}),
+                )
+        test_func_parsing(self, do_job, tests)
 
     def test_kwds(self):
         @Command(
