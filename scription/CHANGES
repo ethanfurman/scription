@@ -1,3 +1,13 @@
+0.80.0
+======
+
+allow flags to be used option-style (e.g. --flag=on)
+cast envvar values to the correct type
+
+backwards-incompatible change:
+- once a vararg is encountered, all remaining args are also treated as varargs
+
+
 0.79.3
 ======
 
