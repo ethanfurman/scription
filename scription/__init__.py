@@ -2140,6 +2140,11 @@ def scription_debug(*values, **kwds):
             return
         _print('scription> ', *values, **kwds)
 
+def debug(*args, **kwds):
+    with print_lock:
+        kwds['verbose'] = kwds.pop('verbose', 2)
+        print(*args, **kwds)
+
 def echo(*args, **kwds):
     with print_lock:
         kwds['verbose'] = kwds.pop('verbose', 0)
@@ -2153,6 +2158,11 @@ def error(*args, **kwds):
         print(*args, **kwds)
         if returncode:
             abort(returncode=returncode)
+
+def info(*args, **kwds):
+    with print_lock:
+        kwds['verbose'] = kwds.pop('verbose', 1)
+        print(*args, **kwds)
 
 def print(*values, **kwds):
     # kwds can contain sep (' '), end ('\n'), file (sys.stdout), and
