@@ -79,7 +79,7 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 80, 0
+version = 0, 80, 1, 1
 
 # data
 __all__ = (
@@ -1780,35 +1780,88 @@ class ProgressView(object):
     """
     Displays progress as a bar or a numeric count.
     """
-
-    ViewType = Enum('ViewType', (('Bar', 'bar'), ('Percent', 'percent')))
+    ViewType = Enum('ViewType', (('Bar', 'bar'), ('Percent', 'percent'), ('Count', 'count')))
     export(ViewType, vars())
 
-    def __init__(self, total, view_type, message=None, bar_char='*'):
-        if VERBOSITY < 1:
-            self.blank = True
-            return
-        self.blank = False
+    def __init__(self, total=None, view_type='count', message=None, bar_char='*', iterable=None):
+        if total is None and iterable is None:
+            raise ValueError('total must be specified if not wrapping an iterable')
+        elif total is None:
+            try:
+                total = len(iterable)
+            except TypeError:
+                get_hint = getattr(iterable, '__length_hint__', None)
+                try:
+                    total = get_hint(iterable)
+                except TypeError:
+                    pass
+                if total is None:
+                    view_type = 'count'
+        self.blank = VERBOSITY < 1
+        self.iterator = iter(iterable)
         self.current_count = 0
         self.total = total
         self.blockcount = 0
         self.bar_char = bar_char
         self.view_type = self.ViewType(view_type)
-        self.last_written = 0
+        self.last_percent = 0
+        self.last_count = 0
+        self.last_time = time.time()
         self.f = sys.stdout
-        if message is not None:
-            self.f.write('\n%s' % message)
-        if self.view_type is self.Percent:
-            self.f.write(':   0%')
-        elif self.view_type is self.Bar:
-            self.f.write('\n-------------------- % Progress ---------------- 1\n')
-            self.f.write('    1    2    3    4    5    6    7    8    9    0\n')
-            self.f.write('    0    0    0    0    0    0    0    0    0    0\n')
-        else:
-            raise Exception('unknown value for view_type: %r' % self.view_type)
-        self.f.flush()
+        if not self.blank:
+            if message is not None:
+                if total is not None:
+                    message = message.replace('$total', str(total))
+                else:
+                    message = ' '.join([w for w in message.split() if w != '$total'])
+                self.f.write('\n%s' % message)
+                if self.view_type is not self.Bar:
+                    self.f.write(': ')
+            if self.view_type is self.Percent:
+                self.progress = self._bar_progress
+                self.f.write('  0%')
+            elif self.view_type is self.Bar:
+                self.progress = self._bar_progress
+                self.f.write('\n-------------------- % Progress ---------------- 1\n')
+                self.f.write('    1    2    3    4    5    6    7    8    9    0\n')
+                self.f.write('    0    0    0    0    0    0    0    0    0    0\n')
+            elif self.view_type is self.Count:
+                self.progress = self._count_progress
+                self.time = time.time()
+                self.f.write('0')
+            else:
+                raise Exception('unknown value for view_type: %r' % self.view_type)
+            self.f.flush()
 
-    def progress(self, count):
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        try:
+            obj = next(self.iterator)
+        except StopIteration:
+            self.progress(self.current_count, done=True)
+            raise
+        self.tick()
+        return obj
+    next = __next__
+
+    def _count_progress(self, count, done=False):
+        """
+        Calculate current count, update views.
+        """
+        if self.blank:
+            return
+        self.current_count = count
+        now = time.time()
+        if now - self.last_time < 1 and not done:
+            return
+        self.f.write(''*len(str(self.last_count))+str(count))
+        self.f.flush()
+        self.last_count = count
+        self.last_time = now
+
+    def _bar_progress(self, count, done=False):
         """
         Calculate current percent, update views.
         """
@@ -1820,9 +1873,9 @@ class ProgressView(object):
             complete = 100
         else:
             complete = int(floor(100.0*count/self.total))
-        if complete <= self.last_written:
+        if complete <= self.last_percent:
             return
-        self.last_written = complete
+        self.last_percent = complete
         if self.view_type is self.Percent:
             self.f.write('%3d%%' % complete)
         elif self.view_type is self.Bar:
@@ -1833,7 +1886,7 @@ class ProgressView(object):
                 self.f.write(self.bar_char)
             self.blockcount = blockcount
         else:
-            raise Exception('unknow value for view_type: %r' % self.view_type)
+            raise Exception('unknown value for view_type: %r' % self.view_type)
         if complete == 100:
             self.f.write('\n')
         self.f.flush()
