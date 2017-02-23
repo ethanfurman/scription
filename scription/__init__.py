@@ -84,7 +84,7 @@ version = 0, 80, 1, 1
 # data
 __all__ = (
     'Alias', 'Command', 'Script', 'Main', 'Run', 'Spec',
-    'Bool','InputFile', 'OutputFile', 'IniError', 'IniFile', 'OrmError', 'OrmFile',
+    'Bool','InputFile', 'OutputFile', 'IniError', 'IniFile', 'OrmError', 'OrmFile', 'NameSpace',
     'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'REQUIRED',
     'ScriptionError', 'ExecuteError', 'FailedPassword', 'TimeoutError', 'Execute', 'Job', 'ProgressView',
     'abort', 'echo', 'error', 'get_response', 'help', 'mail', 'user_ids', 'print',
@@ -519,10 +519,12 @@ def _identity(*args):
         return args[0]
     return args
 
-class _namespace(object):
+class NameSpace(object):
     def __init__(self, wrapped_dict=None):
         if wrapped_dict is not None:
             self.__dict__ = wrapped_dict
+    def __repr__(self):
+        return '%s(%r)' % (self.__class__.__name__, self.__dict__)
     def __contains__(self, name):
         return name in self.__dict__
     def __getitem__(self, name):
@@ -533,6 +535,7 @@ class _namespace(object):
     def __setitem__(self, name, value):
         self.__dict__[name] = value
     def get(self, key, default=None):
+        # deprecated, will be removed by 1.0
         try:
             return self.__dict__[key]
         except KeyError:
@@ -829,7 +832,7 @@ class Alias(object):
         if script_module is None:
             scription_debug('creating script_module', verbose=2)
             script_module = _func_globals(func)
-            script_module['module'] = _namespace(script_module)
+            script_module['module'] = NameSpace(script_module)
             script_module['script_module'] = script_module['module']
             script_module['script_name'] = '<unknown>'
             script_module['script_main'] = THREAD_STORAGE.script_main
@@ -855,7 +858,7 @@ class Command(object):
         if script_module is None:
             scription_debug('creating script_module', verbose=2)
             script_module = _func_globals(func)
-            script_module['module'] = _namespace(script_module)
+            script_module['module'] = NameSpace(script_module)
             script_module['script_module'] = script_module['module']
             script_module['script_name'] = '<unknown>'
             script_module['script_main'] = THREAD_STORAGE.script_main
@@ -914,12 +917,12 @@ class Script(object):
         if script_module is None:
             scription_debug('creating script_module', verbose=2)
             script_module = _func_globals(func)
-            script_module['module'] = _namespace(script_module)
+            script_module['module'] = NameSpace(script_module)
             script_module['script_module'] = script_module['module']
             script_module['script_name'] = '<unknown>'
             script_module['script_commands'] = {}
         func_name = func.__name__.replace('_', '-')
-        if func_name in script_module.get('script_commands', []):
+        if func_name in script_module['script_commands']:
             raise ScriptionError('%r cannot be both Command and Scription' % func_name)
         if func.__doc__ is not None:
             func.__doc__ = textwrap.dedent(func.__doc__).strip()
@@ -1629,7 +1632,7 @@ class OrmFile(object):
             section = section.lower()
         target_section = section
         defaults = {}
-        settings = self._settings = _namespace()
+        settings = self._settings = NameSpace()
         if py_ver < (3, 0):
             fh = open(filename)
         else:
@@ -1646,7 +1649,7 @@ class OrmFile(object):
                     # section header
                     section = self._verify_section_header(line[1:-1])
                     if target_section is None:
-                        new_section = _namespace()
+                        new_section = NameSpace()
                         for key, value in defaults.items():
                             setattr(new_section, key, value)
                         setattr(settings, section, new_section)
