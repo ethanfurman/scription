@@ -1631,6 +1631,8 @@ class OrmFile(object):
         if section:
             section = section.lower()
         target_section = section
+        self._section = target_section
+        self._filename = filename
         defaults = {}
         settings = self._settings = NameSpace()
         if py_ver < (3, 0):
@@ -1673,6 +1675,12 @@ class OrmFile(object):
                 if name[0] != '_':
                     export_to[name] = value
 
+    def __repr__(self):
+        if self._section is None:
+            return '%s(%r)' % (self.__class__.__name__, self._filename)
+        else:
+            return '%s(%r, section=%r)' % (self.__class__.__name__, self._filename, self._section)
+
     def __getattr__(self, name):
         name = name.lower()
         if name in self._settings.__dict__:
@@ -1683,7 +1691,10 @@ class OrmFile(object):
         return self._settings[name]
 
     def __setattr__(self, name, value):
-        if name in ('_settings', '_str', '_path', '_date', '_time', '_datetime', '_bool', '_float', '_int'):
+        if name in (
+                '_settings', '_filename', '_section',
+                '_str', '_path', '_date', '_time', '_datetime', '_bool', '_float', '_int',
+                ):
             object.__setattr__(self, name, value)
         else:
             self._settings[name] = value
