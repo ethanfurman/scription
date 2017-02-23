@@ -527,6 +527,9 @@ class NameSpace(object):
         return '%s(%r)' % (self.__class__.__name__, self.__dict__)
     def __contains__(self, name):
         return name in self.__dict__
+    def __iter__(self):
+        for key, value in sorted(self.__dict__.items()):
+            yield key, value
     def __getitem__(self, name):
         try:
             return self.__dict__[name]
@@ -1680,6 +1683,21 @@ class OrmFile(object):
             return '%s(%r)' % (self.__class__.__name__, self._filename)
         else:
             return '%s(%r, section=%r)' % (self.__class__.__name__, self._filename, self._section)
+
+    def __iter__(self):
+        values = []
+        sections = []
+        for key, value in self._settings:
+            if isinstance(value, NameSpace):
+                sections.append((key, value))
+            else:
+                values.append((key, value))
+        for key, value in values:
+            yield key, value
+        for key, value in sections:
+            yield key, value
+        return
+        raise Exception('%s: iteration not supported' % self.__class__.__name__)
 
     def __getattr__(self, name):
         name = name.lower()

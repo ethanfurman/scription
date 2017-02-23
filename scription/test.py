@@ -1332,7 +1332,7 @@ class TestOrm(TestCase):
             orm_file.write(
                     "home = /usr/bin\n"
                     'who = "ethan"\n'
-            'why = why not?\n'
+                    'why = why not?\n'
                     "\n"
                     "[hg]\n"
                     "home = /usr/local/bin\n"
@@ -1341,7 +1341,33 @@ class TestOrm(TestCase):
         finally:
             orm_file.close()
 
+    def test_iteration(self):
+        'test iteration'
+        # test whole thing
+        complete = OrmFile(self.orm_file)
+        hg = list(complete.hg)
+        root = list(complete)
+        self.assertEqual(len(root), 4)
+        self.assertTrue(('home', '/usr/bin') in root)
+        self.assertTrue(('who', 'ethan') in root)
+        self.assertTrue(('why', 'why not?') in root)
+        self.assertTrue(('hg', complete.hg) in root)
+        self.assertEqual(len(hg), 4)
+        self.assertTrue(('home', '/usr/local/bin') in hg)
+        self.assertTrue(('who', 'ethan') in hg)
+        self.assertTrue(('why', 'why not?') in hg)
+        self.assertTrue(('when', datetime.time(12, 45)) in hg)
+        # test subsection
+        hg_only = OrmFile(self.orm_file, section='hg')
+        hg = list(hg_only)
+        self.assertEqual(len(hg), 4)
+        self.assertTrue(('home', '/usr/local/bin') in hg)
+        self.assertTrue(('who', 'ethan') in hg)
+        self.assertTrue(('why', 'why not?') in hg)
+        self.assertTrue(('when', datetime.time(12, 45)) in hg)
+
     def test_standard(self):
+        'test standard data types'
         complete = OrmFile(self.orm_file)
         self.assertEqual(complete.home, '/usr/bin')
         self.assertEqual(complete.who, 'ethan')
@@ -1361,6 +1387,7 @@ class TestOrm(TestCase):
         self.assertTrue(type(hg.when) is datetime.time)
 
     def test_custom(self):
+        'test custom data types'
         class Path(unicode):
             pass
         class Time(datetime.time):
