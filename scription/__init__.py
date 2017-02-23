@@ -556,29 +556,29 @@ def _rewrite_args(args):
     return new_args
 
 def _run_once(func, args, kwds):
-    debug('creating run_once function')
+    scription_debug('creating run_once function')
     cache = []
     def later():
-        debug('running later')
+        scription_debug('running later')
         global run_once
         if run_once:
-            debug('returning cached value')
+            scription_debug('returning cached value')
             return cache[0]
         run_once = True
-        debug('calling function')
+        scription_debug('calling function')
         result = func(*args, **kwds)
         cache.append(result)
         return result
-    debug('returning <later>')
+    scription_debug('returning <later>')
     return later
 
 def _split_on_comma(text):
-    debug('_split_on_comma(%r)' % (text,), verbose=2)
+    scription_debug('_split_on_comma(%r)' % (text,), verbose=2)
     if ',' not in text:
-        debug('  -> %r' % ([text], ), verbose=2)
+        scription_debug('  -> %r' % ([text], ), verbose=2)
         return [text]
     elif '\\,' not in text:
-        debug('  -> %r' % text.split(','), verbose=2)
+        scription_debug('  -> %r' % text.split(','), verbose=2)
         return text.split(',')
     else:
         values = []
@@ -597,7 +597,7 @@ def _split_on_comma(text):
             last_ch = ch
         if new_value:
             raise ScriptionError('trailing "\\" in argument %r' % text)
-        debug('  -> %r' % values, verbose=2)
+        scription_debug('  -> %r' % values, verbose=2)
         return values
 
 def _usage(func, param_line_args):
@@ -709,9 +709,9 @@ def _usage(func, param_line_args):
                         annote._cli_value = annote.type(value)
                     else:
                         # value could be a list of comma-separated values
-                        debug('_usage:multi ->', annote.type, verbose=2)
+                        scription_debug('_usage:multi ->', annote.type, verbose=2)
                         annote._cli_value += tuple([annote.type(a) for a in _split_on_comma(value)])
-                        debug('_usage:multi ->', annote._cli_value, verbose=2)
+                        scription_debug('_usage:multi ->', annote._cli_value, verbose=2)
                     value = None
             elif annote.kind == 'flag':
                 value = annote.type(value)
@@ -821,13 +821,13 @@ def _usage(func, param_line_args):
 class Alias(object):
     "adds aliases for the function"
     def __init__(self, *aliases):
-        debug('recording aliases', aliases, verbose=2)
+        scription_debug('recording aliases', aliases, verbose=2)
         self.aliases = aliases
     def __call__(self, func):
-        debug('applying aliases to', func.__name__, verbose=2)
+        scription_debug('applying aliases to', func.__name__, verbose=2)
         global script_module
         if script_module is None:
-            debug('creating script_module', verbose=2)
+            scription_debug('creating script_module', verbose=2)
             script_module = _func_globals(func)
             script_module['module'] = _namespace(script_module)
             script_module['script_module'] = script_module['module']
@@ -843,17 +843,17 @@ class Alias(object):
 class Command(object):
     "adds __scription__ to decorated function, and adds func to Command.subcommands"
     def __init__(self, **annotations):
-        debug('Command -> initializing', verbose=1)
-        debug(annotations, verbose=2)
+        scription_debug('Command -> initializing', verbose=1)
+        scription_debug(annotations, verbose=2)
         for name, annotation in annotations.items():
             spec = Spec(annotation)
             annotations[name] = spec
         self.annotations = annotations
     def __call__(self, func):
-        debug('Command -> applying to', func.__name__, verbose=1)
+        scription_debug('Command -> applying to', func.__name__, verbose=1)
         global script_module
         if script_module is None:
-            debug('creating script_module', verbose=2)
+            scription_debug('creating script_module', verbose=2)
             script_module = _func_globals(func)
             script_module['module'] = _namespace(script_module)
             script_module['script_module'] = script_module['module']
@@ -874,8 +874,8 @@ class Script(object):
     adds __scription__ to decorated function, and stores func in self.command
     """
     def __init__(self, **settings):
-        debug('Script -> recording', verbose=1)
-        debug(settings, verbose=2)
+        scription_debug('Script -> recording', verbose=1)
+        scription_debug(settings, verbose=2)
         for name, annotation in settings.items():
             if isinstance(annotation, (Spec, tuple)):
                 spec = Spec(annotation)
@@ -908,11 +908,11 @@ class Script(object):
         self.settings = dummy.__scription__
         THREAD_STORAGE.script_main = self
     def __call__(self, func):
-        debug('Script -> applying to', func, verbose=1)
+        scription_debug('Script -> applying to', func, verbose=1)
         THREAD_STORAGE.script_main = None
         global script_module
         if script_module is None:
-            debug('creating script_module', verbose=2)
+            scription_debug('creating script_module', verbose=2)
             script_module = _func_globals(func)
             script_module['module'] = _namespace(script_module)
             script_module['script_module'] = script_module['module']
@@ -1026,7 +1026,7 @@ class Spec(object):
 
 def Main(module=None):
     "calls Run() only if the script is being run as __main__"
-    debug('Main entered')
+    scription_debug('Main entered')
     # TODO: replace the frame hack if a blessed way to know the calling
     # module is ever developed
     if module is None:
@@ -1042,9 +1042,9 @@ def Main(module=None):
 def Run():
     "parses command-line and compares with either func or, if None, script_module['script_main']"
     global SYS_ARGS
-    debug('Run entered')
+    scription_debug('Run entered')
     if globals().get('HAS_BEEN_RUN'):
-        debug('Run already called once, returning')
+        scription_debug('Run already called once, returning')
         return
     globals()['HAS_BEEN_RUN'] = True
     if py_ver < (3, 0):
@@ -1058,7 +1058,7 @@ def Run():
         if prog_name == '__main__.py':
             # started with python -m, get actual package name for prog_name
             prog_name = os.path.split(prog_path)[1]
-        debug(prog_name, verbose=2)
+        scription_debug(prog_name, verbose=2)
         script_module['script_fullname'] = SYS_ARGS[0]
         script_module['script_name'] = prog_name
         prog_name = prog_name.replace('_','-')
@@ -1123,7 +1123,7 @@ def Run():
         return subcommand()
     except Exception:
         exc = sys.exc_info()[1]
-        debug(exc)
+        scription_debug(exc)
         result = log_exception()
         script_module['script_exception_lines'] = result
         if isinstance(exc, ScriptionError):
@@ -1133,17 +1133,17 @@ def Run():
 
 ## optional
 def Execute(args, cwd=None, password=None, input=None, timeout=None, pty=None, interactive=None, env=None, **new_env_vars):
-    debug('creating job:', args)
+    scription_debug('creating job:', args)
     job = Job(args, cwd=cwd, pty=pty, env=env, **new_env_vars)
     try:
-        debug('communicating')
+        scription_debug('communicating')
         job.communicate(timeout=timeout, interactive=interactive, password=password, input=input)
     except TimeoutError:
-        debug('TimeoutError')
+        scription_debug('TimeoutError')
         pass
     finally:
         job.close()
-    debug('returning')
+    scription_debug('returning')
     return job
 
 class Job(object):
@@ -1183,7 +1183,7 @@ class Job(object):
             args = list(args)
         if not pty:
             # use subprocess
-            debug('subprocess args:', args)
+            scription_debug('subprocess args:', args)
             self.process = process = Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE, cwd=cwd, env=env)
             self.pid = process.pid
             self.child_fd_out = process.stdout
@@ -1238,10 +1238,10 @@ class Job(object):
                 else:
                     read = channel.read
                 while True:
-                    debug('reading', name)
+                    scription_debug('reading', name)
                     data = read(1024)
                     with io_lock:
-                        debug('putting %s %r (%d bytes)' % (name, data, len(data)))
+                        scription_debug('putting %s %r (%d bytes)' % (name, data, len(data)))
                         if not data:
                             data = None
                         q.put((name, data))
@@ -1251,7 +1251,7 @@ class Job(object):
                 _, exc, tb = sys.exc_info()
                 with io_lock:
                     q.put((name, None))
-                    debug('dying %s (from exception %s)' % (name, exc))
+                    scription_debug('dying %s (from exception %s)' % (name, exc))
                     if not isinstance(exc, OSError) or exc.errno not in (errno.EBADF, errno.EIO):
                         raise self._set_exc(exc, tb)
         def write_comm(channel, q):
@@ -1263,13 +1263,13 @@ class Job(object):
                     write = channel.write
                     flush = channel.flush
                 while True:
-                    debug('stdin waiting')
+                    scription_debug('stdin waiting')
                     data = q.get()
                     with io_lock:
                         if data is None:
-                            debug('dying stdin')
+                            scription_debug('dying stdin')
                             break
-                        debug('stdin writing', repr(data))
+                        scription_debug('stdin writing', repr(data))
                         write(data)
                         flush()
             except Exception:
@@ -1303,7 +1303,7 @@ class Job(object):
             deadman_switch = None
             if timeout is not None:
                 def prejudice():
-                    debug('timed out')
+                    scription_debug('timed out')
                     message = '\nTIMEOUT: process failed to complete in %s seconds\n' % timeout
                     with io_lock:
                         self._stderr.append(message)
@@ -1321,11 +1321,11 @@ class Job(object):
                         with io_lock:
                             if data is None:
                                 active -= 1
-                                debug('dead thread:', stream)
+                                scription_debug('dead thread:', stream)
                                 continue
                             if encoding is not None:
                                 data = data.decode(encoding)
-                            debug('adding %r to %s' % (data, stream))
+                            scription_debug('adding %r to %s' % (data, stream))
                             if stream == 'stdout':
                                 self._stdout.append(data)
                                 if interactive == 'echo':
@@ -1387,15 +1387,15 @@ class Job(object):
                     time.sleep(0.1)
                     self.write(input, block=False)
                     time.sleep(0.1)
-            debug('joining process thread...')
+            scription_debug('joining process thread...')
             process_thread.join()
-            debug('process thread joined')
+            scription_debug('process thread joined')
         finally:
-            debug('cancelling deadman switch')
+            scription_debug('cancelling deadman switch')
             if deadman_switch is not None:
                 deadman_switch.cancel()
                 deadman_switch.join()
-            debug('closing job')
+            scription_debug('closing job')
             self.close()
             if self.exception is not None:
                 exc, tb = self.exception
@@ -1440,9 +1440,9 @@ class Job(object):
                 self.closed = True
         finally:
             with io_lock:
-                debug('saving stdout')
+                scription_debug('saving stdout')
                 self.stdout = ''.join(self._stdout).replace('\r\n', '\n')
-                debug('saving stderr')
+                scription_debug('saving stderr')
                 self.stderr = ''.join(self._stderr).replace('\r\n', '\n')
 
     def fileno(self):
@@ -1497,16 +1497,16 @@ class Job(object):
         parent method'''
         for s in self.kill_signals:
             try:
-                debug('checking job for life')
+                scription_debug('checking job for life')
                 if not self.is_alive():
-                    debug('dead, exiting')
+                    scription_debug('dead, exiting')
                     break
-                debug('killing with', s)
+                scription_debug('killing with', s)
                 self.send_signal(s)
                 time.sleep(1)
             except Exception:
                 cls, exc = sys.exc_info()[:2]
-                debug('received', exc)
+                scription_debug('received', exc)
                 if cls in (IOError, OSError) and exc.errno in (errno.ESRCH, errno.ECHILD):
                     break
         else:
@@ -2129,7 +2129,7 @@ def help(msg, returncode=1):
     abort(msg, returncode)
 
 ### printing
-def debug(*values, **kwds):
+def scription_debug(*values, **kwds):
     # kwds can contain sep (' '), end ('\n'), file (sys.stdout), and
     # verbose (1)
     with print_lock:
@@ -2327,51 +2327,51 @@ def mail(server=None, port=25, message=None):
     if message is None:
         raise ValueError('message not specified')
     elif isinstance(message, basestring):
-        debug('converting string -> email.message')
-        debug(message, verbose=2)
+        scription_debug('converting string -> email.message')
+        scription_debug(message, verbose=2)
         message = email.message_from_string(message)
         for targets in ('To', 'Cc', 'Bcc'):
-            debug('   recipient target:', targets, verbose=2)
+            scription_debug('   recipient target:', targets, verbose=2)
             groups = message.get_all(targets, [])
-            debug('      groups:', groups, verbose=2)
+            scription_debug('      groups:', groups, verbose=2)
             del message[targets]
             for group in groups:
-                debug('      group:', group, verbose=2)
+                scription_debug('      group:', group, verbose=2)
                 addresses = group.split(',')
                 for target in addresses:
-                    debug('         individual:', target, verbose=2)
+                    scription_debug('         individual:', target, verbose=2)
                     target = target.strip()
                     message[targets] = target
                     receivers.append(target)
-    debug('receivers:', receivers, verbose=2)
+    scription_debug('receivers:', receivers, verbose=2)
     if 'date' not in message:
         message['date'] = email.utils.formatdate(localtime=True)
     sender = message['From']
     if server is None:
-        debug('skipping stage 1', verbose=2)
+        scription_debug('skipping stage 1', verbose=2)
         send_errs = dict.fromkeys(receivers)
     else:
         try:
-            debug('stage 1: connect to smtp server', server, port)
+            scription_debug('stage 1: connect to smtp server', server, port)
             smtp = smtplib.SMTP(server, port)
         except socket.error:
             exc = sys.exc_info()[1]
-            debug('error:', exc)
+            scription_debug('error:', exc)
             send_errs = {}
             for rec in receivers:
                 send_errs[rec] = (server, exc.args)
         else:
             try:
-                debug('         sending mail')
+                scription_debug('         sending mail')
                 send_errs = smtp.sendmail(sender, receivers, message.as_string())
             except smtplib.SMTPRecipientsRefused:
                 exc = sys.exc_info()[1]
-                debug('error:', exc)
+                scription_debug('error:', exc)
                 send_errs = {}
                 for user, detail in exc.recipients.items():
                     send_errs[user] = (server, detail)
             finally:
-                debug('         quiting')
+                scription_debug('         quiting')
                 smtp.quit()
     errs = {}
     if send_errs:
