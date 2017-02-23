@@ -1677,7 +1677,7 @@ class OrmFile(object):
         name = name.lower()
         if name in self._settings.__dict__:
             return getattr(self._settings, name)
-        raise IniError("'settings' has no section/default named %r" % name)
+        raise OrmError("'settings' has no section/default named %r" % name)
 
     def __getitem__(self, name):
         return self._settings[name]
@@ -1694,22 +1694,22 @@ class OrmFile(object):
     def _verify_name(self, name):
         name = name.strip().lower()
         if not name[0].isalpha():
-            raise IniError('names must start with a letter')
+            raise OrmError('names must start with a letter')
         if re.sub('\w*', '', name):
             # illegal characters in name
-            raise IniError('names can only contain letters, digits, and the underscore [%r]' % name)
+            raise OrmError('names can only contain letters, digits, and the underscore [%r]' % name)
         return name
 
     def _verify_section_header(self, section):
         section = section.strip().lower()
         if not section[0].isalpha():
-            raise IniError('names must start with a letter')
+            raise OrmError('names must start with a letter')
         if re.sub('\w*', '', section):
             # illegal characters in section
-            raise IniError('names can only contain letters, digits, and the underscore [%r]' % section)
+            raise OrmError('names can only contain letters, digits, and the underscore [%r]' % section)
         if section in self.__dict__:
             # section already exists
-            raise IniError('section %r is a duplicate, or already exists as a default value' % section)
+            raise OrmError('section %r is a duplicate, or already exists as a default value' % section)
         return section
 
     def _verify_value(self, value):
@@ -1723,11 +1723,11 @@ class OrmFile(object):
         if value[0] in ('"', "'"):
             # definitely a string
             if value[0] != value[-1]:
-                raise IniError('string must be quoted at both ends [%r]' % value)
+                raise OrmError('string must be quoted at both ends [%r]' % value)
             start, end = 1, -1
             if value[:3] in ('"""', "'''"):
                 if value[:3] != value[-3:] or len(value) < 6:
-                    raise IniError('invalid string value: %r' % value)
+                    raise OrmError('invalid string value: %r' % value)
                 start, end = 3, -3
             return self._str(value[start:end])
         elif '/' in value or '\\' in value:
@@ -1740,27 +1740,27 @@ class OrmFile(object):
                 time = map(int, value[11:].split(':'))
                 return self._datetime(*(date+time))
             except ValueError:
-                raise IniError('invalid datetime value: %r' % value)
+                raise OrmError('invalid datetime value: %r' % value)
         elif '-' in value:
             # date
             try:
                 date = map(int, value.split('-'))
                 return self._date(date)
             except ValueError:
-                raise IniError('invalid date value: %r' % value)
+                raise OrmError('invalid date value: %r' % value)
         elif ':' in value:
             # time
             try:
                 time = map(int, value.split(':'))
                 return self._time(*time)
             except ValueError:
-                raise IniError('invalid time value: %r' % value)
+                raise OrmError('invalid time value: %r' % value)
         elif '.' in value:
             # float
             try:
                 value = self._float(value)
             except ValueError:
-                raise IniError('invalid float value: %r' % value)
+                raise OrmError('invalid float value: %r' % value)
         elif value.lower() == 'true':
             # boolean - True
             return self._bool(True)
@@ -1772,12 +1772,12 @@ class OrmFile(object):
             try:
                 return self._int(value)
             except ValueError:
-                raise IniError('invalid integer value: %r' % value)
+                raise OrmError('invalid integer value: %r' % value)
         else:
             # must be a string
             return value
-IniError = OrmError     # deprecated
-IniFile = OrmFile       # deprecated
+IniError = OrmError     # deprecated, will be removed by 1.0
+IniFile = OrmFile       # deprecated, will be removed by 1.0
 
 class ProgressView(object):
     """
