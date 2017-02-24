@@ -79,7 +79,7 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 80, 1
+version = 0, 80, 2, 1
 
 # data
 __all__ = (
@@ -1816,6 +1816,11 @@ class ProgressView(object):
     export(ViewType, vars())
 
     def __init__(self, total=None, view_type='count', message=None, bar_char='*', iterable=None):
+        try:
+            os.ttyname(stdout.fileno())
+            headless = False
+        except OSError:
+            headless = True
         if total is None and iterable is None:
             raise ValueError('total must be specified if not wrapping an iterable')
         elif total is None:
@@ -1847,6 +1852,13 @@ class ProgressView(object):
                 else:
                     message = ' '.join([w for w in message.split() if w != '$total'])
                 self.f.write('\n%s' % message)
+                if headless:
+                    if total is not None:
+                        self.f.write(': %s\n' % (total, ))
+                    else:
+                        self.f.write('\n')
+                    self.blank = True
+                    return
                 if self.view_type is not self.Bar:
                     self.f.write(': ')
             if self.view_type is self.Percent:
@@ -1874,7 +1886,8 @@ class ProgressView(object):
         except StopIteration:
             self.progress(self.current_count, done=True)
             raise
-        self.tick()
+        if not self.blank:
+            self.progress(self.current_count+1)
         return obj
     next = __next__
 
