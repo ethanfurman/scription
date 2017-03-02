@@ -197,7 +197,7 @@ logger.addHandler(NullHandler())
 class DocEnum(Enum):
     """
     compares equal to all cased versions of its name
-    accepts a doctring for each member
+    accepts a docstring for each member
     """
     _settings_ = AutoNumber
 

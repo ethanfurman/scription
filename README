@@ -57,12 +57,15 @@ helper functions/classes
     also be specified
 
   - print: wrapper around print that adds a 'verbose_level' keyword (default: 1);
-    default verbosity is 0 (so print does nothing), but can be increased using
-    -v, -vv, --verbose, or --verbose=2 (in Python 2 the script must use
+    default script verbosity is 0 (so print does nothing), but can be increased
+    using -v, -vv, --verbose, or --verbose=2 (in Python 2 the script must use
     'from __future__ import print_function' to use scription's print)
 
   - user_ids:  context manager useful for suid scripts -- all actions taken
     within the context are run as the user/group specified
+
+  - Exit: an enumeration of useful exit codes (scription uses Exit.ScriptionError
+   (63) if unable to parse the command line and run the script)
 
 
 features

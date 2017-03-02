@@ -1,8 +1,14 @@
+0.80.2
+======
+
+improve return code handling
+
+
 0.80.1
 ======
 
 ProgressView now supports directly wrapping an iterable
-add info and debuh wrappers to print which default verbose level to 1 and 2
+add info and debug wrappers to print which default verbose level to 1 and 2
 add NameSpace to API
 add nice reprs to NameSpace and OrmFile
 add iteration support to NameSpace and OrmFile
