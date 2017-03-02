@@ -42,7 +42,7 @@ import textwrap
 import threading
 import time
 import traceback
-from aenum import Enum, AutoNumber, export
+from aenum import Enum, IntEnum, AutoNumber, export
 from math import floor
 from sys import stdout, stderr
 
@@ -79,7 +79,7 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 80, 2, 1
+version = 0, 80, 2, 4
 
 # data
 __all__ = (
@@ -89,18 +89,20 @@ __all__ = (
     'ScriptionError', 'ExecuteError', 'FailedPassword', 'TimeoutError', 'Execute', 'Job', 'ProgressView',
     'abort', 'echo', 'error', 'get_response', 'help', 'mail', 'user_ids', 'print',
     'stdout', 'stderr', 'wait_and_check', 'b', 'u',
-    'Trivalent', 'Truthy', 'Unknown', 'Falsey', 'Success', 'Failure',
+    'Trivalent', 'Truthy', 'Unknown', 'Falsey', 'Exit',
     # the following are actually injected directly into the calling module, but are
     # added here as well for pylakes' benefit
     'script_main',          # Script decorator instance if used
     'script_commands',      # defined commands
     'script_command',       # callback to run chosen command function
     'script_command_name',  # name of above
-    'script_fullname',     # sys.argv[0]
+    'script_fullname',      # sys.argv[0]
     'script_name',          # above without path
     'script_verbosity',     # vebosity level from command line
     'script_module',        # module that imported scription
     'module',               # same as above
+    'script_abort_message', # copy of message sent to abort()
+    'script_exception_lines', # traceback from unhandled exception
     )
 
 VERBOSITY = 0
@@ -124,6 +126,7 @@ for arg in sys.argv:
 
 module = script_module = script_main = script_commands = None
 script_fullname = script_name = script_verbosity = script_command = script_command_name = None
+script_abort_message = script_exception_lines = None
 
 registered = False
 run_once = False
@@ -217,9 +220,60 @@ class DocEnum(Enum):
         return '<%s.%s>' % (self.__class__.__name__, self._name_)
 
 @export(globals())
-class ReturnCode(Enum):
-    Success = 0
-    Failure = -1
+class Exit(IntEnum):
+    '''
+    Non-zero values indicate an error
+    '''
+    _init_ = 'value __doc__'
+    _ignore_ = 'v name text sig'
+
+    Success         =   0, 'ran successfully'
+    Unknown         =   1, 'unspecified error'
+    ScriptionError  =  63, 'fatal scription error'
+    Usage           =  64, 'command line usage error'
+    DataError       =  65, 'data format error'
+    NoInput         =  66, 'cannot open input'
+    NoUser          =  67, 'user unknown'
+    NoHost          =  68, 'host unknown'
+    Unavailable     =  69, 'service unavailable'
+    Software        =  70, 'internal error'
+    OsError         =  71, 'system error'
+    OsFile          =  72, 'critical OS file missing'
+    CantCreate      =  73, 'cannot create (user) output file'
+    IoError         =  74, 'input/output error'
+    TempFail        =  75, 'temp failure; user is invited to retry'
+    Protocol        =  76, 'remote error in protocol'
+    NoPermission    =  77, 'permission denied'
+    Config          =  78, 'configuration error'
+    CannotExecute   = 126, 'command invoked cannot execute'
+    ExitOutOfRange  = 255, 'exit code out of range'
+    InvalidExitCode = 127, 'invalid argument to exit'
+
+    # add signal exit codes
+    v = vars()
+    for name, text in (
+            ('SIGHUP',  'controlling process died'),
+            ('SIGINT',  'interrupt from keyboard'),
+            ('SIGQUIT', 'quit from keyboard'),
+            ('SIGILL',  'illegal instruction (machine code)'),
+            ('SIGABRT', 'abort from abort(3)'),
+            ('SIGBUS',  'bus error (bad memory address)'),
+            ('SIGFPE',  'floating point exception'),
+            ('SIGKILL', 'kill'),
+            ('SIGUSR1', 'user-defined signal 1'),
+            ('SIGSEGV', 'invalid memory reference'),
+            ('SIGUSR2', 'user-defined signal 2'),
+            ('SIGPIPE', 'broken pipe, or write to read pipe'),
+            ('SIGALRM', 'timer expired'),
+            ('SIGTERM', 'terminate'),
+            ('SIGCHILD', 'child error'),
+        ):
+        sig = getattr(signal, name, None)
+        if sig is not None:
+            v[name] = sig, name
+        else:
+            v['SIGNKWN'] = 128, 'invalid signal'
+
     def __bool__(self):
         return self.value == 0
     __nonzero__ = __bool__
@@ -637,7 +691,7 @@ def _usage(func, param_line_args):
                 if annote._script_default:
                     annote._cli_value = annote._script_default
                 else:
-                    help('%s has no value' % last_item)
+                    help('%s has no value' % last_item, Exit.ScriptionError)
             else:
                 if annote.remove:
                     # only remove if not using the annotation default
@@ -660,7 +714,7 @@ def _usage(func, param_line_args):
             continue
         if all_to_varargs:
             if var_arg_spec is None:
-                help("don't know what to do with %r" % item)
+                help("don't know what to do with %r" % item, Exit.ScriptionError)
             var_arg_spec._cli_value += (var_arg_spec.type(item), )
             continue
         if item.startswith('-'):
@@ -689,7 +743,7 @@ def _usage(func, param_line_args):
                 try:
                     VERBOSITY = int(value)
                 except ValueError:
-                    abort('invalid verbosity level: %r' % value)
+                    help('invalid verbosity level: %r' % value, Exit.ScriptionError)
                 value = None
                 continue
             if item in annotations:
@@ -701,7 +755,7 @@ def _usage(func, param_line_args):
                 value = None
                 continue
             else:
-                help('%s not valid' % original_item)
+                help('%s not valid' % original_item, Exit.ScriptionError)
             if annote.remove:
                 to_be_removed.append(offset)
             if annote.kind in ('multi', 'option'):
@@ -724,18 +778,18 @@ def _usage(func, param_line_args):
                 annote._cli_value = value
                 value = None
             else:
-                help('%s argument %s should not be introduced with --' % (annote.kind, item))
+                help('%s argument %s should not be introduced with --' % (annote.kind, item), Exit.ScriptionError)
         elif '=' in item:
             # no lead dash, keyword args
             if kwd_arg_spec is None:
-                help("don't know what to do with %r" % item)
+                help("don't know what to do with %r" % item, Exit.ScriptionError)
             item, value = item.split('=')
             item = item.replace('-','_')
             if item in func.named_params:
-                help('%s must be specified as a %s' % (item, annotations[item].kind))
+                help('%s must be specified as a %s' % (item, annotations[item].kind), Exit.ScriptionError)
             item, value = kwd_arg_spec.type(item, value)
             if not isinstance(item, str):
-                help('keyword names must be strings')
+                help('keyword names must be strings', Exit.ScriptionError)
             kwd_arg_spec._cli_value[item] = value
             value = None
         else:
@@ -746,13 +800,13 @@ def _usage(func, param_line_args):
                     to_be_removed.append(offset)
                 # check for choices membership before transforming into a type
                 if annote.choices and item not in annote.choices:
-                    help('%s: %r not in [ %s ]' % (annote.usage, item, ' | '.join(annote.choices)))
+                    help('%s: %r not in [ %s ]' % (annote.usage, item, ' | '.join(annote.choices)), Exit.ScriptionError)
                 item = annote.type(item)
                 annote._cli_value = item
                 pos += 1
             else:
                 if var_arg_spec is None:
-                    help("don't know what to do with %r" % item)
+                    help("don't know what to do with %r" % item, Exit.ScriptionError)
                 var_arg_spec._cli_value += (var_arg_spec.type(item), )
                 all_to_varargs = True
     # exc = None
@@ -762,13 +816,13 @@ def _usage(func, param_line_args):
             _print('global options: ' + Script.__usage__ + '\n')
         _print('%s %s' % (program, func.__usage__))
         _print()
-        raise SystemExit
+        sys.exit(Exit.Success)
     elif print_version:
         _print(_get_version(script_module['module']))
-        raise SystemExit
+        sys.exit(Exit.Success)
     elif print_all_versions:
         _print('\n'.join(_get_all_versions(script_module)))
-        raise SystemExit
+        sys.exit(Exit.Success)
     for setting in set(func.__scription__.values()):
         if setting.kind == 'required':
             setting.value
@@ -1042,7 +1096,7 @@ def Main(module=None):
             module = script_module['__name__']
     if module == '__main__':
         result = Run()
-        raise SystemExit(result)
+        sys.exit(result)
 
 
 def Run():
@@ -1077,10 +1131,10 @@ def Run():
             func_name = func_name[0].lower()
             if func_name == '--version':
                 _print(_get_version(script_module['module']))
-                raise SystemExit
+                sys.exit(Exit.Success)
             elif func_name in ('--all-versions', '--all_versions'):
                 _print('\n'.join(_get_all_versions(script_module)))
-                raise SystemExit
+                sys.exit(Exit.Success)
             else:
                 func_name = func_name.replace('_', '-')
         func = Command.get(func_name)
@@ -1117,7 +1171,10 @@ def Run():
                         doc = (func.__doc__ or func.__usage__.split('\n')[0]).split('\n')[0]
                         _print("   %*s  %s" % (-_name_length, name, doc))
 
-                raise SystemExit
+                if func_name in ('-h', '--help'):
+                    sys.exit(Exit.Success)
+                else:
+                    sys.exit(Exit.ScriptionError)
         main_args, main_kwds, sub_args, sub_kwds = _usage(func, param_line)
         main_cmd = Script and Script.command
         subcommand = _run_once(func, sub_args, sub_kwds)
@@ -1133,7 +1190,7 @@ def Run():
         result = log_exception()
         script_module['script_exception_lines'] = result
         if isinstance(exc, ScriptionError):
-            raise SystemExit(str(exc))
+            abort(str(exc), Exit.ScriptionError)
         raise
 
 
@@ -2156,18 +2213,20 @@ def OutputFile(arg):
 ## utilities
 
 ### quiting
-def abort(msg=None, returncode=1):
-    "prints msg to stderr, raises SystemExit with returncode"
+def abort(msg=None, returncode=Exit.Unknown):
+    "prints msg to stderr, calls sys.exit() with returncode"
     with print_lock:
         if msg:
             if VERBOSITY > 0:
                 progname = script_module['script_fullname']
             else:
                 progname = script_module['script_name']
-            print('%s: %s' % (progname, msg), file=stderr)
-        raise SystemExit(returncode)
+            result = '%s: %s' % (progname, msg)
+            script_module['script_abort_message'] = result
+            print(result, file=stderr)
+        sys.exit(returncode)
 
-def help(msg, returncode=1):
+def help(msg, returncode=Exit.ScriptionError):
     "conditionally adds reference to --help"
     if '--help' not in msg:
         msg += ' (use --help for more information)'
@@ -2226,7 +2285,7 @@ def print(*values, **kwds):
         except IOError:
             cls, exc, tb = sys.exc_info()
             if exc.errno == errno.EPIPE:
-                raise SystemExit
+                sys.exit(Exit.IoError)
             raise
 
 def log_exception(tb=None):
