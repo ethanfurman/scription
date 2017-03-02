@@ -573,6 +573,22 @@ def _identity(*args):
         return args[0]
     return args
 
+def _init_script_module(func):
+    scription_debug('creating script_module', verbose=2)
+    global script_module
+    script_module = _func_globals(func)
+    script_module['module'] = NameSpace(script_module)
+    script_module['script_module'] = script_module['module']
+    script_module['script_name'] = '<unknown>'
+    script_module['script_main'] = THREAD_STORAGE.script_main
+    script_module['script_commands'] = {}
+    script_module['script_command'] = None
+    script_module['script_command_name'] = ''
+    script_module['script_fullname'] = ''
+    script_module['script_verbosity'] = 0
+    script_module['script_abort_message'] = ''
+    script_module['script_exception_lines'] = []
+
 class NameSpace(object):
     def __init__(self, wrapped_dict=None):
         if wrapped_dict is not None:
@@ -885,15 +901,8 @@ class Alias(object):
         self.aliases = aliases
     def __call__(self, func):
         scription_debug('applying aliases to', func.__name__, verbose=2)
-        global script_module
         if script_module is None:
-            scription_debug('creating script_module', verbose=2)
-            script_module = _func_globals(func)
-            script_module['module'] = NameSpace(script_module)
-            script_module['script_module'] = script_module['module']
-            script_module['script_name'] = '<unknown>'
-            script_module['script_main'] = THREAD_STORAGE.script_main
-            script_module['script_commands'] = {}
+            _init_script_module(func)
         for alias in self.aliases:
             alias_name = alias.replace('_', '-')
             script_module['script_commands'][alias_name] = func
@@ -911,15 +920,8 @@ class Command(object):
         self.annotations = annotations
     def __call__(self, func):
         scription_debug('Command -> applying to', func.__name__, verbose=1)
-        global script_module
         if script_module is None:
-            scription_debug('creating script_module', verbose=2)
-            script_module = _func_globals(func)
-            script_module['module'] = NameSpace(script_module)
-            script_module['script_module'] = script_module['module']
-            script_module['script_name'] = '<unknown>'
-            script_module['script_main'] = THREAD_STORAGE.script_main
-            script_module['script_commands'] = {}
+            _init_script_module(func)
         if func.__doc__ is not None:
             func.__doc__ = textwrap.dedent(func.__doc__).strip()
         _add_annotations(func, self.annotations)
@@ -970,14 +972,8 @@ class Script(object):
     def __call__(self, func):
         scription_debug('Script -> applying to', func, verbose=1)
         THREAD_STORAGE.script_main = None
-        global script_module
         if script_module is None:
-            scription_debug('creating script_module', verbose=2)
-            script_module = _func_globals(func)
-            script_module['module'] = NameSpace(script_module)
-            script_module['script_module'] = script_module['module']
-            script_module['script_name'] = '<unknown>'
-            script_module['script_commands'] = {}
+            _init_script_module(func)
         func_name = func.__name__.replace('_', '-')
         if func_name in script_module['script_commands']:
             raise ScriptionError('%r cannot be both Command and Scription' % func_name)
