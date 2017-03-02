@@ -42,7 +42,7 @@ import textwrap
 import threading
 import time
 import traceback
-from aenum import Enum, IntEnum, AutoNumber, export
+from scription._aenum import Enum, IntEnum, AutoNumber, export
 from math import floor
 from sys import stdout, stderr
 
@@ -79,7 +79,7 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 80, 2
+version = 0, 80, 3, 1
 
 # data
 __all__ = (
@@ -209,9 +209,10 @@ class DocEnum(Enum):
     def __eq__(self, other):
         if isinstance(other, basestring):
             return self._value_ == other.lower()
-        elif not isinstance(other, self.__class__):
+        elif isinstance(other, self.__class__):
+            return self is other
+        else:
             return NotImplemented
-        return self is other
 
     def __ne__(self, other):
         return not self == other

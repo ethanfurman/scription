@@ -99,7 +99,7 @@ make = []
 
 data = dict(
         name='scription',
-        version='0.80.2',
+        version='0.80.3a1',
         license='BSD License',
         description='simple script parameter parser',
         long_description=description,
@@ -110,7 +110,6 @@ data = dict(
                  'CHANGES', 'LICENSE',
                  ],
              },
-        install_requires=['aenum'],
         author='Ethan Furman',
         author_email='ethan@stoneleaf.us',
         classifiers=[
