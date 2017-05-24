@@ -1,3 +1,9 @@
+0.80.4
+======
+
+properly handle end-of-data in ProgressView
+
+
 0.80.2
 ======
 
