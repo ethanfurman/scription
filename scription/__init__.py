@@ -79,7 +79,7 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 80, 3
+version = 0, 80, 4, 1
 
 # data
 __all__ = (
@@ -1940,8 +1940,7 @@ class ProgressView(object):
         except StopIteration:
             self.progress(self.current_count, done=True)
             raise
-        if not self.blank:
-            self.progress(self.current_count+1)
+        self.progress(self.current_count+1)
         return obj
     next = __next__
 
@@ -1959,6 +1958,9 @@ class ProgressView(object):
         self.f.flush()
         self.last_count = count
         self.last_time = now
+        if done:
+            self.f.write('\n')
+            self.f.flush()
 
     def _bar_progress(self, count, done=False):
         """
@@ -1990,12 +1992,16 @@ class ProgressView(object):
             self.f.write('\n')
         self.f.flush()
 
+    def progress(self, count, done=False):
+        if done:
+            self.f.write('\n')
+            self.f.flush()
+        pass
+
     def tick(self):
         """
         Add one to counter, possibly update view.
         """
-        if self.blank:
-            return
         self.current_count += 1
         self.progress(self.current_count)
 
