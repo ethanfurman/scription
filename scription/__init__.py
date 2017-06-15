@@ -1538,6 +1538,7 @@ class Job(object):
 
     def is_alive(self):
         'parent method'
+        time.sleep(0.1)
         if self.terminated:
             return False
         try:
