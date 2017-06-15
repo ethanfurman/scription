@@ -1443,7 +1443,7 @@ class Job(object):
                         try:
                             # pty -- look for echo off first
                             while self.get_echo() and self.is_alive():
-                                time.sleep(0.01)
+                                time.sleep(0.1)
                             pw, passwords = passwords[0], passwords[1:]
                             self.write(pw, block=False)
                         except IOError:
@@ -1571,7 +1571,7 @@ class Job(object):
                     break
                 scription_debug('killing with', s)
                 self.send_signal(s)
-                time.sleep(1)
+                time.sleep(0.1)
             except Exception:
                 cls, exc = sys.exc_info()[:2]
                 scription_debug('received', exc)
@@ -1640,7 +1640,7 @@ class Job(object):
         if self.is_alive() and self.kill_signals:
             sig = self.kill_signals[0]
             os.kill(self.pid, sig)
-            time.sleep(1)
+            time.sleep(0.1)
 
     def write(self, data, block=True):
         'parent method'
@@ -1655,7 +1655,7 @@ class Job(object):
         self._all_input.put(data)
         if block:
             while not self._all_input.empty():
-                time.sleep(0.01)
+                time.sleep(0.1)
         return len(data)
 
     def write_error(self, data):
