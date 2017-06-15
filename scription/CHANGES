@@ -1,3 +1,9 @@
+0.80.5
+======
+
+Job/Execute: yield control to subprocess so it can finish closing its job
+
+
 0.80.4
 ======
 
