@@ -79,7 +79,7 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 80, 4
+version = 0, 80, 5, 1
 
 # data
 __all__ = (
@@ -1249,10 +1249,10 @@ class Job(object):
             self.child_fd_out = process.stdout
             self.child_fd_in = process.stdin
             self.child_fd_err = process.stderr
-            self.poll = process.poll
-            self.terminate = process.terminate
-            self.kill = process.kill
-            self.send_signal = process.send_signal
+            self.poll = self._log_wrap(process.poll, 'polling')
+            self.terminate = self._log_wrap(process.terminate, 'terminating')
+            self.kill = self._log_wrap(process.kill, 'killing')
+            self.send_signal = self._log_wrap(process.send_signal, 'sending signal')
         else:
             error_read, error_write = os.pipe()
             self.pid, self.child_fd = fork()
@@ -1347,8 +1347,15 @@ class Job(object):
         # do not add the stdin thread to the list of threads that automatically die if the job dies, as
         # it has to be manually ended
 
+    def _log_wrap(self, func, msg):
+        def wrapper(*args, **kwds):
+            scription_debug(msg, args, kwds)
+            return func(*args, **kwds)
+        return wrapper
+
     def _set_exc(self, exc, tb=None):
         'sets self.exception if not already set, or unsets if exc is None'
+        scription_debug('setting exception to: %r' % (exc,))
         if self.exception is None and exc is not None:
             self.exception = exc, tb
         elif exc is None:
@@ -1451,8 +1458,8 @@ class Job(object):
             process_thread.join()
             scription_debug('process thread joined')
         finally:
-            scription_debug('cancelling deadman switch')
             if deadman_switch is not None:
+                scription_debug('cancelling deadman switch')
                 deadman_switch.cancel()
                 deadman_switch.join()
             scription_debug('closing job')
@@ -1555,6 +1562,7 @@ class Job(object):
         '''kills child job, and self if child will not die
 
         parent method'''
+        scription_debug('killing')
         for s in self.kill_signals:
             try:
                 scription_debug('checking job for life')
@@ -1580,6 +1588,7 @@ class Job(object):
             os.kill(os.getpid(), signal.SIGKILL)
 
     def poll(self):
+        scription_debug('polling')
         if self.is_alive():
             return None
         else:
@@ -1621,11 +1630,13 @@ class Job(object):
 
     def send_signal(self, signal):
         "parent method"
+        scription_debug('sending signal:', signal)
         os.kill(self.pid, signal)
         time.sleep(0.1)
 
     def terminate(self):
         'parent method'
+        scription_debug('terminating')
         if self.is_alive() and self.kill_signals:
             sig = self.kill_signals[0]
             os.kill(self.pid, sig)
@@ -2580,4 +2591,3 @@ class wait_and_check(object):
                 return True
         return False
     __nonzero__ = __bool__
-
