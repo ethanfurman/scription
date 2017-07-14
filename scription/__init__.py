@@ -79,7 +79,7 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 80, 5
+version = 0, 80, 6, 1
 
 # data
 __all__ = (
@@ -112,6 +112,15 @@ THREAD_STORAGE = threading.local()
 THREAD_STORAGE.script_main = None
 
 # bootstrap SCRIPTION_DEBUG
+tmp = os.environ.get('SCRIPTION_DEBUG')
+if tmp:
+    try:
+        SCRIPTION_DEBUG = int(tmp)
+        print('\n-------------------\n')
+    except ValueError:
+        SCRIPTION_DEBUG = 1
+        print('BAD VALUE FOR SCRIPTION_DEBUG: %r' % (tmp, ))
+del tmp
 for arg in sys.argv:
     if arg.startswith(('--SCRIPTION_DEBUG', '--SCRIPTION-DEBUG')):
         SCRIPTION_DEBUG = 1
