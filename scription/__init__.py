@@ -111,6 +111,14 @@ LOCALE_ENCODING = locale.getpreferredencoding() or 'utf-8'
 THREAD_STORAGE = threading.local()
 THREAD_STORAGE.script_main = None
 
+# bootstrap VERBOSITY
+tmp = os.environ.get('SCRIPTION_VERBOSITY')
+if tmp:
+    try:
+        VERBOSITY = int(tmp)
+    except ValueError:
+        VERBOSITY = 1
+        print('BAD VALUE FOR SCRIPTION_VEBOSITY: %r' % (tmp, ))
 # bootstrap SCRIPTION_DEBUG
 tmp = os.environ.get('SCRIPTION_DEBUG')
 if tmp:
