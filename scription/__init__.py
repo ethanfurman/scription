@@ -1901,6 +1901,9 @@ class OrmFile(object):
         elif value.lower() in ('false', ''):
             # boolean - False
             return self._bool(False)
+        elif value.lower() == 'none':
+            # None
+            return self._none()
         elif any(c.isdigit() for c in value):
             # int
             try:

@@ -1333,10 +1333,13 @@ class TestOrm(TestCase):
                     "home = /usr/bin\n"
                     'who = "ethan"\n'
                     'why = why not?\n'
+                    'why_not = True\n'
+                    'where = False\n'
                     "\n"
                     "[hg]\n"
                     "home = /usr/local/bin\n"
                     "when = 12:45\n"
+                    'why_not = None\n'
                     )
         finally:
             orm_file.close()
@@ -1376,24 +1379,28 @@ class TestOrm(TestCase):
         complete = OrmFile(self.orm_file)
         hg = list(complete.hg)
         root = list(complete)
-        self.assertEqual(len(root), 4)
+        self.assertEqual(len(root), 6)
         self.assertTrue(('home', '/usr/bin') in root)
         self.assertTrue(('who', 'ethan') in root)
         self.assertTrue(('why', 'why not?') in root)
+        self.assertTrue(('why_not', True) in root)
+        self.assertTrue(('where', False) in root)
         self.assertTrue(('hg', complete.hg) in root)
-        self.assertEqual(len(hg), 4)
+        self.assertEqual(len(hg), 6)
         self.assertTrue(('home', '/usr/local/bin') in hg)
         self.assertTrue(('who', 'ethan') in hg)
         self.assertTrue(('why', 'why not?') in hg)
         self.assertTrue(('when', datetime.time(12, 45)) in hg)
+        self.assertTrue(('why_not', None) in hg)
         # test subsection
         hg_only = OrmFile(self.orm_file, section='hg')
         hg = list(hg_only)
-        self.assertEqual(len(hg), 4)
+        self.assertEqual(len(hg), 6)
         self.assertTrue(('home', '/usr/local/bin') in hg)
         self.assertTrue(('who', 'ethan') in hg)
         self.assertTrue(('why', 'why not?') in hg)
         self.assertTrue(('when', datetime.time(12, 45)) in hg)
+        self.assertTrue(('why_not', None) in hg)
 
     def test_standard(self):
         'test standard data types'
@@ -1401,12 +1408,17 @@ class TestOrm(TestCase):
         self.assertEqual(complete.home, '/usr/bin')
         self.assertEqual(complete.who, 'ethan')
         self.assertEqual(complete.why, 'why not?')
+        self.assertEqual(complete.why_not, True)
+        self.assertEqual(complete.where, False)
         self.assertEqual(complete.hg.home, '/usr/local/bin')
         self.assertEqual(complete.hg.who, 'ethan')
         self.assertEqual(complete.hg.when, datetime.time(12, 45))
+        self.assertEqual(complete.hg.why_not, None)
         self.assertTrue(type(complete.home) is unicode)
         self.assertTrue(type(complete.who) is unicode)
         self.assertTrue(type(complete.hg.when) is datetime.time)
+        self.assertTrue(type(complete.why_not) is bool)
+        self.assertTrue(type(complete.where) is bool)
         hg = OrmFile(self.orm_file, section='hg')
         self.assertEqual(hg.home, '/usr/local/bin')
         self.assertEqual(hg.who, 'ethan')
@@ -1414,6 +1426,7 @@ class TestOrm(TestCase):
         self.assertTrue(type(hg.home) is unicode)
         self.assertTrue(type(hg.who) is unicode)
         self.assertTrue(type(hg.when) is datetime.time)
+        self.assertTrue(type(hg.why_not) is type(None))
 
     def test_custom(self):
         'test custom data types'
