@@ -1,3 +1,14 @@
+0.80.6
+======
+
+support SCRIPTION_VERBOSITY and SCRIPTION_DEBUG as environment variables
+
+OrmFile
+-------
+- convert 'none' to None
+- convert dumb ini files (types restricted to str, int, float, bool, and None)
+
+
 0.80.5
 ======
 
