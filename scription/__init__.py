@@ -1692,6 +1692,9 @@ class OrmFile(object):
       - presence of quotes
       - presence of colons and/or hyphens
       - presence of period
+
+    if `plain` is True, then only True/False/None and numbers are,
+    converted, everything else is a string.
     """
     _str = unicode
     _path = unicode
@@ -1701,8 +1704,9 @@ class OrmFile(object):
     _bool = bool
     _float = float
     _int = int
+    _none = lambda s: None
 
-    def __init__(self, filename, section=None, export_to=None, types={}, encoding='utf-8'):
+    def __init__(self, filename, section=None, export_to=None, types={}, encoding='utf-8', plain=False):
         # if section, only return defaults merged with section
         # if export_to, it should be a mapping, and will be populated
         # with the settings
@@ -1745,7 +1749,7 @@ class OrmFile(object):
                     # setting
                     name, value = line.split('=', 1)
                     name = self._verify_name(name)
-                    value = self._verify_value(value)
+                    value = self._verify_value(value, plain=plain)
                     if section:
                         if target_section is None:
                             setattr(new_section, name, value)
@@ -1824,14 +1828,32 @@ class OrmFile(object):
             raise OrmError('section %r is a duplicate, or already exists as a default value' % section)
         return section
 
-    def _verify_value(self, value):
+    def _verify_value(self, value, plain=False):
         # quotes indicate a string
         # / or \ indicates a path
         # : or - indicates time, date, datetime
         # . indicates float
         # True/False indicates True/False
         # anything else is fed through int()
+        #
+        # except if `plain` is True, then
+        # True/False/None are True/False/None
+        # numbers are integer or float
+        # everything else is a string
         value = value.strip()
+        if plain:
+            if not value:
+                return value
+            if value.lower() in ('true', 'false', 'none'):
+                return (self._bool(True), self._bool(False), self._none())[('true', 'false', 'none').index(value.lower())]
+            try:
+                return self._int(value)
+            except ValueError:
+                try:
+                    return self._float(value)
+                except ValueError:
+                    pass
+            return value
         if value[0] in ('"', "'"):
             # definitely a string
             if value[0] != value[-1]:

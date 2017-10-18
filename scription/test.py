@@ -1340,6 +1340,35 @@ class TestOrm(TestCase):
                     )
         finally:
             orm_file.close()
+        self.orm_file_plain = orm_file_name = os.path.join(tempdir, 'test-plain.orm')
+        orm_file = open(orm_file_name, 'w')
+        try:
+            orm_file.write(
+                    "home = \n"
+                    'who = ethan\n'
+                    "\n"
+                    "what = False\n"
+                    "where = True\n"
+                    "when = 12.45\n"
+                    'why = None\n'
+                    "how = 33\n"
+                    )
+        finally:
+            orm_file.close()
+
+    def test_plain(self):
+        'test plain conversion'
+        # test whole thing
+        complete = OrmFile(self.orm_file_plain, plain=True)
+        root = list(complete)
+        self.assertEqual(len(root), 7)
+        self.assertTrue(('home', '') in root)
+        self.assertTrue(('who', 'ethan') in root)
+        self.assertTrue(('what', False) in root)
+        self.assertTrue(('where', True) in root)
+        self.assertTrue(('when', 12.45) in root)
+        self.assertTrue(('why', None) in root)
+        self.assertTrue(('how', 33) in root)
 
     def test_iteration(self):
         'test iteration'
