@@ -1,3 +1,16 @@
+0.80.7
+======
+
+OrmFile
+-------
+support nested headers, e.g.:
+
+    [postgres]
+    some_value = "a value"
+    [postgres.v903]
+    another_value = "a value"
+
+
 0.80.6
 ======
 
