@@ -1716,7 +1716,7 @@ class OrmFile(object):
                     '_str', '_path', '_date', '_time', '_datetime',
                     '_bool', '_float', '_int',
                     ):
-                raise TypeError('invalid orm type: %r' % n)
+                raise TypeError('OrmFile %r: invalid orm type -> %r' % (filename, n))
             setattr(self, n, t)
         target_sections = []
         if section:
@@ -1741,7 +1741,7 @@ class OrmFile(object):
                 if line[0] == '[':
                     # better be a section header
                     if line[-1] != ']':
-                        raise OrmError('section headers must start and end with "[]" [got %r]' % (line, ))
+                        raise OrmError('OrmFile %r; section headers must start and end with "[]" [got %r]' % (filename, line, ))
                     sections = self._verify_section_header(line[1:-1])
                     prior, section = sections[:-1], sections[-1]
                     if target_sections and target_sections[-1] == section:
@@ -1797,13 +1797,12 @@ class OrmFile(object):
         for key, value in sections:
             yield key, value
         return
-        raise Exception('%s: iteration not supported' % self.__class__.__name__)
 
     def __getattr__(self, name):
         name = name.lower()
         if name in self._settings.__dict__:
             return getattr(self._settings, name)
-        raise OrmError("'settings' has no section/default named %r" % name)
+        raise OrmError("OrmFile %r: no section/default named %r" % (self._filename, name))
 
     def __getitem__(self, name):
         return self._settings[name]
@@ -1823,23 +1822,23 @@ class OrmFile(object):
     def _verify_name(self, name):
         name = name.strip().lower()
         if not name[0].isalpha():
-            raise OrmError('names must start with a letter [%r]' % (name, ))
+            raise OrmError('OrmFile %r: names must start with a letter (got %r)' % (self._filename, name, ))
         if re.sub('\w*', '', name):
             # illegal characters in name
-            raise OrmError('names can only contain letters, digits, and the underscore [%r]' % name)
+            raise OrmError('OrmFile %r: names can only contain letters, digits, and the underscore [%r]' % (self._filename, name))
         return name
 
     def _verify_section_header(self, section):
         sections = section.strip().lower().split('.')
         current_section = sections[-1]
         if not current_section[0].isalpha():
-            raise OrmError('names must start with a letter')
+            raise OrmError('OrmFile %r: names must start with a letter' % (self._filename, ))
         if re.sub('\w*', '', current_section):
             # illegal characters in section
-            raise OrmError('names can only contain letters, digits, and the underscore [%r]' % current_section)
+            raise OrmError('OrmFile %r: names can only contain letters, digits, and the underscore [%r]' % (self._filename, current_section))
         if current_section in self.__dict__:
             # section already exists
-            raise OrmError('section %r is a duplicate, or already exists as a default value' % current_section)
+            raise OrmError('OrmFile %r: section %r is a duplicate, or already exists as a default value' % (self._filename, current_section))
         sections[-1] = current_section
         return sections
 
@@ -1872,11 +1871,11 @@ class OrmFile(object):
         if value[0] in ('"', "'"):
             # definitely a string
             if value[0] != value[-1]:
-                raise OrmError('string must be quoted at both ends [%r]' % value)
+                raise OrmError('OrmFile %r: string must be quoted at both ends [%r]' % (self._filename, value))
             start, end = 1, -1
             if value[:3] in ('"""', "'''"):
                 if value[:3] != value[-3:] or len(value) < 6:
-                    raise OrmError('invalid string value: %r' % value)
+                    raise OrmError('OrmFile %r: invalid string value: %r' % (self._filename, value))
                 start, end = 3, -3
             return self._str(value[start:end])
         elif '/' in value or '\\' in value:
@@ -1889,27 +1888,27 @@ class OrmFile(object):
                 time = map(int, value[11:].split(':'))
                 return self._datetime(*(date+time))
             except ValueError:
-                raise OrmError('invalid datetime value: %r' % value)
+                raise OrmError('OrmFile %r: invalid datetime value: %r' % (self._filename, value))
         elif '-' in value:
             # date
             try:
                 date = map(int, value.split('-'))
                 return self._date(date)
             except ValueError:
-                raise OrmError('invalid date value: %r' % value)
+                raise OrmError('OrmFile %r: invalid date value: %r' % (self._filename, value))
         elif ':' in value:
             # time
             try:
                 time = map(int, value.split(':'))
                 return self._time(*time)
             except ValueError:
-                raise OrmError('invalid time value: %r' % value)
+                raise OrmError('OrmFile %r: invalid time value: %r' % (self._filename, value))
         elif '.' in value:
             # float
             try:
                 value = self._float(value)
             except ValueError:
-                raise OrmError('invalid float value: %r' % value)
+                raise OrmError('OrmFile %r: invalid float value: %r' % (self._filename, value))
         elif value.lower() == 'true':
             # boolean - True
             return self._bool(True)
@@ -1924,7 +1923,7 @@ class OrmFile(object):
             try:
                 return self._int(value)
             except ValueError:
-                raise OrmError('invalid integer value: %r' % value)
+                raise OrmError('OrmFile %r: invalid integer value: %r' % (self._filename, value))
         else:
             # must be a string
             return value
