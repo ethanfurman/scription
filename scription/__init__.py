@@ -1718,8 +1718,9 @@ class OrmFile(object):
                     ):
                 raise TypeError('invalid orm type: %r' % n)
             setattr(self, n, t)
+        target_sections = []
         if section:
-            section = section.lower()
+            target_sections = list(reversed(section.lower().split('.')))
         target_section = section
         self._section = target_section
         self._filename = filename
@@ -1743,6 +1744,8 @@ class OrmFile(object):
                         raise OrmError('section headers must start and end with "[]" [got %r]' % (line, ))
                     sections = self._verify_section_header(line[1:-1])
                     prior, section = sections[:-1], sections[-1]
+                    if target_sections and target_sections[-1] == section:
+                        target_section = target_sections.pop()
                     if target_section is None:
                         new_section = NameSpace()
                         for key, value in defaults.items():
