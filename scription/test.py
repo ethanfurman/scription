@@ -1336,6 +1336,9 @@ class TestOrm(TestCase):
                     'why_not = True\n'
                     'where = False\n'
                     "\n"
+                    '[not_used]\n'
+                    'this = "that"\n'
+                    'these = "those"\n'
                     "[hg]\n"
                     "home = /usr/local/bin\n"
                     "when = 12:45\n"
@@ -1355,6 +1358,27 @@ class TestOrm(TestCase):
                     "when = 12.45\n"
                     'why = None\n'
                     "how = 33\n"
+                    )
+        finally:
+            orm_file.close()
+        self.orm_file_sub = orm_file_name = os.path.join(tempdir, 'test-sub.orm')
+        orm_file = open(orm_file_name, 'w')
+        try:
+            orm_file.write(
+                    "[postgres]\n"
+                    "psql = /usr/lib/postgresql/9.1/bin/psql\n"
+                    "\n"
+                    "[postgres.v901]\n"
+                    "pg_dump = /usr/lib/postgres/9.1/bin/pg_dump\n"
+                    "pg_dumpall = /usr/lib/postgres/9.1/bin/pg_dumpall\n"
+                    "\n"
+                    "[postgres.v903]\n"
+                    "pg_dump = /usr/lib/postgres/9.3/bin/pg_dump\n"
+                    "pg_dumpall = /usr/lib/postgres/9.3/bin/pg_dumpall\n"
+                    "\n"
+                    "[postgres.v905]\n"
+                    "pg_dump = /usr/lib/postgres/9.5/bin/pg_dump\n"
+                    "pg_dumpall = /usr/lib/postgres/9.5/bin/pg_dumpall\n"
                     )
         finally:
             orm_file.close()
@@ -1379,7 +1403,7 @@ class TestOrm(TestCase):
         complete = OrmFile(self.orm_file)
         hg = list(complete.hg)
         root = list(complete)
-        self.assertEqual(len(root), 6)
+        self.assertEqual(len(root), 7)
         self.assertTrue(('home', '/usr/bin') in root)
         self.assertTrue(('who', 'ethan') in root)
         self.assertTrue(('why', 'why not?') in root)
@@ -1450,6 +1474,30 @@ class TestOrm(TestCase):
         self.assertTrue(type(hg.home) is Path)
         self.assertTrue(type(hg.who) is str)
         self.assertTrue(type(hg.when) is Time)
+
+    def test_subheader(self):
+        complete = OrmFile(self.orm_file_sub)
+        postgres = complete.postgres
+        postgres91 = complete.postgres.v901
+        postgres93 = complete.postgres.v903
+        postgres95 = complete.postgres.v905
+        self.assertEqual(len(list(complete)), 1)
+        self.assertEqual(len(list(postgres)), 4)
+        self.assertTrue(('postgres', complete.postgres) in list(complete))
+        self.assertTrue(('v901', postgres.v901) in list(postgres))
+        self.assertTrue(('v903', postgres.v903) in list(postgres))
+        self.assertTrue(('v905', postgres.v905) in list(postgres))
+        self.assertEqual(len(list(postgres)), 4)
+        self.assertTrue(('psql', "/usr/lib/postgresql/9.1/bin/psql") in list(postgres))
+        self.assertEqual(len(list(postgres91)), 3)
+        self.assertTrue(('pg_dump', '/usr/lib/postgres/9.1/bin/pg_dump') in list(postgres91))
+        self.assertTrue(('pg_dumpall', '/usr/lib/postgres/9.1/bin/pg_dumpall') in list(postgres91))
+        self.assertEqual(len(list(postgres93)), 3)
+        self.assertTrue(('pg_dump', '/usr/lib/postgres/9.3/bin/pg_dump') in list(postgres93))
+        self.assertTrue(('pg_dumpall', '/usr/lib/postgres/9.3/bin/pg_dumpall') in list(postgres93))
+        self.assertEqual(len(list(postgres95)), 3)
+        self.assertTrue(('pg_dump', '/usr/lib/postgres/9.5/bin/pg_dump') in list(postgres95))
+        self.assertTrue(('pg_dumpall', '/usr/lib/postgres/9.5/bin/pg_dumpall') in list(postgres95))
 
 
 class TestResponse(TestCase):

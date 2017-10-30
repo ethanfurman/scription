@@ -79,7 +79,7 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 80, 6
+version = 0, 80, 7, 1
 
 # data
 __all__ = (
@@ -1707,7 +1707,7 @@ class OrmFile(object):
     _none = lambda s: None
 
     def __init__(self, filename, section=None, export_to=None, types={}, encoding='utf-8', plain=False):
-        # if section, only return defaults merged with section
+        # if section, only return defaults merged with section (listed as 'target_section' below)
         # if export_to, it should be a mapping, and will be populated
         # with the settings
         # if types, use those instead of the default orm types
@@ -1737,14 +1737,24 @@ class OrmFile(object):
                 line = line.strip()
                 if not line or line.startswith(('#',';')):
                     continue
-                if line[0] + line[-1] == '[]':
-                    # section header
-                    section = self._verify_section_header(line[1:-1])
+                if line[0] == '[':
+                    # better be a section header
+                    if line[-1] != ']':
+                        raise OrmError('section headers must start and end with "[]" [got %r]' % (line, ))
+                    sections = self._verify_section_header(line[1:-1])
+                    prior, section = sections[:-1], sections[-1]
                     if target_section is None:
                         new_section = NameSpace()
                         for key, value in defaults.items():
                             setattr(new_section, key, value)
-                        setattr(settings, section, new_section)
+                        prev_namespace = self
+                        for prev_name in prior:
+                            prev_namespace = prev_namespace[prev_name]
+                            for key_value in prev_namespace:
+                                key, value = key_value
+                                if not isinstance(value, NameSpace):
+                                    setattr(new_section, key, value)
+                        setattr(prev_namespace, section, new_section)
                 else:
                     # setting
                     name, value = line.split('=', 1)
@@ -1810,23 +1820,25 @@ class OrmFile(object):
     def _verify_name(self, name):
         name = name.strip().lower()
         if not name[0].isalpha():
-            raise OrmError('names must start with a letter')
+            raise OrmError('names must start with a letter [%r]' % (name, ))
         if re.sub('\w*', '', name):
             # illegal characters in name
             raise OrmError('names can only contain letters, digits, and the underscore [%r]' % name)
         return name
 
     def _verify_section_header(self, section):
-        section = section.strip().lower()
-        if not section[0].isalpha():
+        sections = section.strip().lower().split('.')
+        current_section = sections[-1]
+        if not current_section[0].isalpha():
             raise OrmError('names must start with a letter')
-        if re.sub('\w*', '', section):
+        if re.sub('\w*', '', current_section):
             # illegal characters in section
-            raise OrmError('names can only contain letters, digits, and the underscore [%r]' % section)
-        if section in self.__dict__:
+            raise OrmError('names can only contain letters, digits, and the underscore [%r]' % current_section)
+        if current_section in self.__dict__:
             # section already exists
-            raise OrmError('section %r is a duplicate, or already exists as a default value' % section)
-        return section
+            raise OrmError('section %r is a duplicate, or already exists as a default value' % current_section)
+        sections[-1] = current_section
+        return sections
 
     def _verify_value(self, value, plain=False):
         # quotes indicate a string
