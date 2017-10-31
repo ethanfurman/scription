@@ -79,7 +79,7 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 80, 7
+version = 0, 80, 8, 1
 
 # data
 __all__ = (
@@ -1720,9 +1720,8 @@ class OrmFile(object):
             setattr(self, n, t)
         target_sections = []
         if section:
-            target_sections = list(reversed(section.lower().split('.')))
-        target_section = section
-        self._section = target_section
+            target_sections = section.lower().split('.')
+        self._section = section
         self._filename = filename
         defaults = {}
         settings = self._settings = NameSpace()
@@ -1744,35 +1743,32 @@ class OrmFile(object):
                         raise OrmError('OrmFile %r; section headers must start and end with "[]" [got %r]' % (filename, line, ))
                     sections = self._verify_section_header(line[1:-1])
                     prior, section = sections[:-1], sections[-1]
-                    if target_sections and target_sections[-1] == section:
-                        target_section = target_sections.pop()
-                    if target_section is None:
-                        new_section = NameSpace()
-                        for key, value in defaults.items():
-                            setattr(new_section, key, value)
-                        prev_namespace = self
-                        for prev_name in prior:
-                            prev_namespace = prev_namespace[prev_name]
-                            for key_value in prev_namespace:
-                                key, value = key_value
-                                if not isinstance(value, NameSpace):
-                                    setattr(new_section, key, value)
-                        setattr(prev_namespace, section, new_section)
+                    new_section = NameSpace()
+                    for key, value in defaults.items():
+                        setattr(new_section, key, value)
+                    prev_namespace = self
+                    for prev_name in prior:
+                        prev_namespace = prev_namespace[prev_name]
+                        for key_value in prev_namespace:
+                            key, value = key_value
+                            if not isinstance(value, NameSpace):
+                                setattr(new_section, key, value)
+                    setattr(prev_namespace, section, new_section)
                 else:
                     # setting
                     name, value = line.split('=', 1)
                     name = self._verify_name(name)
                     value = self._verify_value(value, plain=plain)
                     if section:
-                        if target_section is None:
-                            setattr(new_section, name, value)
-                        elif target_section == section:
-                            setattr(settings, name, value)
+                        setattr(new_section, name, value)
                     else:
                         setattr(settings, name, value)
                         defaults[name] = value
         finally:
             fh.close()
+        for section in target_sections:
+            settings = settings[section]
+        self._settings = settings
         if export_to is not None:
             for name, value in settings.__dict__.items():
                 if name[0] != '_':

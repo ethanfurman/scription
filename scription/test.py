@@ -1506,6 +1506,14 @@ class TestOrm(TestCase):
         self.assertTrue(('pg_dump', '/usr/lib/postgres/9.5/bin/pg_dump') in list(postgres95))
         self.assertTrue(('pg_dumpall', '/usr/lib/postgres/9.5/bin/pg_dumpall') in list(postgres95))
 
+    def test_section_with_subheader(self):
+        postgres = OrmFile(self.orm_file_sub, section='postgres')
+        self.assertEqual(len(list(postgres)), 4)
+        self.assertTrue(('psql', "/usr/lib/postgresql/9.1/bin/psql") in list(postgres))
+        self.assertTrue(('v901', postgres.v901) in list(postgres))
+        self.assertTrue(('v903', postgres.v903) in list(postgres))
+        self.assertTrue(('v905', postgres.v905) in list(postgres))
+
 
 class TestResponse(TestCase):
 
