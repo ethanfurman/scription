@@ -315,6 +315,8 @@ class ExecuteError(Exception):
 
 class FailedPassword(ExecuteError):
     "Bad or too few passwords"
+    def __init__(self, msg=None):
+        super(FailedPassword, self).__init__(msg or 'invalid/too few passwords')
 
 class TimeoutError(ExecuteError):
     "Execute timed out"
@@ -1209,14 +1211,14 @@ def Run():
 
 
 ## optional
-def Execute(args, cwd=None, password=None, input=None, timeout=None, pty=None, interactive=None, env=None, **new_env_vars):
+def Execute(args, cwd=None, password=None, password_timeout=90, input=None, timeout=None, pty=None, interactive=None, env=None, **new_env_vars):
     scription_debug('creating job:', args)
     job = Job(args, cwd=cwd, pty=pty, env=env, **new_env_vars)
     try:
         scription_debug('communicating')
-        job.communicate(timeout=timeout, interactive=interactive, password=password, input=input)
-    except TimeoutError:
-        scription_debug('TimeoutError')
+        job.communicate(timeout=timeout, interactive=interactive, password=password, password_timeout=password_timeout, input=input)
+    except (TimeoutError, FailedPassword) as exc:
+        scription_debug(exc)
         pass
     finally:
         job.close()
@@ -1379,10 +1381,11 @@ class Job(object):
             self.exception = None
         return exc
 
-    def communicate(self, input=None, password=None, timeout=None, interactive=None, encoding='utf-8'):
-        # password    -> single password or tuple of passwords (pty=True only)
-        # timeout     -> raise exception of not complete in timeout seconds
-        # interactive -> False = record only, 'echo' = echo output as we get it
+    def communicate(self, input=None, password=None, timeout=None, interactive=None, encoding='utf-8', password_timeout=90):
+        # password          -> single password or tuple of passwords (pty=True only)
+        # password_timeout  -> time allowed for successful password transmission
+        # timeout           -> time allowed for successful completion of job
+        # interactive       -> False = record only, 'echo' = echo output as we get it
         try:
             deadman_switch = None
             if timeout is not None:
@@ -1467,6 +1470,20 @@ class Job(object):
                             # ignore get_echo and write errors (probably due to password not needed and job finishing)
                             self._set_exc(None)
                             break
+                else:
+                    # wait a moment for any passwords to be sent
+                    scription_debug('sleeping so passwords can be sent and response read')
+                    time.sleep(password_timeout)
+                    scription_debug('checking if passwords still being requested')
+                    # no more passwords -- if pty, check if password still being requested
+                    if not self.process:
+                        if not self.get_echo():
+                            scription_debug('PASSWORD FAILURE:  invalid passwords or none given')
+                            with io_lock:
+                                self._stderr.append('Invalid/too few passwords\n')
+                            self._set_exc(FailedPassword)
+                            self.kill()
+                            raise FailedPassword
                 if input is not None:
                     time.sleep(0.1)
                     self.write(input, block=False)
