@@ -1208,6 +1208,15 @@ class TestExecution(TestCase):
         finally:
             password_file.close()
 
+    def test_bad_timeout(self):
+        job = Job([sys.executable, self.pty_password_file], pty=True)
+        self.assertRaises(
+                ValueError,
+                job.communicate,
+                timeout=2,
+                password_timeout=10,
+                )
+
     if not is_win:
         def test_pty(self):
             command = Execute([sys.executable, self.good_file], pty=True, timeout=10)
@@ -1261,12 +1270,14 @@ class TestExecution(TestCase):
                     timeout=1,
                     pty=True,
                     )
+            self.assertTrue('TIMEOUT' in command.stderr)
             self.assertTrue(command.returncode)
             command = Execute(
                     [sys.executable, '-c', 'import time; time.sleep(30); raise Exception("did not time out!")'],
                     timeout=1,
                     pty=False,
                     )
+            self.assertTrue('TIMEOUT' in command.stderr)
             self.assertTrue(command.returncode)
 
     def test_environ(self):
@@ -1671,7 +1682,7 @@ class TestExecutionThreads(TestCase):
                 '''from getpass import getpass\n'''
                 '''print(getpass('howdy!'))\n'''
                 )
-        job = Execute([sys.executable, test_file], pty=True, timeout=10, input='Bye!\n')
+        job = Execute([sys.executable, test_file], pty=True, timeout=10, password='Bye!')
         self.assertEqual(thread_count, threading.active_count())
         self.assertEqual(job.stdout.strip().replace('\n', ' '), 'howdy! Bye!', '\n out: %r\n err: %r' % (job.stdout, job.stderr))
         self.assertEqual(job.returncode, 0, '-- stdout --\n%s\n-- stderr --\n%s' % (job.stdout, job.stderr))

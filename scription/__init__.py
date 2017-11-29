@@ -237,7 +237,6 @@ class DocEnum(Enum):
     def __repr__(self):
         return '<%s.%s>' % (self.__class__.__name__, self._name_)
 
-@export(globals())
 class Exit(IntEnum):
     '''
     Non-zero values indicate an error
@@ -308,15 +307,15 @@ class SpecKind(DocEnum):
 
 # exceptions
 class ExecuteError(Exception):
-    "errors raised by Execute"
+    "errors raised by Execute/Job"
     def __init__(self, msg=None, process=None):
         self.process = process
         Exception.__init__(self, msg)
 
 class FailedPassword(ExecuteError):
     "Bad or too few passwords"
-    def __init__(self, msg=None):
-        super(FailedPassword, self).__init__(msg or 'invalid/too few passwords')
+    def __init__(self, msg=None, process=None):
+        super(FailedPassword, self).__init__(msg or 'invalid/too few passwords', process)
 
 class TimeoutError(ExecuteError):
     "Execute timed out"
@@ -1211,15 +1210,16 @@ def Run():
 
 
 ## optional
-def Execute(args, cwd=None, password=None, password_timeout=90, input=None, timeout=None, pty=None, interactive=None, env=None, **new_env_vars):
+def Execute(args, cwd=None, password=None, password_timeout=None, input=None, timeout=None, pty=None, interactive=None, env=None, **new_env_vars):
     scription_debug('creating job:', args)
     job = Job(args, cwd=cwd, pty=pty, env=env, **new_env_vars)
     try:
         scription_debug('communicating')
         job.communicate(timeout=timeout, interactive=interactive, password=password, password_timeout=password_timeout, input=input)
-    except (TimeoutError, FailedPassword) as exc:
+    except BaseException as exc:
         scription_debug(exc)
-        pass
+        if not isinstance(exc, TimeoutError):
+            raise
     finally:
         job.close()
     scription_debug('returning')
@@ -1381,13 +1381,22 @@ class Job(object):
             self.exception = None
         return exc
 
-    def communicate(self, input=None, password=None, timeout=None, interactive=None, encoding='utf-8', password_timeout=90):
+    def communicate(self, input=None, password=None, timeout=None, interactive=None, encoding='utf-8', password_timeout=None):
         # password          -> single password or tuple of passwords (pty=True only)
         # password_timeout  -> time allowed for successful password transmission
         # timeout           -> time allowed for successful completion of job
         # interactive       -> False = record only, 'echo' = echo output as we get it
         try:
             deadman_switch = None
+            scription_debug('timeout: %r, password_timeout: %r' % (timeout, password_timeout))
+            if timeout is not None and password_timeout is not None and password_timeout >= timeout:
+                self._set_exc(ValueError('password_timeout must be less than timeout'))
+                self.kill()
+                return
+            if timeout is not None and password_timeout is None:
+                password_timeout = min(90, timeout / 10.0)
+            elif password_timeout is None:
+                password_timeout = 90
             if timeout is not None:
                 def prejudice():
                     scription_debug('timed out')
@@ -1498,11 +1507,14 @@ class Job(object):
                 deadman_switch.join()
             scription_debug('closing job')
             self.close()
+            scription_debug('saved exception: %r' % (self.exception, ))
             if self.exception is not None:
                 exc, tb = self.exception
                 if tb is None:
+                    scription_debug('raising...')
                     raise exc
                 else:
+                    scription_debug('raising w/traceback...')
                     raise_with_traceback(exc, tb)
 
     def close(self, force=True):
