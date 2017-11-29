@@ -1,3 +1,17 @@
+0.81.0
+======
+
+Execute
+-------
+if using pty raise exception when password is requested and no more passwords
+remain;
+
+Exit
+----
+Exit enumeration no longer exported to the global namespace (must be accessed
+as Exit.Xxx)
+
+
 0.80.8
 ======
 
