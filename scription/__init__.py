@@ -79,7 +79,7 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 81, 1
+version = 0, 81, 2, 1
 
 # data
 __all__ = (
@@ -1393,9 +1393,9 @@ class Job(object):
                 self._set_exc(ValueError('password_timeout must be less than timeout'))
                 self.kill()
                 return
-            if timeout is not None and password_timeout is None:
+            if timeout is not None and password and password_timeout is None:
                 password_timeout = min(90, timeout / 10.0)
-            elif password_timeout is None:
+            elif password and password_timeout is None:
                 password_timeout = 90
             if timeout is not None:
                 def prejudice():
