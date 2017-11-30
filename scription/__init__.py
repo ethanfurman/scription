@@ -1442,9 +1442,8 @@ class Job(object):
                 process_thread = self._process_thread = Thread(target=process_comm, name='process')
                 process_thread.start()
             passwords = []
-            if input is not None:
-                if not isinstance(input, bytes):
-                    input = input.encode('utf-8')
+            if isinstance(input, unicode):
+                input = input.encode('utf-8')
             if password is None:
                 password = ()
             elif isinstance(password, basestring):
@@ -1494,8 +1493,11 @@ class Job(object):
                             self.kill()
                             raise FailedPassword
                 if input is not None:
+
                     time.sleep(0.1)
-                    self.write(input, block=False)
+                    for line in input.split(b'\n'):
+                        line += b'\n'
+                        self.write(line)
                     time.sleep(0.1)
             scription_debug('joining process thread...')
             process_thread.join()
