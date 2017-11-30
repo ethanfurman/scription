@@ -79,7 +79,7 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 81, 0
+version = 0, 81, 1, 1
 
 # data
 __all__ = (
@@ -1609,16 +1609,14 @@ class Job(object):
         '''kills child job, and self if child will not die
 
         parent method'''
-        scription_debug('killing')
         for s in self.kill_signals:
             try:
+                scription_debug('killing with', s)
+                self.send_signal(s)
                 scription_debug('checking job for life')
                 if not self.is_alive():
                     scription_debug('dead, exiting')
                     break
-                scription_debug('killing with', s)
-                self.send_signal(s)
-                time.sleep(0.1)
             except Exception:
                 cls, exc = sys.exc_info()[:2]
                 scription_debug('received', exc)
