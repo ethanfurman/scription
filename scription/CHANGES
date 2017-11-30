@@ -1,3 +1,11 @@
+0.81.1
+======
+
+Execute
+-------
+always send first kill signal before checking for life
+
+
 0.81.0
 ======
 
