@@ -1444,6 +1444,8 @@ class Job(object):
             passwords = []
             if isinstance(input, unicode):
                 input = input.encode('utf-8')
+            if isinstance(input, basestring):
+                input = (i + b'\n' for i in input.split(b'\n'))
             if password is None:
                 password = ()
             elif isinstance(password, basestring):
@@ -1493,10 +1495,8 @@ class Job(object):
                             self.kill()
                             raise FailedPassword
                 if input is not None:
-
                     time.sleep(0.1)
-                    for line in input.split(b'\n'):
-                        line += b'\n'
+                    for line in input:
                         self.write(line)
                     time.sleep(0.1)
             scription_debug('joining process thread...')
