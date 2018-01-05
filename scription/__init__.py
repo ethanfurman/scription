@@ -1756,7 +1756,7 @@ class OrmFile(object):
     _none = lambda s: None
 
     def __init__(self, filename, section=None, export_to=None, types={}, encoding='utf-8', plain=False):
-        # if section, only return defaults merged with section (listed as 'target_section' below)
+        # if section, only return defaults merged with section
         # if export_to, it should be a mapping, and will be populated
         # with the settings
         # if types, use those instead of the default orm types
