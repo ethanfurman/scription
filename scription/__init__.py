@@ -79,7 +79,7 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 82, 0, 1
+version = 0, 81, 2, 1
 
 # data
 __all__ = (
@@ -1464,11 +1464,17 @@ class Job(object):
             passwords = []
             if isinstance(input, unicode):
                 input = input.encode('utf-8')
-            if isinstance(input, basestring):
-                input = (i + b'\n' for i in input.split(b'\n'))
+            if isinstance(input, bytes):
+                add_newline = input[-1:] == ['\n']
+                input = [i + b'\n' for i in input.split(b'\n')]
+                if not add_newline:
+                    input[-1] = input[-1].strip(b'\n')
+                    if not input[-1]:
+                        input.pop()
+            scription_debug('input is: %r' % (input, ), verbose=2)
             if password is None:
                 password = ()
-            elif isinstance(password, basestring):
+            elif isinstance(password, (bytes, str)):
                 password = (password, )
             for pwd in password:
                 if not isinstance(pwd, bytes):
@@ -1502,9 +1508,10 @@ class Job(object):
                             break
                 else:
                     # wait a moment for any passwords to be sent
-                    scription_debug('sleeping so passwords can be sent and response read')
-                    time.sleep(password_timeout)
-                    scription_debug('checking if passwords still being requested')
+                    if password_timeout is not None:
+                        scription_debug('sleeping so passwords can be sent and response read')
+                        time.sleep(password_timeout)
+                        scription_debug('checking if passwords still being requested')
                     # no more passwords -- if pty, check if password still being requested
                     if not self.process:
                         if not self.get_echo():
@@ -1515,6 +1522,7 @@ class Job(object):
                             self.kill()
                             raise FailedPassword
                 if input is not None:
+                    scription_debug('writing input: %r' % input, verbose=2)
                     time.sleep(0.1)
                     for line in input:
                         self.write(line)
@@ -1711,6 +1719,7 @@ class Job(object):
 
     def write(self, data, block=True):
         'parent method'
+        scription_debug('writing %r' % data, verbose=2)
         if not self.is_alive():
             try:
                 raise IOError(errno.EPIPE, 'Broken pipe.')
