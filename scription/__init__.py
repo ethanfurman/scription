@@ -79,7 +79,7 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 81, 2, 1
+version = 0, 82, 0, 1
 
 # data
 __all__ = (
@@ -301,6 +301,7 @@ class SpecKind(DocEnum):
     REQUIRED = "required value"
     OPTION = "single value per name"
     MULTI = "multiple values per name (list form, no whitespace)"
+    MULTIREQ = "multiple values per name (list form, no whitespace, required)"
     FLAG = "boolean/trivalent value per name"
     KEYWORD = 'unknown options'
 
@@ -451,6 +452,14 @@ def _help(func):
         elif kind == 'required':
             pos = max_pos
             max_pos += 1
+        elif kind == 'multireq':
+            pos = max_pos
+            max_pos += 1
+            if default:
+                if isinstance(default, list):
+                    default = tuple(default)
+                elif not isinstance(default, tuple):
+                    default = (default, )
         elif kind == 'flag':
             if abbrev is empty:
                 abbrev = (name[0], )
@@ -473,7 +482,7 @@ def _help(func):
         if usage_name is empty:
             usage_name = name.upper()
         if arg_type is _identity and default is not empty and default is not None:
-            if kind == 'multi':
+            if kind in ('multi', 'multireq'):
                 if default:
                     arg_type = type(default[0])
             else:
@@ -512,7 +521,7 @@ def _help(func):
                 raise ScriptionError('default value for %s specified in Spec and in header (%r, %r)' %
                         (name, annote._script_default, dflt))
             annote._use_default = True
-            if annote.kind != 'multi':
+            if annote.kind not in ('multi', 'multireq'):
                 if annote.type is _identity and dflt is not None:
                     annote.type = type(dflt)
                 annote._script_default = annote.type(dflt)
@@ -669,6 +678,8 @@ def _run_once(func, args, kwds):
 
 def _split_on_comma(text):
     scription_debug('_split_on_comma(%r)' % (text,), verbose=2)
+    if text.endswith(',') and not text.endswith('\\,'):
+        raise ScriptionError('trailing "," in argument %r' % text)
     if ',' not in text:
         scription_debug('  -> %r' % ([text], ), verbose=2)
         return [text]
@@ -698,10 +709,12 @@ def _split_on_comma(text):
 def _usage(func, param_line_args):
     global VERBOSITY, SCRIPTION_DEBUG
     Script = script_module['script_main']
+    scription_debug('_usage(%r, %r' % (func, param_line_args), verbose=2)
     # Command = script_module['script_commands']
     program, param_line_args = param_line_args[0], _rewrite_args(param_line_args[1:])
     pos = 0
     max_pos = func.max_pos
+    scription_debug('max_pos:', max_pos, verbose=2)
     print_help = print_version = print_all_versions = False
     value = None
     annotations = func.__scription__
@@ -734,11 +747,11 @@ def _usage(func, param_line_args):
                 value = item
                 if annote.kind == 'option':
                     annote._cli_value = annote.type(value)
-                elif annote.kind == 'multi':
+                elif annote.kind in ('multi', 'multireq'):
                     values = [annote.type(a) for a in _split_on_comma(value)]
                     annote._cli_value += tuple(values)
                 else:
-                    raise ScriptionError("Error: %s's kind %r not in (multi, option)" % (last_item, annote.kind))
+                    raise ScriptionError("Error: %s's kind %r not in (option, multi, multireq)" % (last_item, annote.kind))
                 value = None
                 continue
         last_item = item
@@ -829,15 +842,22 @@ def _usage(func, param_line_args):
             value = None
         else:
             # positional (required?) argument
+            scription_debug('positional argument:', value)
+            scription_debug('  with Spec:', annote)
             if pos < max_pos:
                 annote = annotations[pos]
                 if annote.remove:
                     to_be_removed.append(offset)
-                # check for choices membership before transforming into a type
-                if annote.choices and item not in annote.choices:
-                    help('%s: %r not in [ %s ]' % (annote.usage, item, ' | '.join(annote.choices)), Exit.ScriptionError)
-                item = annote.type(item)
-                annote._cli_value = item
+                if annote.kind == 'multireq' and item:
+                    scription_debug('_usage:multireq ->', annote.type, verbose=2)
+                    annote._cli_value += tuple([annote.type(a) for a in _split_on_comma(item)])
+                    scription_debug('_usage:multireq ->', annote._cli_value, verbose=2)
+                else:
+                    # check for choices membership before transforming into a type
+                    if annote.choices and item not in annote.choices:
+                        help('%s: %r not in [ %s ]' % (annote.usage, item, ' | '.join(annote.choices)), Exit.ScriptionError)
+                    item = annote.type(item)
+                    annote._cli_value = item
                 pos += 1
             else:
                 if var_arg_spec is None:
@@ -1043,7 +1063,7 @@ class Spec(object):
             # otherwise force_default is the always used default itself
             default = force_default
             use_default = True
-        if kind not in ('required', 'option', 'multi', 'flag'):
+        if kind not in ('required', 'multireq', 'option', 'multi', 'flag'):
             raise ScriptionError('unknown parameter kind: %r' % kind)
         if kind == 'flag':
             if type is Trivalent:
@@ -1054,7 +1074,7 @@ class Spec(object):
                     type = Bool
         elif kind == 'option':
             arg_type_default = None
-        elif kind == 'multi':
+        elif kind in ('multi', 'multireq'):
             arg_type_default = tuple()
         elif default is not empty:
             arg_type_default = type(default)

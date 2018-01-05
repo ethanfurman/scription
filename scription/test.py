@@ -325,6 +325,19 @@ class TestCommandlineProcessing(TestCase):
 
     def test_multi_with_Spec_default_int(self):
         @Command(
+                huh=Spec('misc options', 'multi', default=7, force_default=True),
+                )
+        def tester(huh):
+            pass
+        tests = (
+                ( 'tester'.split(), (), {}, ((7, ), ), {} ),
+                ( 'tester --huh=1'.split(), (), {}, ((1, ), ), {} ),
+                ( 'tester -h 11 -h 13'.split(), (), {}, ((11, 13), ), {} ),
+                )
+        test_func_parsing(self, tester, tests)
+
+    def test_multi_with_Spec_default_int_in_tuple(self):
+        @Command(
                 huh=Spec('misc options', 'multi', default=(7, ), force_default=True),
                 )
         def tester(huh):
@@ -333,6 +346,122 @@ class TestCommandlineProcessing(TestCase):
                 ( 'tester'.split(), (), {}, ((7, ), ), {} ),
                 ( 'tester --huh=1'.split(), (), {}, ((1, ), ), {} ),
                 ( 'tester -h 11 -h 13'.split(), (), {}, ((11, 13), ), {} ),
+                )
+        test_func_parsing(self, tester, tests)
+
+    def test_multireq(self):
+        @Command(
+                huh=('required option that accepts several values', 'multireq'),
+                )
+        def tester(huh):
+            pass
+        tests = (
+                ( 'tester'.split(), (), {}, (tuple(), ), {} ),
+                ( 'tester file1'.split(), (), {}, ( ('file1',) , ), {} ),
+                ( 'tester file1,file2'.split(), (), {}, (('file1', 'file2'), ), {} ),
+                )
+        test_func_parsing(self, tester, tests)
+
+    def test_multireq_with_private(self):
+        @Command(
+                huh=('misc options', 'multireq'),
+                )
+        def tester(huh, _mine=''):
+            pass
+        tests = (
+                ( 'tester file1'.split(), (), {}, (('file1', ), ), {} ),
+                ( 'tester file1,file2'.split(), (), {}, (('file1', 'file2'), ), {} ),
+                )
+        test_func_parsing(self, tester, tests)
+
+    def test_multireq_with_comma_and_quotes(self):
+        @Command(
+                huh=('misc options', 'multireq'),
+                )
+        def tester(huh):
+            pass
+        tests = (
+                ( shlex.split('tester "one,two,three four"'), (), {}, (('one', 'two', 'three four'), ), {}),
+                ( shlex.split('tester "one,two nine,three"'), (), {}, (('one', 'two nine', 'three'), ), {}),
+                )
+        test_func_parsing(self, tester, tests)
+
+    def test_multireq_with_comma_and_quotes_and_private(self):
+        @Command(
+                huh=('misc options', 'multireq'),
+                )
+        def tester(huh, _still_private=None):
+            pass
+        tests = (
+                ( shlex.split('tester "one,two,three four"'), (), {}, (('one', 'two', 'three four'), ), {}),
+                ( shlex.split('tester "one,two nine,three"'), (), {}, (('one', 'two nine', 'three'), ), {}),
+                )
+        test_func_parsing(self, tester, tests)
+
+    def test_multireq_with_option(self):
+        @Command(
+                huh=('misc options', 'multireq'),
+                wow=('oh yeah', 'option'),
+                )
+        def tester(huh, wow):
+            pass
+        tests = (
+                ( 'tester file1'.split(), (), {}, (('file1', ), None), {} ),
+                ( 'tester file1 -w google'.split(), (), {}, (('file1', ), 'google'), {} ),
+                ( 'tester file1,file2'.split(), (), {}, (('file1', 'file2'), None), {} ),
+                ( 'tester file1,file2 -w frizzle'.split(), (), {}, (('file1', 'file2'), 'frizzle'), {} ),
+                )
+        test_func_parsing(self, tester, tests)
+
+    def test_multireq_with_Spec_default_str(self):
+        @Command(
+                huh=Spec('misc options', 'multireq', default='woo', force_default=True),
+                )
+        def tester(huh):
+            pass
+        tests = (
+                ( 'tester'.split(), (), {}, (('woo', ), ), {} ),
+                ( 'tester file1'.split(), (), {}, (('file1', ), ), {} ),
+                ( 'tester file1,file2'.split(), (), {}, (('file1', 'file2'), ), {} ),
+                )
+        test_func_parsing(self, tester, tests)
+
+    def test_multireq_with_Spec_default_tuple(self):
+        @Command(
+                huh=Spec('misc options', 'multireq', default=('woo', ), force_default=True),
+                )
+        def tester(huh):
+            pass
+        tests = (
+                ( 'tester'.split(), (), {}, (('woo', ), ), {} ),
+                ( 'tester file1'.split(), (), {}, (('file1', ), ), {} ),
+                ( 'tester file1,file2'.split(), (), {}, (('file1', 'file2'), ), {} ),
+                )
+        test_func_parsing(self, tester, tests)
+
+    def test_multireq_with_Spec_default_int(self):
+        @Command(
+                huh=Spec('misc options', 'multireq', default=7, force_default=True),
+                )
+        def tester(huh):
+            pass
+        tests = (
+                ( 'tester'.split(), (), {}, ((7, ), ), {} ),
+                ( 'tester 1'.split(), (), {}, ((1, ), ), {} ),
+                ( 'tester 11,13'.split(), (), {}, ((11, 13), ), {} ),
+                )
+        test_func_parsing(self, tester, tests)
+
+    def test_multireq_with_Spec_default_int_in_tuple(self):
+        @Command(
+                huh=Spec('misc options', 'multireq', default=(7, ), force_default=True),
+                )
+        def tester(huh):
+            pass
+        tests = (
+                ( 'tester'.split(), (), {}, ((7, ), ), {} ),
+                ( 'tester 1'.split(), (), {}, ((1, ), ), {} ),
+                ( 'tester 11,13'.split(), (), {}, ((11, 13), ), {} ),
                 )
         test_func_parsing(self, tester, tests)
 

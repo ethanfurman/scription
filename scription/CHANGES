@@ -1,3 +1,11 @@
+0.82.0
+======
+
+add MULTIREQ -- required parameter that accepts multiple, comma-seperated
+values
+
+
+
 0.81.1
 ======
 
