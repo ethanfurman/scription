@@ -1462,6 +1462,19 @@ class TestExecution(TestCase):
                 )
         self.assertEqual(command.stderr, '')
 
+    def test_unmangled_password(self):
+        command = Execute(
+                [sys.executable, self.subp_password_file],
+                pty=False,
+                password=unicode('Salutations!'),
+                timeout=10,
+                )
+        self.assertEqual(
+                command.stdout,
+                "super secret santa soda sizzle?\nmake sure no one is watching you type!: 'Salutations!'?  Are you sure??\n",
+                'Failed (actual results):\n%r' % command.stdout,
+                )
+        self.assertEqual(command.stderr, '')
 
 class TestOrm(TestCase):
 

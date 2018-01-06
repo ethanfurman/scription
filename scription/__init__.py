@@ -1474,7 +1474,7 @@ class Job(object):
             scription_debug('input is: %r' % (input, ), verbose=2)
             if password is None:
                 password = ()
-            elif isinstance(password, (bytes, str)):
+            elif isinstance(password, (bytes, unicode)):
                 password = (password, )
             for pwd in password:
                 if not isinstance(pwd, bytes):

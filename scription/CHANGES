@@ -1,3 +1,12 @@
+0.81.3
+======
+
+Execute
+-------
+Really fixed password writing to child processes (unicode passwords now
+correctly sent)
+
+
 0.81.2
 ======
 
