@@ -158,6 +158,13 @@ class TestPocket(TestCase):
         self.assertEqual(pocket.value2, 7)
 
 
+class TestExports(TestCase):
+
+    def test_speckind_exported(self):
+        for member in scription.SpecKind:
+            self.assertTrue(member in globals(), '%s is missing from globals()' % member)
+
+
 class TestCommandlineProcessing(TestCase):
 
     def test_envvar(self):

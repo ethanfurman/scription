@@ -79,13 +79,13 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 81, 3
+version = 0, 81, 4, 1
 
 # data
 __all__ = (
     'Alias', 'Command', 'Script', 'Main', 'Run', 'Spec',
     'Bool','InputFile', 'OutputFile', 'IniError', 'IniFile', 'OrmError', 'OrmFile', 'NameSpace',
-    'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'REQUIRED',
+    'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'MULTIREQ', 'REQUIRED',
     'ScriptionError', 'ExecuteError', 'FailedPassword', 'TimeoutError', 'Execute', 'Job', 'ProgressView',
     'abort', 'echo', 'error', 'get_response', 'help', 'mail', 'user_ids', 'print',
     'stdout', 'stderr', 'wait_and_check', 'b', 'u',
@@ -230,6 +230,9 @@ class DocEnum(Enum):
             return self is other
         else:
             return NotImplemented
+
+    def __hash__(self):
+        return hash(self._value_)
 
     def __ne__(self, other):
         return not self == other
