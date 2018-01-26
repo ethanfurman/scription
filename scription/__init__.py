@@ -2020,6 +2020,8 @@ class ProgressView(object):
         self.blockcount = 0
         self.bar_char = bar_char
         self.view_type = self.ViewType(view_type)
+        if self.view_type is self.ViewType.Bar and VERBOSITY > 1:
+            self.view_type = self.ViewType.Percent
         self.last_percent = 0
         self.last_count = 0
         self.last_time = time.time()
@@ -2055,6 +2057,9 @@ class ProgressView(object):
             else:
                 raise Exception('unknown value for view_type: %r' % self.view_type)
             self.f.flush()
+        scription_debug('ProgressView:')
+        for attr in 'blank iterator total bar_char view_type last_time progress'.split():
+            scription_debug('  %s:  %r' % (attr, getattr(self, attr)), verbose=2)
 
     def __iter__(self):
         return self
