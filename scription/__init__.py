@@ -2619,17 +2619,20 @@ def mail(server=None, port=25, message=None):
     if send_errs:
         for user in send_errs:
             try:
-                server = 'mail.' + user.split('@')[1]
+                server = 'mail.' + user.split('@')[1].strip('<>')
+                scription_debug('stage 2: connect to user smtp server', server, 25)
                 smtp = smtplib.SMTP(server, 25)
             except socket.error:
                 exc = sys.exc_info()[1]
                 errs[user] = [send_errs[user], (server, exc.args)]
+                scription_debug('error:', exc)
             else:
                 try:
                     smtp.sendmail(sender, [user], message.as_string())
                 except smtplib.SMTPRecipientsRefused:
                     exc = sys.exc_info()[1]
                     errs[user] = [send_errs[user], (server, exc.recipients[user])]
+                    scription_debug('error:', exc)
                 finally:
                     smtp.quit()
     return errs
