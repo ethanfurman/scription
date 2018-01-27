@@ -42,7 +42,7 @@ import textwrap
 import threading
 import time
 import traceback
-from scription._aenum import Enum, IntEnum, AutoNumber, export
+from scription._aenum import Enum, IntEnum, Flag, AutoValue, AutoNumber, export, _decompose, _high_bit
 from math import floor
 from sys import stdout, stderr
 
@@ -2045,7 +2045,7 @@ class Color(Flag):
     def _create_pseudo_member_(cls, value):
         pseudo_member = cls._value2member_map_.get(value, None)
         if pseudo_member is None:
-            members, _ = aenum._decompose(cls, value)
+            members, _ = _decompose(cls, value)
             pseudo_member = super(Color, cls)._create_pseudo_member_(value)
             pseudo_member.code = ';'.join(m.code for m in members)
         return pseudo_member
@@ -2057,7 +2057,7 @@ class Color(Flag):
         for last_value_pair in reversed(last_values):
             last_value, last_code = last_value_pair
             try:
-                high_bit = aenum._high_bit(last_value)
+                high_bit = _high_bit(last_value)
                 break
             except Exception:
                 error = True
