@@ -88,7 +88,7 @@ __all__ = (
     'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'MULTIREQ', 'REQUIRED',
     'ScriptionError', 'ExecuteError', 'FailedPassword', 'TimeoutError', 'Execute', 'Job', 'ProgressView',
     'abort', 'echo', 'error', 'get_response', 'help', 'mail', 'user_ids', 'print',
-    'stdout', 'stderr', 'wait_and_check', 'b', 'u',
+    'stdout', 'stderr', 'wait_and_check', 'b', 'u', 'ColorTemplate', 'Color',
     'Trivalent', 'Truthy', 'Unknown', 'Falsey', 'Exit',
     # the following are actually injected directly into the calling module, but are
     # added here as well for pylakes' benefit
@@ -1230,6 +1230,8 @@ def Run():
         if isinstance(exc, ScriptionError):
             abort(str(exc), Exit.ScriptionError)
         raise
+    finally:
+        echo(Color.AllReset, end='')
 
 
 ## optional
@@ -1987,6 +1989,91 @@ class OrmFile(object):
 IniError = OrmError     # deprecated, will be removed by 1.0
 IniFile = OrmFile       # deprecated, will be removed by 1.0
 
+
+class ColorTemplate(object):
+    "string %-templates that support color"
+
+    def __init__(self, template, default_color=None, select_colors=lambda r: (lambda d: d, )*len(r)):
+        self.template = re.sub(r'%[+-]?\d*[sdf]', lambda m: '%s'+m.group()+'%s', template)
+        if default_color is None:
+            default_color = Color.AllReset
+        self.default_color = default_color
+        self.select_colors = select_colors
+
+    def __call__(self, *datas):
+        colors = self.select_colors(datas)
+        result = []
+        for color, data in zip(colors, datas):
+            result.extend([str(color), data, str(self.default_color)])
+        return self.template % tuple(result)
+
+
+class Color(Flag):
+    _settings_ = AutoValue
+    _init_ = 'value code'
+    AllReset = '0'           # ESC [ 0 m       # reset all (colors and brightness)
+    Bright = '1'          # ESC [ 1 m       # bright
+    Dim = '2'             # ESC [ 2 m       # dim (looks same as normal brightness)
+    Underline = '4'
+    Normal = '22'         # ESC [ 22 m      # normal brightness
+                        #
+                        # # FOREGROUND - 30s  BACKGROUND - 40s:
+    FG_Black = '30'           # ESC [ 30 m      # black
+    FG_Red = '31'             # ESC [ 31 m      # red
+    FG_Green = '32'           # ESC [ 32 m      # green
+    FG_Yellow = '33'          # ESC [ 33 m      # yellow
+    FG_Blue = '34'            # ESC [ 34 m      # blue
+    FG_Magenta = '35'         # ESC [ 35 m      # magenta
+    FG_Cyan = '36'            # ESC [ 36 m      # cyan
+    FG_White = '37'           # ESC [ 37 m      # white
+    FG_Reset = '39'           # ESC [ 39 m      # reset
+                            #
+    BG_Black = '40'           # ESC [ 30 m      # black
+    BG_Red = '41'             # ESC [ 31 m      # red
+    BG_Green = '42'           # ESC [ 32 m      # green
+    BG_Yellow = '43'          # ESC [ 33 m      # yellow
+    BG_Blue = '44'            # ESC [ 34 m      # blue
+    BG_Magenta = '45'         # ESC [ 35 m      # magenta
+    BG_Cyan = '46'            # ESC [ 36 m      # cyan
+    BG_White = '47'           # ESC [ 37 m      # white
+    BG_Reset = '49'           # ESC [ 39 m      # reset
+
+    def __str__(self):
+        return '\x1b[%sm' % self.code
+
+    @classmethod
+    def _create_pseudo_member_(cls, value):
+        pseudo_member = cls._value2member_map_.get(value, None)
+        if pseudo_member is None:
+            members, _ = aenum._decompose(cls, value)
+            pseudo_member = super(Color, cls)._create_pseudo_member_(value)
+            pseudo_member.code = ';'.join(m.code for m in members)
+        return pseudo_member
+
+    def _generate_next_value_(name, start, count, last_values, *args, **kwds):
+        if not count:
+            return ((1, start)[start is not None], ) + args
+        error = False
+        for last_value_pair in reversed(last_values):
+            last_value, last_code = last_value_pair
+            try:
+                high_bit = aenum._high_bit(last_value)
+                break
+            except Exception:
+                error = True
+                break
+        if error:
+            raise TypeError('Invalid Flag value: %r' % (last_value, ))
+        return (2 ** (high_bit+1), ) + args
+
+    def __enter__(self):
+        print(self.AllReset, end='', verbose=0)
+        return self
+
+    def __exit__(self, *args):
+        print(self.AllReset, end='', verbose=0)
+
+
 class ProgressView(object):
     """
     Displays progress as a bar or a numeric count.
@@ -2401,20 +2488,31 @@ def info(*args, **kwds):
         kwds['verbose'] = kwds.pop('verbose', 1)
         print(*args, **kwds)
 
+_print_targets = {}
 def print(*values, **kwds):
     # kwds can contain sep (' '), end ('\n'), file (sys.stdout), and
     # verbose (1)
     with print_lock:
         verbose_level = kwds.pop('verbose', 1)
-        target = kwds.get('file')
+        target = kwds.get('file') or stdout
         if verbose_level > VERBOSITY and target is not stderr:
             return
+        is_tty = _print_targets.get(target)
+        try:
+            is_tty = os.isatty(target.fileno())
+            _print_targets[target] = is_tty
+        except (AttributeError, TypeError):
+            _print_targets[target] = is_tty = False
+        if not is_tty:
+            new_values = []
+            for v in values:
+                v = str(v)
+                v = re.sub('\x1b\[[\d;]*\w', '', v)
+                new_values.append(v)
+            values = tuple(new_values)
         try:
             _print(*values, **kwds)
-            if target:
-                target.flush()
-            else:
-                sys.stdout.flush()
+            target.flush()
         except IOError:
             cls, exc, tb = sys.exc_info()
             if exc.errno == errno.EPIPE:
