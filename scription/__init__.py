@@ -1230,8 +1230,6 @@ def Run():
         if isinstance(exc, ScriptionError):
             abort(str(exc), Exit.ScriptionError)
         raise
-    finally:
-        echo(Color.AllReset, end='')
 
 
 ## optional
@@ -2011,6 +2009,32 @@ class ColorTemplate(object):
 class Color(Flag):
     _settings_ = AutoValue
     _init_ = 'value code'
+
+    def _generate_next_value_(name, start, count, last_values, *args, **kwds):
+        if not count:
+            return ((1, start)[start is not None], ) + args
+        error = False
+        for last_value_pair in reversed(last_values):
+            last_value, last_code = last_value_pair
+            try:
+                high_bit = _high_bit(last_value)
+                break
+            except Exception:
+                error = True
+                break
+        if error:
+            raise TypeError('Invalid Flag value: %r' % (last_value, ))
+        return (2 ** (high_bit+1), ) + args
+
+    @classmethod
+    def _create_pseudo_member_(cls, value):
+        pseudo_member = cls._value2member_map_.get(value, None)
+        if pseudo_member is None:
+            members, _ = _decompose(cls, value)
+            pseudo_member = super(Color, cls)._create_pseudo_member_(value)
+            pseudo_member.code = ';'.join(m.code for m in members)
+        return pseudo_member
+
     AllReset = '0'           # ESC [ 0 m       # reset all (colors and brightness)
     Bright = '1'          # ESC [ 1 m       # bright
     Dim = '2'             # ESC [ 2 m       # dim (looks same as normal brightness)
@@ -2038,33 +2062,11 @@ class Color(Flag):
     BG_White = '47'           # ESC [ 37 m      # white
     BG_Reset = '49'           # ESC [ 39 m      # reset
 
+    def __repr__(self):
+        return '<%s.%s>' % (self.__class__.__name__, self._name_)
+
     def __str__(self):
         return '\x1b[%sm' % self.code
-
-    @classmethod
-    def _create_pseudo_member_(cls, value):
-        pseudo_member = cls._value2member_map_.get(value, None)
-        if pseudo_member is None:
-            members, _ = _decompose(cls, value)
-            pseudo_member = super(Color, cls)._create_pseudo_member_(value)
-            pseudo_member.code = ';'.join(m.code for m in members)
-        return pseudo_member
-
-    def _generate_next_value_(name, start, count, last_values, *args, **kwds):
-        if not count:
-            return ((1, start)[start is not None], ) + args
-        error = False
-        for last_value_pair in reversed(last_values):
-            last_value, last_code = last_value_pair
-            try:
-                high_bit = _high_bit(last_value)
-                break
-            except Exception:
-                error = True
-                break
-        if error:
-            raise TypeError('Invalid Flag value: %r' % (last_value, ))
-        return (2 ** (high_bit+1), ) + args
 
     def __enter__(self):
         print(self.AllReset, end='', verbose=0)
@@ -2072,7 +2074,6 @@ class Color(Flag):
 
     def __exit__(self, *args):
         print(self.AllReset, end='', verbose=0)
-
 
 class ProgressView(object):
     """
