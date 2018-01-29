@@ -162,7 +162,8 @@ class TestExports(TestCase):
 
     def test_speckind_exported(self):
         for member in scription.SpecKind:
-            self.assertTrue(member in globals(), '%s is missing from globals()' % member)
+            self.assertTrue(member.name in globals(), '%s is missing from globals()' % member)
+            self.assertIs(globals()[member.name], member)
 
 
 class TestCommandlineProcessing(TestCase):
