@@ -2016,12 +2016,12 @@ class ColorTemplate(object):
                 for color, data in zip(colors, row):
                     line.extend([str(color), data, str(self.default_color)])
                 result.append(self.template % tuple(line))
-            return self.default_color + '\n'.join(result)
+            return str(self.default_color) + '\n'.join(result)
         elif self.multiline is self.Multiline.TRUNCATE:
             cells = tuple([c.split('\n')[0] if isinstance(c, basestring) else c for c in cells])
         for color, data in zip(colors, cells):
             result.extend([str(color), data, str(self.default_color)])
-        return self.default_color + (self.template % tuple(result))
+        return str(self.default_color) + (self.template % tuple(result))
 
 
 class Color(Flag):
