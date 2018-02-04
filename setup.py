@@ -104,6 +104,7 @@ data = dict(
         description='simple script parameter parser',
         long_description=description,
         url='https://bitbucket.org/stoneleaf/scription',
+        install_requires=['aenum >= 2.0.10'],
         packages=['scription'],
         package_data={
              'scription': [
