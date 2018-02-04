@@ -1,3 +1,18 @@
+0.81.4
+======
+
+make DocEnums hashable
+
+strip angle-brackets (<>) from email addresses when discerning mail server
+
+change ProgressView's view_type from 'bar' when verbose level is 2 or higher
+
+add Color enum for ansi color sequences, and ColorTemplate for line-oriented,
+colored output
+
+stop vendoring-in aenum
+
+
 0.81.3
 ======
 
