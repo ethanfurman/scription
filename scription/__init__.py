@@ -2010,7 +2010,7 @@ class ColorTemplate(object):
         colors = self.select_colors(cells)
         result = []
         if self.multiline is self.Multiline.WRAP:
-            cells = tuple([c.split('\n') if isinstance(c, basestring) else c for c in cells])
+            cells = tuple([c.split('\n') if isinstance(c, basestring) else [c] for c in cells])
             for row in zip_longest(*cells, fillvalue=''):
                 line = []
                 for color, data in zip(colors, row):
