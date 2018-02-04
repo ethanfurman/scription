@@ -154,6 +154,7 @@ if py_ver < (3, 0):
     bytes = str
     b = str
     u = unicode
+    from itertools import izip_longest as zip_longest
     from __builtin__ import print as _print
     exec(textwrap.dedent('''\
         def raise_with_traceback(exc, tb):
@@ -165,6 +166,7 @@ else:
     unicode = str
     b = bytes
     u = unicode
+    from itertools import zip_longest
     from builtins import print as _print
     exec(textwrap.dedent('''\
         def raise_with_traceback(exc, tb):
@@ -1991,19 +1993,35 @@ IniFile = OrmFile       # deprecated, will be removed by 1.0
 class ColorTemplate(object):
     "string %-templates that support color"
 
-    def __init__(self, template, default_color=None, select_colors=lambda r: (lambda d: d, )*len(r)):
+    class Multiline(Enum):
+        IGNORE = 'ignore'
+        TRUNCATE = 'truncate'
+        WRAP = 'wrap'
+
+    def __init__(self, template, multiline=Multiline.IGNORE, default_color=None, select_colors=lambda r: (lambda d: d, )*len(r)):
         self.template = re.sub(r'%[+-]?\d*[sdf]', lambda m: '%s'+m.group()+'%s', template)
         if default_color is None:
             default_color = Color.AllReset
         self.default_color = default_color
         self.select_colors = select_colors
+        self.multiline = self.Multiline(multiline)
 
-    def __call__(self, *datas):
-        colors = self.select_colors(datas)
+    def __call__(self, *cells):
+        colors = self.select_colors(cells)
         result = []
-        for color, data in zip(colors, datas):
+        if self.multiline is self.Multiline.WRAP:
+            cells = tuple([c.split('\n') if isinstance(c, basestring) else c for c in cells])
+            for row in zip_longest(*cells, fillvalue=''):
+                line = []
+                for color, data in zip(colors, row):
+                    line.extend([str(color), data, str(self.default_color)])
+                result.append(self.template % tuple(line))
+            return self.default_color + '\n'.join(result)
+        elif self.multiline is self.Multiline.TRUNCATE:
+            cells = tuple([c.split('\n')[0] if isinstance(c, basestring) else c for c in cells])
+        for color, data in zip(colors, cells):
             result.extend([str(color), data, str(self.default_color)])
-        return self.template % tuple(result)
+        return self.default_color + (self.template % tuple(result))
 
 
 class Color(Flag):
