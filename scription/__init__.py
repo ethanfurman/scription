@@ -141,9 +141,10 @@ for arg in sys.argv:
         elif arg[17:] == '=5':
             SCRIPTION_DEBUG = 5
 
-module = script_module = script_main = script_commands = None
+module = script_main = script_commands = None
 script_fullname = script_name = script_verbosity = script_command = script_command_name = None
 script_abort_message = script_exception_lines = None
+script_module = {}
 
 registered = False
 run_once = False
@@ -945,7 +946,7 @@ class Alias(object):
         self.aliases = aliases
     def __call__(self, func):
         scription_debug('applying aliases to', func.__name__, verbose=2)
-        if script_module is None:
+        if not script_module:
             _init_script_module(func)
         for alias in self.aliases:
             alias_name = alias.replace('_', '-')
@@ -964,7 +965,7 @@ class Command(object):
         self.annotations = annotations
     def __call__(self, func):
         scription_debug('Command -> applying to', func.__name__, verbose=1)
-        if script_module is None:
+        if not script_module:
             _init_script_module(func)
         if func.__doc__ is not None:
             func.__doc__ = textwrap.dedent(func.__doc__).strip()
@@ -1016,7 +1017,7 @@ class Script(object):
     def __call__(self, func):
         scription_debug('Script -> applying to', func, verbose=1)
         THREAD_STORAGE.script_main = None
-        if script_module is None:
+        if not script_module:
             _init_script_module(func)
         func_name = func.__name__.replace('_', '-')
         if func_name in script_module['script_commands']:
@@ -2119,14 +2120,15 @@ class ProgressView(object):
                     pass
                 if total is None:
                     view_type = 'count'
-        self.blank = VERBOSITY < 1
+        verbosity = script_module.get('script_verbosity', 1)
+        self.blank = verbosity < 1
         self.iterator = iter(iterable)
         self.current_count = 0
         self.total = total
         self.blockcount = 0
         self.bar_char = bar_char
         self.view_type = self.ViewType(view_type)
-        if self.view_type is self.ViewType.Bar and VERBOSITY > 1:
+        if self.view_type is self.ViewType.Bar and verbosity > 1:
             self.view_type = self.ViewType.Percent
         self.last_percent = 0
         self.last_count = 0
@@ -2456,7 +2458,7 @@ def abort(msg=None, returncode=Exit.Unknown):
     "prints msg to stderr, calls sys.exit() with returncode"
     with print_lock:
         if msg:
-            if VERBOSITY > 0:
+            if script_module.get('script_verbosity', 1) > 0:
                 progname = script_module['script_fullname']
             else:
                 progname = script_module['script_name']
@@ -2514,7 +2516,7 @@ def print(*values, **kwds):
     with print_lock:
         verbose_level = kwds.pop('verbose', 1)
         target = kwds.get('file') or stdout
-        if verbose_level > VERBOSITY and target is not stderr:
+        if verbose_level > script_module.get('script_verbosity', 1) and target is not stderr:
             return
         is_tty = _print_targets.get(target)
         try:
