@@ -42,7 +42,7 @@ import textwrap
 import threading
 import time
 import traceback
-from scription._aenum import Enum, IntEnum, Flag, AutoValue, AutoNumber, export, _decompose, _high_bit
+from aenum import Enum, IntEnum, Flag, AutoValue, AutoNumber, export, _decompose, _high_bit
 from math import floor
 from sys import stdout, stderr
 
