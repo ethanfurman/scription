@@ -1884,6 +1884,20 @@ class TestExecutionThreads(TestCase):
         self.assertNotEqual(job.returncode, 0, '-- stdout --\n%s\n-- stderr --\n%s' % (job.stdout, job.stderr))
 
 
+class TestColorEnum(TestCase):
+
+    def test_bitwise_or(self):
+        C = scription.Color
+        red, white = C.FG_Red, C.BG_White
+        # error(red, type(red), repr(red.value), repr(red.code))
+        # error(white, type(white), repr(white.value), repr(white.code))
+        # error(white.value | red.value)
+        barber = red | white
+        self.assertEqual(barber, '\x1b[47;31m')
+        self.assertEqual(barber.value, red.value | white.value)
+        self.assertEqual(barber.code, ';'.join([white.code, red.code]))
+        self.assertEqual(repr(barber), '<Color: BG_White|FG_Red>')
+
 if not is_win:
     @skipUnless(INCLUDE_SLOW, 'skipping slow tests')
     class TestExecutionPtys(TestCase):

@@ -79,7 +79,7 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 81, 4
+version = 0, 81, 5, 1
 
 # data
 __all__ = (
@@ -2025,34 +2025,20 @@ class ColorTemplate(object):
         return str(self.default_color) + (self.template % tuple(result))
 
 
-class Color(Flag):
+class Color(str, Flag):
     _settings_ = AutoValue
-    _init_ = 'value code'
 
-    def _generate_next_value_(name, start, count, last_values, *args, **kwds):
-        if not count:
-            return ((1, start)[start is not None], ) + args
-        error = False
-        for last_value_pair in reversed(last_values):
-            last_value, last_code = last_value_pair
-            try:
-                high_bit = _high_bit(last_value)
-                break
-            except Exception:
-                error = True
-                break
-        if error:
-            raise TypeError('Invalid Flag value: %r' % (last_value, ))
-        return (2 ** (high_bit+1), ) + args
+    def __new__(cls, value, code):
+        str_value = '\x1b[%sm' % code
+        obj = str.__new__(cls, str_value)
+        obj._value_ = value
+        obj.code = code
+        return obj
 
     @classmethod
-    def _create_pseudo_member_(cls, value):
-        pseudo_member = cls._value2member_map_.get(value, None)
-        if pseudo_member is None:
-            members, _ = _decompose(cls, value)
-            pseudo_member = super(Color, cls)._create_pseudo_member_(value)
-            pseudo_member.code = ';'.join(m.code for m in members)
-        return pseudo_member
+    def _create_pseudo_member_values_(cls, members, *values):
+        code = ';'.join(m.code for m in members)
+        return values + (code, )
 
     AllReset = '0'           # ESC [ 0 m       # reset all (colors and brightness)
     Bright = '1'          # ESC [ 1 m       # bright
@@ -2082,10 +2068,10 @@ class Color(Flag):
     BG_Reset = '49'           # ESC [ 39 m      # reset
 
     def __repr__(self):
-        return '<%s.%s>' % (self.__class__.__name__, self._name_)
-
-    def __str__(self):
-        return '\x1b[%sm' % self.code
+        if self._name_ is not None:
+            return '<%s.%s>' % (self.__class__.__name__, self._name_)
+        else:
+            return '<%s: %s>' % (self.__class__.__name__, '|'.join([m.name for m in Flag.__iter__(self)]))
 
     def __enter__(self):
         print(self.AllReset, end='', verbose=0)
