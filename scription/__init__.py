@@ -79,7 +79,7 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 81, 5
+version = 0, 81, 6, 1
 
 # data
 __all__ = (
@@ -2066,6 +2066,8 @@ class Color(str, Flag):
     BG_Cyan = '46'            # ESC [ 36 m      # cyan
     BG_White = '47'           # ESC [ 37 m      # white
     BG_Reset = '49'           # ESC [ 39 m      # reset
+
+    __str__ = str.__str__
 
     def __repr__(self):
         if self._name_ is not None:

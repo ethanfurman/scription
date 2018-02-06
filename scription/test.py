@@ -1897,6 +1897,7 @@ class TestColorEnum(TestCase):
         self.assertEqual(barber.value, red.value | white.value)
         self.assertEqual(barber.code, ';'.join([white.code, red.code]))
         self.assertEqual(repr(barber), '<Color: BG_White|FG_Red>')
+        self.assertEqual(str(barber), '\x1b[47;31m')
 
 if not is_win:
     @skipUnless(INCLUDE_SLOW, 'skipping slow tests')
