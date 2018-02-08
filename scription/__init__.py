@@ -79,7 +79,7 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 81, 6
+version = 0, 81, 7, 1
 
 # data
 __all__ = (
@@ -1289,7 +1289,12 @@ class Job(object):
         if not pty:
             # use subprocess
             scription_debug('subprocess args:', args)
-            self.process = process = Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE, cwd=cwd, env=env)
+            try:
+                self.process = process = Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE, cwd=cwd, env=env)
+            except OSError as exc:
+                scription_debug('subprocess cwd:', cwd)
+                scription_debug('subprocess env:', env)
+                raise
             self.pid = process.pid
             self.child_fd_out = process.stdout
             self.child_fd_in = process.stdin
