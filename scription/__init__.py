@@ -762,6 +762,8 @@ def _usage(func, param_line_args):
                 if annote.kind == 'option':
                     scription_debug('processing as option', verbose=2)
                     scription_debug('checking choice membership: %r in %r?' % (item, annote.choices), verbose=2)
+                    if annote.choices and value not in annote.choices:
+                        raise ScriptionError('%s: %r not in [ %s ]' % (annote.usage, value, ' | '.join(annote.choices)), use_help=True)
                     annote._cli_value = annote.type(value)
                 elif annote.kind in ('multi', 'multireq'):
                     scription_debug('processing as multi', verbose=2)
@@ -851,6 +853,8 @@ def _usage(func, param_line_args):
                     if annote.kind == 'option':
                         scription_debug('processing as option', verbose=2)
                         scription_debug('checking choice membership: %r in %r?' % (item, annote.choices), verbose=2)
+                        if annote.choices and value not in annote.choices:
+                            raise ScriptionError('%s: %r not in [ %s ]' % (annote.usage, value, ' | '.join(annote.choices)), use_help=True)
                         annote._cli_value = annote.type(value)
                     else:
                         scription_debug('processing as multi-option', verbose=2)
