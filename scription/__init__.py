@@ -42,7 +42,7 @@ import textwrap
 import threading
 import time
 import traceback
-from aenum import Enum, IntEnum, Flag, AutoValue, AutoNumber, export, _decompose, _high_bit
+from aenum import Enum, IntEnum, Flag, AutoValue, AutoNumber, export
 from math import floor
 from sys import stdout, stderr
 
@@ -337,6 +337,10 @@ class OrmError(ValueError):
 
 class ScriptionError(Exception):
     "raised for errors in user script"
+    def __init__(self, msg=False, returncode=Exit.ScriptionError, use_help=False):
+        Exception.__init__(self, msg)
+        self.returncode = returncode
+        self.use_help = use_help
 
 # internal
 def _add_annotations(func, annotations, script=False):
@@ -745,7 +749,7 @@ def _usage(func, param_line_args):
                 if annote._script_default:
                     annote._cli_value = annote._script_default
                 else:
-                    help('%s has no value' % last_item, Exit.ScriptionError)
+                    raise ScriptionError('%s has no value' % last_item, use_help=True)
             else:
                 if annote.remove:
                     # only remove if not using the annotation default
@@ -768,7 +772,7 @@ def _usage(func, param_line_args):
             continue
         if all_to_varargs:
             if var_arg_spec is None:
-                help("don't know what to do with %r" % item, Exit.ScriptionError)
+                raise ScriptionError("don't know what to do with %r" % item, use_help=True)
             var_arg_spec._cli_value += (var_arg_spec.type(item), )
             continue
         if item.startswith('-'):
@@ -797,7 +801,7 @@ def _usage(func, param_line_args):
                 try:
                     VERBOSITY = int(value)
                 except ValueError:
-                    help('invalid verbosity level: %r' % value, Exit.ScriptionError)
+                    raise ScriptionError('invalid verbosity level: %r' % value, use_help=True)
                 value = None
                 continue
             if item in annotations:
@@ -809,7 +813,7 @@ def _usage(func, param_line_args):
                 value = None
                 continue
             else:
-                help('%s not valid' % original_item, Exit.ScriptionError)
+                raise ScriptionError('%s not valid' % original_item, use_help=True)
             if annote.remove:
                 to_be_removed.append(offset)
             if annote.kind in ('multi', 'option'):
@@ -832,18 +836,18 @@ def _usage(func, param_line_args):
                 annote._cli_value = value
                 value = None
             else:
-                help('%s argument %s should not be introduced with --' % (annote.kind, item), Exit.ScriptionError)
+                raise ScriptionError('%s argument %s should not be introduced with --' % (annote.kind, item), use_help=True)
         elif '=' in item:
             # no lead dash, keyword args
             if kwd_arg_spec is None:
-                help("don't know what to do with %r" % item, Exit.ScriptionError)
+                raise ScriptionError("don't know what to do with %r" % item, use_help=True)
             item, value = item.split('=')
             item = item.replace('-','_')
             if item in func.named_params:
-                help('%s must be specified as a %s' % (item, annotations[item].kind), Exit.ScriptionError)
+                raise ScriptionError('%s must be specified as a %s' % (item, annotations[item].kind), use_help=True)
             item, value = kwd_arg_spec.type(item, value)
             if not isinstance(item, str):
-                help('keyword names must be strings', Exit.ScriptionError)
+                raise ScriptionError('keyword names must be strings', use_help=True)
             kwd_arg_spec._cli_value[item] = value
             value = None
         else:
@@ -861,13 +865,13 @@ def _usage(func, param_line_args):
                 else:
                     # check for choices membership before transforming into a type
                     if annote.choices and item not in annote.choices:
-                        help('%s: %r not in [ %s ]' % (annote.usage, item, ' | '.join(annote.choices)), Exit.ScriptionError)
+                        raise ScriptionError('%s: %r not in [ %s ]' % (annote.usage, item, ' | '.join(annote.choices)), use_help=True)
                     item = annote.type(item)
                     annote._cli_value = item
                 pos += 1
             else:
                 if var_arg_spec is None:
-                    help("don't know what to do with %r" % item, Exit.ScriptionError)
+                    raise ScriptionError("don't know what to do with %r" % item, use_help=True)
                 var_arg_spec._cli_value += (var_arg_spec.type(item), )
                 all_to_varargs = True
     # exc = None
@@ -1231,7 +1235,10 @@ def Run():
         result = log_exception()
         script_module['script_exception_lines'] = result
         if isinstance(exc, ScriptionError):
-            abort(str(exc), Exit.ScriptionError)
+            if exc.use_help:
+                help(str(exc), exc.returncode)
+            else:
+                abort(str(exc), exc.returncode)
         raise
 
 
