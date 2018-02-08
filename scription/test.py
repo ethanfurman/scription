@@ -112,6 +112,12 @@ class TestCase(unittest_TestCase):
 
     run_so_far = []
 
+    def __init__(self, *args, **kwds):
+        regex = getattr(self, 'assertRaisesRegex', None)
+        if regex is None:
+            self.assertRaisesRegex = getattr(self, 'assertRaisesRegexp')
+        super(TestCase, self).__init__(*args, **kwds)
+
     @classmethod
     def setUpClass(cls, *args, **kwds):
         cls.run_so_far.append(cls.__name__)
@@ -906,6 +912,43 @@ class TestCommandlineProcessing(TestCase):
                 ('type_tester 9 --value2 31.25 --value6 71'.split(), (), {}, (9, 31.25, (3.0j, ), None, None, ('71', )), {}),
                 )
         test_func_parsing(self, type_tester, tests)
+
+    def test_option_with_bad_choices(self):
+        @Command(
+            parent=Spec('an option with choices', OPTION, choices=['mom', 'none', 'thing']),
+            )
+        def test_choices(parent):
+            pass
+        self.assertRaisesRegex(
+                ScriptionError,
+                "PARENT: 'dad' not in \[ mom \| none \| thing \]",
+                _usage,
+                test_choices,
+                # with = sign
+                'test_choices --parent=dad'.split(),
+                )
+        self.assertRaisesRegex(
+                ScriptionError,
+                "PARENT: 'dad' not in \[ mom \| none \| thing \]",
+                _usage,
+                test_choices,
+                # without = sign
+                'test_choices --parent dad'.split(),
+                )
+
+    def test_required_with_bad_choices(self):
+        @Command(
+            word=Spec('a silly argument', choices=['this', 'that']),
+            )
+        def test_choices(word):
+            pass
+        self.assertRaisesRegex(
+                ScriptionError,
+                r"WORD: 'gark' not in \[ this \| that \]",
+                _usage,
+                test_choices,
+                'test_choices gark'.split(),
+                )
 
 
 class TestParamRemoval(TestCase):
