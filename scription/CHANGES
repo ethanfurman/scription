@@ -1,3 +1,10 @@
+0.81.7
+======
+
+add more debugging info
+check for choices membership for options (was only checking for required)
+
+
 0.81.5
 ======
 
