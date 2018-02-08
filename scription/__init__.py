@@ -742,11 +742,15 @@ def _usage(func, param_line_args):
     all_to_varargs = False
     annote = last_item = None
     for offset, item in enumerate(param_line_args + [None]):
+        scription_debug('%r: %r' % (offset, item), verbose=2)
         original_item = item
         if value is not None:
+            scription_debug('None branch', verbose=2)
             if item is None or item.startswith('-') or '=' in item:
+                scription_debug('new flag/option, checking for previous flag/option default', verbose=2)
                 # check for default
                 if annote._script_default:
+                    scription_debug('found: %r' % (annote._script_default, ))
                     annote._cli_value = annote._script_default
                 else:
                     raise ScriptionError('%s has no value' % last_item, use_help=True)
@@ -756,8 +760,11 @@ def _usage(func, param_line_args):
                     to_be_removed.append(offset)
                 value = item
                 if annote.kind == 'option':
+                    scription_debug('processing as option', verbose=2)
+                    scription_debug('checking choice membership: %r in %r?' % (item, annote.choices), verbose=2)
                     annote._cli_value = annote.type(value)
                 elif annote.kind in ('multi', 'multireq'):
+                    scription_debug('processing as multi', verbose=2)
                     values = [annote.type(a) for a in _split_on_comma(value)]
                     annote._cli_value += tuple(values)
                 else:
@@ -766,8 +773,10 @@ def _usage(func, param_line_args):
                 continue
         last_item = item
         if item is None:
+            scription_debug('done with loop', verbose=2)
             break
         elif item == '--':
+            scription_debug('all to varargs', verbose=2)
             all_to_varargs = True
             continue
         if all_to_varargs:
@@ -776,28 +785,36 @@ def _usage(func, param_line_args):
             var_arg_spec._cli_value += (var_arg_spec.type(item), )
             continue
         if item.startswith('-'):
+            scription_debug('option or flag', verbose=2)
             # (multi)option or flag
             if item.lower() == '--help' or item == '-h' and 'h' not in annotations:
+                scription_debug('help flag', verbose=2)
                 print_help = True
                 continue
             elif item.lower() == '--version':
+                scription_debug('version flag', verbose=2)
                 print_version = True
                 continue
             elif item.lower() in ('--all-versions', '--all_versions'):
+                scription_debug('all versions flag', verbose=2)
                 print_all_versions = True
                 continue
             elif item == '-v' and 'v' not in annotations:
+                scription_debug('verbosity flag', verbose=2)
                 VERBOSITY += 1
                 continue
             item = item.lstrip('-')
             value = True
             if item.lower().startswith('no-') and '=' not in item:
+                scription_debug('no- flag', verbose=2)
                 value = False
                 item = item[3:]
             elif '=' in item:
+                scription_debug('name & value', verbose=2)
                 item, value = item.split('=', 1)
             item = item.replace('-','_')
             if item.lower() == 'verbose':
+                scription_debug('verbosity option', verbose=2)
                 try:
                     VERBOSITY = int(value)
                 except ValueError:
@@ -805,33 +822,45 @@ def _usage(func, param_line_args):
                 value = None
                 continue
             if item in annotations:
+                scription_debug('Command setting', verbose=2)
                 annote = annotations[item]
             elif Script and item in Script.settings:
+                scription_debug('Script setting', verbose=2)
                 annote = Script.settings[item]
             elif item in ('SCRIPTION_DEBUG', ):
+                scription_debug('SCRIPTION_DEBUG', verbose=2)
                 SCRIPTION_DEBUG = int(value)
                 value = None
                 continue
             else:
                 raise ScriptionError('%s not valid' % original_item, use_help=True)
             if annote.remove:
+                scription_debug('removed setting', verbose=2)
                 to_be_removed.append(offset)
             if annote.kind in ('multi', 'option'):
+                scription_debug('(multi)option' , verbose=2)
                 if value is True:
+                    scription_debug('value is True', verbose=2)
                     last_item = item
                 elif value is False:
+                    scription_debug('value is False', verbose=2)
                     annote._cli_value = annote._type_default
                     value = None
                 else:
+                    scription_debug('value is %r' % (value, ), verbose=2)
                     if annote.kind == 'option':
+                        scription_debug('processing as option', verbose=2)
+                        scription_debug('checking choice membership: %r in %r?' % (item, annote.choices), verbose=2)
                         annote._cli_value = annote.type(value)
                     else:
+                        scription_debug('processing as multi-option', verbose=2)
                         # value could be a list of comma-separated values
                         scription_debug('_usage:multi ->', annote.type, verbose=2)
                         annote._cli_value += tuple([annote.type(a) for a in _split_on_comma(value)])
                         scription_debug('_usage:multi ->', annote._cli_value, verbose=2)
                     value = None
             elif annote.kind == 'flag':
+                scription_debug('flag', verbose=2)
                 value = annote.type(value)
                 annote._cli_value = value
                 value = None
@@ -839,6 +868,7 @@ def _usage(func, param_line_args):
                 raise ScriptionError('%s argument %s should not be introduced with --' % (annote.kind, item), use_help=True)
         elif '=' in item:
             # no lead dash, keyword args
+            scription_debug('keyword arg', verbose=2)
             if kwd_arg_spec is None:
                 raise ScriptionError("don't know what to do with %r" % item, use_help=True)
             item, value = item.split('=')
@@ -851,6 +881,7 @@ def _usage(func, param_line_args):
             kwd_arg_spec._cli_value[item] = value
             value = None
         else:
+            scription_debug('positional?', verbose=2)
             # positional (required?) argument
             scription_debug('positional argument:', value)
             scription_debug('  with Spec:', annote)
@@ -864,6 +895,7 @@ def _usage(func, param_line_args):
                     scription_debug('_usage:multireq ->', annote._cli_value, verbose=2)
                 else:
                     # check for choices membership before transforming into a type
+                    scription_debug('choice membership: %r in %r?' % (item, annote.choices), verbose=2)
                     if annote.choices and item not in annote.choices:
                         raise ScriptionError('%s: %r not in [ %s ]' % (annote.usage, item, ' | '.join(annote.choices)), use_help=True)
                     item = annote.type(item)
