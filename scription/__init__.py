@@ -2137,7 +2137,7 @@ class ProgressView(object):
     ViewType = Enum('ViewType', (('Bar', 'bar'), ('Percent', 'percent'), ('Count', 'count')))
     export(ViewType, vars())
 
-    def __init__(self, total=None, view_type='count', message=None, bar_char='*', iterable=None):
+    def __init__(self, total=None, view_type='count', message=None, bar_char='*', sep=': ', iterable=None):
         headless = not _is_atty[stdout]
         if total is None and iterable is None:
             raise ValueError('total must be specified if not wrapping an iterable')
@@ -2177,7 +2177,7 @@ class ProgressView(object):
                     self.blank = True
                     return
                 if self.view_type is not self.Bar:
-                    self.f.write(': ')
+                    self.f.write(sep)
             if self.view_type is self.Percent:
                 self.progress = self._bar_progress
                 self.f.write('  0%')
