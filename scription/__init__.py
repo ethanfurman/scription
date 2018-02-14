@@ -44,7 +44,7 @@ import time
 import traceback
 from aenum import Enum, IntEnum, Flag, AutoValue, AutoNumber, export
 from math import floor
-from sys import stdout, stderr
+from sys import stdin, stdout, stderr
 
 # locks, etc.
 print_lock = threading.RLock()
@@ -79,7 +79,7 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 81, 7
+version = 0, 81, 8, 1
 
 # data
 __all__ = (
@@ -2138,11 +2138,7 @@ class ProgressView(object):
     export(ViewType, vars())
 
     def __init__(self, total=None, view_type='count', message=None, bar_char='*', iterable=None):
-        try:
-            os.ttyname(stdout.fileno())
-            headless = False
-        except OSError:
-            headless = True
+        headless = not _is_atty[stdout]
         if total is None and iterable is None:
             raise ValueError('total must be specified if not wrapping an iterable')
         elif total is None:
@@ -2172,16 +2168,12 @@ class ProgressView(object):
         self.f = sys.stdout
         if not self.blank:
             if message is not None:
-                if total is not None:
+                if total is not None and '$total' in message:
                     message = message.replace('$total', str(total))
                 else:
                     message = ' '.join([w for w in message.split() if w != '$total'])
                 self.f.write('\n%s' % message)
                 if headless:
-                    if total is not None:
-                        self.f.write(': %s\n' % (total, ))
-                    else:
-                        self.f.write('\n')
                     self.blank = True
                     return
                 if self.view_type is not self.Bar:
@@ -2545,7 +2537,12 @@ def info(*args, **kwds):
         kwds['verbose'] = kwds.pop('verbose', 1)
         print(*args, **kwds)
 
-_print_targets = {}
+_is_atty = {}
+for channel in (stdin, stdout, stderr):
+    try:
+        _is_atty[channel] = os.isatty(channel.fileno())
+    except:
+        _is_atty[channel] = False
 def print(*values, **kwds):
     # kwds can contain sep (' '), end ('\n'), file (sys.stdout), and
     # verbose (1)
@@ -2554,12 +2551,12 @@ def print(*values, **kwds):
         target = kwds.get('file') or stdout
         if verbose_level > script_module.get('script_verbosity', 1) and target is not stderr:
             return
-        is_tty = _print_targets.get(target)
+        is_tty = _is_atty.get(target)
         try:
             is_tty = os.isatty(target.fileno())
-            _print_targets[target] = is_tty
+            _is_atty[target] = is_tty
         except (AttributeError, TypeError):
-            _print_targets[target] = is_tty = False
+            _is_atty[target] = is_tty = False
         if not is_tty:
             new_values = []
             for v in values:
