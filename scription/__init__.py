@@ -87,7 +87,7 @@ __all__ = (
     'Bool','InputFile', 'OutputFile', 'IniError', 'IniFile', 'OrmError', 'OrmFile', 'NameSpace',
     'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'MULTIREQ', 'REQUIRED',
     'ScriptionError', 'ExecuteError', 'FailedPassword', 'TimeoutError', 'Execute', 'Job', 'ProgressView',
-    'abort', 'echo', 'error', 'get_response', 'help', 'mail', 'user_ids', 'print',
+    'abort', 'echo', 'error', 'get_response', 'help', 'mail', 'user_ids', 'print', 'box',
     'stdout', 'stderr', 'wait_and_check', 'b', 'u', 'ColorTemplate', 'Color',
     'Trivalent', 'Truthy', 'Unknown', 'Falsey', 'Exit',
     # the following are actually injected directly into the calling module, but are
@@ -2536,6 +2536,93 @@ def info(*args, **kwds):
     with print_lock:
         kwds['verbose'] = kwds.pop('verbose', 1)
         print(*args, **kwds)
+
+def box(message, style, *chars, **kwds):
+    """ draws box around text using style and box_chars
+
+    stlye:
+
+    -------
+    | flag
+    -------
+    -------
+    | box |
+    -------
+
+    --------
+    overline
+
+    underline
+    ---------
+
+    -----
+    lined
+    -----
+
+    chars:
+
+    single str or 1-item tuple -> char to use for all positions
+    2-item tuple ->  (top_bottom, left_right)
+    4-item tuple ->  (top, bottom, left, right)
+    """
+    if style not in ('flag', 'box', 'overline', 'underline', 'lined'):
+        raise ScriptionError('invalid style:  %r' % (style, ))
+    lines = message.split('\n')
+    width = max([len(l) for l in lines])
+    if not chars:
+        top = bottom = '-'
+        left = right = '|'
+    elif len(chars) == 1:
+        top = bottom = left = right = chars[0]
+    elif len(chars) == 2:
+        top = bottom = chars[0]
+        left = right = chars[1]
+    elif len(chars) == 4:
+        top, bottom, left, right = chars
+    else:
+        raise ScriptionError('if box chars specified, must be a single item for use as all four, two items for use as top/bottom and left/right, or four items')
+    #
+    padding = 0
+    if style == 'box':
+        padding = 1
+        width += len(left) + len(right) + 2 * padding
+    elif style == 'flag':
+        padding = 1
+        width += len(left) + 2 * padding
+        # make sure right is not used
+        right = ''
+    else:
+        # make sure left and right are not used
+        left = right = ''
+    #
+    times, remainder = divmod(width, len(top))
+    top_line = top * times
+    if remainder and style != 'underline':
+        top_line += top
+        padding += len(top) // 2
+        width = len(top_line)
+    #
+    times, remainder = divmod(width, len(bottom))
+    bottom_line = bottom * times
+    if remainder:
+        bottom_line += bottom
+        if style == 'underline':
+            padding += len(bottom) // 2
+            width = len(bottom_line)
+    #
+    box = []
+    padding = padding * ' '
+    if style != 'underline':
+        box.append(top_line)
+    for line in lines:
+        leading = ('%(left)s%(padding)s%(line)s' %
+                {'left': left, 'padding': padding, 'line':line}
+                )
+        line = '%-*s%s' % (width-len(right), leading, right)
+        box.append(line)
+    if style != 'overline':
+        box.append(bottom_line)
+    return '\n'.join(box)
 
 _is_atty = {}
 for channel in (stdin, stdout, stderr):

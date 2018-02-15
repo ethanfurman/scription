@@ -1,6 +1,7 @@
 from __future__ import print_function
 from scription import *
 from scription import _usage, version, empty, pocket
+from textwrap import dedent
 from unittest import skip, skipUnless, SkipTest, TestCase as unittest_TestCase, main
 import datetime
 import functools
@@ -1941,6 +1942,132 @@ class TestColorEnum(TestCase):
         self.assertEqual(barber.code, ';'.join([white.code, red.code]))
         self.assertEqual(repr(barber), '<Color: BG_White|FG_Red>')
         self.assertEqual(str(barber), '\x1b[47;31m')
+
+
+class TestBox(TestCase):
+
+    def test_flag(self):
+        self.assertEqual(
+                box('hello', 'flag'),
+                "--------\n"
+                "| hello \n"
+                "--------",
+                )
+        self.assertEqual(
+                box('hello\nworld', 'flag'),
+                "--------\n"
+                "| hello \n"
+                "| world \n"
+                "--------",
+                )
+        self.assertEqual(
+                box('hello\nworlds', 'flag'),
+                "---------\n"
+                "| hello  \n"
+                "| worlds \n"
+                "---------",
+                )
+
+    def test_box(self):
+        self.assertEqual(
+                box('hello', 'box'),
+                dedent('''\
+                        ---------
+                        | hello |
+                        ---------'''),
+                )
+        self.assertEqual(
+                box('hello\nworld', 'box'),
+                dedent('''\
+                        ---------
+                        | hello |
+                        | world |
+                        ---------'''),
+                )
+        self.assertEqual(
+                box('hello\nworlds', 'box'),
+                dedent('''\
+                        ----------
+                        | hello  |
+                        | worlds |
+                        ----------'''),
+                )
+
+    def test_fancy_box(self):
+        self.assertEqual(
+                box('a very fancy box', 'box', '* *', '**'),
+                dedent('''\
+                        * ** ** ** ** ** ** ** *
+                        **  a very fancy box  **
+                        * ** ** ** ** ** ** ** *'''),
+                )
+
+    def test_overline(self):
+        self.assertEqual(
+                box('hello', 'overline'),
+                dedent('''\
+                        -----
+                        hello'''),
+                )
+        self.assertEqual(
+                box('hello\nworld', 'overline'),
+                dedent('''\
+                        -----
+                        hello
+                        world'''),
+                )
+        self.assertEqual(
+                box('hello\nworlds', 'overline'),
+                "------\n"
+                "hello \n"
+                "worlds",
+                )
+
+    def test_underline(self):
+        self.assertEqual(
+                box('hello', 'underline'),
+                dedent('''\
+                          hello
+                          -----'''),
+                )
+        self.assertEqual(
+                box('hello\nworld', 'underline'),
+                dedent('''\
+                          hello
+                          world
+                          -----'''),
+                )
+        self.assertEqual(
+                box('hello\nworlds', 'underline'),
+                "hello \n"
+                "worlds\n"
+                "------",
+                )
+
+    def test_lined(self):
+        self.assertEqual(
+                box('hello', 'lined'),
+                dedent('''\
+                          -----
+                          hello
+                          -----'''),
+                )
+        self.assertEqual(
+                box('hello\nworld', 'lined'),
+                dedent('''\
+                          -----
+                          hello
+                          world
+                          -----'''),
+                )
+        self.assertEqual(
+                box('hello\nworlds', 'lined'),
+                "------\n"
+                "hello \n"
+                "worlds\n"
+                "------",
+                )
+
 
 if not is_win:
     @skipUnless(INCLUDE_SLOW, 'skipping slow tests')
