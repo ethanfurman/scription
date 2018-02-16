@@ -2605,18 +2605,13 @@ def box(message, *style, **kwds):
     #
     times, remainder = divmod(width, len(top))
     top_line = top * times
-    if remainder and border != 'underline':
-        top_line += top
-        padding += len(top) // 2
-        width = len(top_line)
+    if remainder:
+        top_line += top[-remainder:]
     #
     times, remainder = divmod(width, len(bottom))
     bottom_line = bottom * times
     if remainder:
-        bottom_line += bottom
-        if border == 'underline':
-            padding += len(bottom) // 2
-            width = len(bottom_line)
+        bottom_line += bottom[-remainder:]
     #
     box = []
     padding = padding * ' '
