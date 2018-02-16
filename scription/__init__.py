@@ -79,7 +79,7 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 81, 8
+version = 0, 81, 9, 1
 
 # data
 __all__ = (
@@ -1276,6 +1276,8 @@ def Run():
             else:
                 abort(str(exc), exc.returncode)
         raise
+    except KeyboardInterrupt:
+        _print('\n<Ctrl-C> detected, aborting')
 
 
 ## optional
