@@ -2643,19 +2643,30 @@ def print(*values, **kwds):
         target = kwds.get('file') or stdout
         if verbose_level > script_module.get('script_verbosity', 1) and target is not stderr:
             return
+        border = kwds.pop('border', None)
+        if border is not None and not isinstance(border, tuple):
+            border = (border, )
+        sep = kwds.get('sep', ' ')
         is_tty = _is_atty.get(target)
         try:
             is_tty = os.isatty(target.fileno())
             _is_atty[target] = is_tty
         except (AttributeError, TypeError):
             _is_atty[target] = is_tty = False
-        if not is_tty:
+        if not is_tty or border is not None:
+            old_values = []
             new_values = []
             for v in values:
                 v = str(v)
+                old_values.append(v)
                 v = re.sub('\x1b\[[\d;]*\w', '', v)
                 new_values.append(v)
-            values = tuple(new_values)
+            if not is_tty:
+                values = new_values
+            else:
+                values = old_values
+            if border is not None:
+                values = (box(sep.join(values), *border), )
         try:
             _print(*values, **kwds)
             target.flush()
