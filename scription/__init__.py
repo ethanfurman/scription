@@ -2583,6 +2583,8 @@ def box(message, style, *chars, **kwds):
         top, bottom, left, right = chars
     else:
         raise ScriptionError('if box chars specified, must be a single item for use as all four, two items for use as top/bottom and left/right, or four items')
+    # calculate rule now
+    rule = '-' * width
     #
     padding = 0
     if style == 'box':
@@ -2617,6 +2619,8 @@ def box(message, style, *chars, **kwds):
     if style != 'underline':
         box.append(top_line)
     for line in lines:
+        if line == '---':
+            line = rule
         leading = ('%(left)s%(padding)s%(line)s' %
                 {'left': left, 'padding': padding, 'line':line}
                 )
