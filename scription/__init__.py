@@ -2539,8 +2539,8 @@ def info(*args, **kwds):
         kwds['verbose'] = kwds.pop('verbose', 1)
         print(*args, **kwds)
 
-def box(message, style, *chars, **kwds):
-    """ draws box around text using style and box_chars
+def box(message, *style, **kwds):
+    """ draws box around text using style -> ([border,] [char [, char [ ...]]])
 
     stlye:
 
@@ -2567,10 +2567,14 @@ def box(message, style, *chars, **kwds):
     2-item tuple ->  (top_bottom, left_right)
     4-item tuple ->  (top, bottom, left, right)
     """
-    if style not in ('flag', 'box', 'overline', 'underline', 'lined'):
-        raise ScriptionError('invalid style:  %r' % (style, ))
+    if style and style[0] in ('flag', 'box', 'overline', 'underline', 'lined'):
+        border = style[0]
+        chars = style[1:]
+    else:
+        border = 'box'
+        chars = style
     lines = message.split('\n')
-    width = max([len(l) for l in lines])
+    width = max([len(re.sub('\x1b\[[\d;]*\w', '', l)) for l in lines])
     if not chars:
         top = bottom = '-'
         left = right = '|'
@@ -2587,10 +2591,10 @@ def box(message, style, *chars, **kwds):
     rule = '-' * width
     #
     padding = 0
-    if style == 'box':
+    if border == 'box':
         padding = 1
         width += len(left) + len(right) + 2 * padding
-    elif style == 'flag':
+    elif border == 'flag':
         padding = 1
         width += len(left) + 2 * padding
         # make sure right is not used
@@ -2601,7 +2605,7 @@ def box(message, style, *chars, **kwds):
     #
     times, remainder = divmod(width, len(top))
     top_line = top * times
-    if remainder and style != 'underline':
+    if remainder and border != 'underline':
         top_line += top
         padding += len(top) // 2
         width = len(top_line)
@@ -2610,13 +2614,13 @@ def box(message, style, *chars, **kwds):
     bottom_line = bottom * times
     if remainder:
         bottom_line += bottom
-        if style == 'underline':
+        if border == 'underline':
             padding += len(bottom) // 2
             width = len(bottom_line)
     #
     box = []
     padding = padding * ' '
-    if style != 'underline':
+    if border != 'underline':
         box.append(top_line)
     for line in lines:
         if line == '---':
@@ -2626,7 +2630,7 @@ def box(message, style, *chars, **kwds):
                 )
         line = '%-*s%s' % (width-len(right), leading, right)
         box.append(line)
-    if style != 'overline':
+    if border != 'overline':
         box.append(bottom_line)
     return '\n'.join(box)
 
