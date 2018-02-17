@@ -1997,9 +1997,9 @@ class TestBox(TestCase):
         self.assertEqual(
                 box('a very fancy box', 'box', '* *', '**'),
                 dedent('''\
-                        * ** ** ** ** ** ** ** *
-                        **  a very fancy box  **
-                        * ** ** ** ** ** ** ** *'''),
+                        * ** ** ** ** ** ** **
+                        ** a very fancy box **
+                        * ** ** ** ** ** ** **'''),
                 )
 
     def test_overline(self):

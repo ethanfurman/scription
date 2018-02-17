@@ -1,3 +1,21 @@
+0.81.9
+======
+
+exit gracefully on ctrl-c
+support rulebreaks in box()
+make style an optional positional argument in box()
+smartly truncate top/bottom lines in box() that are longer than content
+add border keyword to print that auto-calls box()
+
+
+0.81.8
+======
+
+ProgressView only prints message if stdout is redirected
+make separator between message and total customizable
+add box() for prettifying output
+
+
 0.81.7
 ======
 
