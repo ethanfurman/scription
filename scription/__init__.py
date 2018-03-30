@@ -79,7 +79,8 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 81, 9
+version = 0, 81, 10, 1
+
 
 # data
 __all__ = (
@@ -2136,10 +2137,21 @@ class ProgressView(object):
     """
     Displays progress as a bar or a numeric count.
     """
-    ViewType = Enum('ViewType', (('Bar', 'bar'), ('Percent', 'percent'), ('Count', 'count')))
+    ViewType = Enum(
+            'ViewType',
+            (('BAR', 'bar'), ('PERCENT', 'percent'), ('COUNT', 'count'), ('NONE', 'none')),
+            type=str,
+            )
     export(ViewType, vars())
 
     def __init__(self, total=None, view_type='count', message=None, bar_char='*', sep=': ', iterable=None):
+        try:
+            view_type = self.ViewType(view_type)
+        except KeyError:
+            raise ScriptionError(
+                    'unknown value %r for view_type; allowed values: %s'
+                        % ', '.join(repr(vt.value) for vt in self.ViewType)
+                    )
         headless = not _is_atty[stdout]
         if total is None and iterable is None:
             raise ValueError('total must be specified if not wrapping an iterable')
@@ -2152,50 +2164,53 @@ class ProgressView(object):
                     total = get_hint(iterable)
                 except TypeError:
                     pass
-                if total is None:
+                if total is None and view_type is not self.NONE:
                     view_type = 'count'
         verbosity = script_module.get('script_verbosity', 1)
-        self.blank = verbosity < 1
+        self.blank = verbosity < 1 or view_type is self.NONE or headless
         self.iterator = iter(iterable)
         self.current_count = 0
         self.total = total
         self.blockcount = 0
         self.bar_char = bar_char
         self.view_type = self.ViewType(view_type)
-        if self.view_type is self.ViewType.Bar and verbosity > 1:
-            self.view_type = self.ViewType.Percent
+        if self.view_type is self.ViewType.BAR and verbosity > 1:
+            self.view_type = self.ViewType.PERCENT
         self.last_percent = 0
         self.last_count = 0
         self.last_time = time.time()
         self.f = sys.stdout
+        if message is not None:
+            if total is not None and '$total' in message:
+                message = message.replace('$total', str(total))
+            else:
+                message = ' '.join([w for w in message.split() if w != '$total'])
+            if view_type is self.BAR:
+                message = '\n' + message
+            self.f.write('%s' % message)
+            if self.blank:
+                self.f.write('\n')
+                self.f.flush()
+                return
+            if self.view_type is not self.BAR:
+                self.f.write(sep)
         if not self.blank:
-            if message is not None:
-                if total is not None and '$total' in message:
-                    message = message.replace('$total', str(total))
-                else:
-                    message = ' '.join([w for w in message.split() if w != '$total'])
-                self.f.write('\n%s' % message)
-                if headless:
-                    self.blank = True
-                    return
-                if self.view_type is not self.Bar:
-                    self.f.write(sep)
-            if self.view_type is self.Percent:
+            if self.view_type is self.PERCENT:
                 self.progress = self._bar_progress
                 self.f.write('  0%')
-            elif self.view_type is self.Bar:
+            elif self.view_type is self.BAR:
                 self.progress = self._bar_progress
                 self.f.write('\n-------------------- % Progress ---------------- 1\n')
                 self.f.write('    1    2    3    4    5    6    7    8    9    0\n')
                 self.f.write('    0    0    0    0    0    0    0    0    0    0\n')
-            elif self.view_type is self.Count:
+            elif self.view_type is self.COUNT:
                 self.progress = self._count_progress
                 self.time = time.time()
                 self.f.write('0')
             else:
                 raise Exception('unknown value for view_type: %r' % self.view_type)
             self.f.flush()
-        scription_debug('ProgressView:')
+        scription_debug('ProgressView')
         for attr in 'blank iterator total bar_char view_type last_time progress'.split():
             scription_debug('  %s:  %r' % (attr, getattr(self, attr)), verbose=2)
 
@@ -2245,9 +2260,9 @@ class ProgressView(object):
         if complete <= self.last_percent:
             return
         self.last_percent = complete
-        if self.view_type is self.Percent:
+        if self.view_type is self.PERCENT:
             self.f.write('%3d%%' % complete)
-        elif self.view_type is self.Bar:
+        elif self.view_type is self.BAR:
             blockcount = int(complete//2)
             if blockcount <= self.blockcount:
                 return
@@ -2261,9 +2276,9 @@ class ProgressView(object):
         self.f.flush()
 
     def progress(self, count, done=False):
-        if done:
-            self.f.write('\n')
-            self.f.flush()
+        # if done:
+        #     self.f.write('\n')
+        #     self.f.flush()
         pass
 
     def tick(self):
