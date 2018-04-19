@@ -655,6 +655,7 @@ class NameSpace(object):
 
 def _rewrite_args(args):
     "prog -abc heh --foo bar  -->  prog -a -b -c heh --foo bar"
+    scription_debug('incoming args: %r' % (args, ), verbose=2)
     new_args = []
     pass_through = False
     for arg in args:
@@ -668,6 +669,7 @@ def _rewrite_args(args):
             continue
         for ch in arg[1:]:
             new_args.append('-%s' % ch)
+    scription_debug('outgoing args: %r' % (new_args, ), verbose=2)
     return new_args
 
 def _run_once(func, args, kwds):
