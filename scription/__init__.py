@@ -79,7 +79,7 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 81, 10
+version = 0, 82, 0, 1
 
 
 # data
@@ -910,7 +910,6 @@ def _usage(func, param_line_args):
                 if var_arg_spec is None:
                     raise ScriptionError("don't know what to do with %r" % item, use_help=True)
                 var_arg_spec._cli_value += (var_arg_spec.type(item), )
-                all_to_varargs = True
     # exc = None
     if print_help:
         _print()
