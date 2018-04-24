@@ -88,7 +88,7 @@ __all__ = (
     'Bool','InputFile', 'OutputFile', 'IniError', 'IniFile', 'OrmError', 'OrmFile', 'NameSpace',
     'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'MULTIREQ', 'REQUIRED',
     'ScriptionError', 'ExecuteError', 'FailedPassword', 'TimeoutError', 'Execute', 'Job', 'ProgressView',
-    'abort', 'echo', 'error', 'get_response', 'help', 'mail', 'user_ids', 'print', 'box',
+    'abort', 'echo', 'error', 'get_response', 'help', 'input', 'mail', 'user_ids', 'print', 'box',
     'stdout', 'stderr', 'wait_and_check', 'b', 'u', 'ColorTemplate', 'Color',
     'Trivalent', 'Truthy', 'Unknown', 'Falsey', 'Exit',
     # the following are actually injected directly into the calling module, but are
@@ -2707,7 +2707,7 @@ def log_exception(tb=None):
 
 
 ### interaction
-def get_response(
+def input(
         question='',
         validate=None,
         type=None,
@@ -2835,6 +2835,7 @@ def get_response(
         if validate(answer):
             break
     return type(answer)
+get_response = input
 
 def mail(server=None, port=25, message=None):
     """
