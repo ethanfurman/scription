@@ -2708,7 +2708,7 @@ def log_exception(tb=None):
 
 ### interaction
 def get_response(
-        question,
+        question='',
         validate=None,
         type=None,
         retry='bad response, please try again',
@@ -2735,7 +2735,7 @@ def get_response(
         if type is None:
             type = str
         if validate is None:
-            validate = lambda ans: type(ans.strip())
+            validate = lambda ans: True
     else:
         # two supported options:
         #   'some question [always/maybe/never]'
@@ -2830,7 +2830,8 @@ def get_response(
     # setup is done, ask question and get answer
     while 'answer is unacceptable':
         answer = raw_input(question)
-        answer = answer or default
+        if default and not answer:
+            answer = default
         if validate(answer):
             break
     return type(answer)
