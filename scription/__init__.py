@@ -678,6 +678,9 @@ def _rewrite_args(args):
         if arg.startswith('--') or not arg.startswith('-'):
             new_args.append(arg)
             continue
+        if arg[2:3] == '=':
+            new_args.append('-%s' % arg)
+            continue
         for ch in arg[1:]:
             new_args.append('-%s' % ch)
     scription_debug('outgoing args: %r' % (new_args, ), verbose=2)

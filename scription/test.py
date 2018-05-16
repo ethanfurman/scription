@@ -1013,7 +1013,7 @@ class TestCommandlineProcessing(TestCase):
         self.assertRaisesRegex(
                 ScriptionError,
                 'only one of OW and TOOHOO may be specified',
-                _usage, tester, 'tester --ow=google -t yahoo'.split(),
+                _usage, tester, 'tester -o=google -t yahoo'.split(),
                 )
         #
         self.assertRaisesRegex(
@@ -1031,7 +1031,7 @@ class TestCommandlineProcessing(TestCase):
         self.assertRaisesRegex(
                 ScriptionError,
                 'only one of OW and TOOHOO may be specified',
-                _usage, tester, 'tester --ow=google --toohoo=yahoo'.split(),
+                _usage, tester, 'tester --ow=google -t=yahoo'.split(),
                 )
         #
         self.assertRaisesRegex(

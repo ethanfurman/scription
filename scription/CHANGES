@@ -1,6 +1,8 @@
 0.82.0
 ======
 
+support "-a=..."
+
 add radio option to parameters: if specified, only one parameter from each
 radio group may be used
 
