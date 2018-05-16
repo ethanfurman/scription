@@ -714,11 +714,17 @@ class TestCommandlineProcessing(TestCase):
             pass
         tests = (
                 ('do_job hg st'.split(), (), {}, ('hg', 'st'), {}),
-                ('do_job hg diff -r 199'.split(), (), {}, ('hg', 'diff', '-r', '199'), {}),
-                ('do_job hg diff -c 201'.split(), (), {}, ('hg', 'diff', '-c', '201'), {}),
-                (shlex.split('do_job hg commit -m "a message"'), (), {}, ('hg', 'commit', '-m', 'a message'), {}),
+                ('do_job -- hg diff -r 199'.split(), (), {}, ('hg', 'diff', '-r', '199'), {}),
+                ('do_job hg -- diff -c 201'.split(), (), {}, ('hg', 'diff', '-c', '201'), {}),
+                (shlex.split('do_job hg commit -- -m "a message"'), (), {}, ('hg', 'commit', '-m', 'a message'), {}),
                 )
         test_func_parsing(self, do_job, tests)
+        #
+        self.assertRaisesRegex(
+                ScriptionError,
+                '-r not valid',
+                _usage, do_job, 'do_job hg diff -r 199'.split(),
+                )
 
     def test_kwds(self):
         @Command(
