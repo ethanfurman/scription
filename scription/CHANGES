@@ -1,3 +1,15 @@
+0.82.0
+======
+
+add radio option to parameters: if specified, only one parameter from each
+radio group may be used
+
+get_response() renamed to input(), now acts like input by default
+
+backwards-incompatible change:
+- undo change made in 0.80.0  args after a vararg no longer treated as varargs
+
+
 0.81.10
 =======
 

@@ -958,6 +958,88 @@ class TestCommandlineProcessing(TestCase):
                 )
 
 
+    def test_radio(self):
+        @Command(
+                huh=Spec('what', 'flag', radio='aches'),
+                uhuh=Spec('no way', 'flag', radio='aches'),
+                wuhuh=Spec('yeah huh', 'flag', radio='aches'),
+                ow=Spec('oh no', 'option', radio='w'),
+                toohoo=Spec('yes way', 'option', radio='w'),
+                gosh=Spec('really', 'multi', radio='explete'),
+                darn=Spec('argghhh', 'multi', radio='explete'),
+                )
+        def tester(huh, uhuh, wuhuh, ow, toohoo, gosh, darn):
+            pass
+        tests = (
+                ( 'tester -h '.split(), (), {}, (True, False, False, None, None, (), ()), {} ),
+                ( 'tester -u -o google'.split(), (), {}, (False, True, False, 'google', None, (), ()), {} ),
+                ( 'tester -w -t file2'.split(), (), {}, (False, False, True, None, 'file2', (), ()), {} ),
+                ( 'tester -h -g ick'.split(), (), {}, (True, False, False, None, None, ('ick', ), ()), {} ),
+                ( 'tester -u -o google -d ack'.split(), (), {}, (False, True, False, 'google', None, (), ('ack', )), {} ),
+                ( 'tester -w -t file2 -g ick,ack'.split(), (), {}, (False, False, True, None, 'file2', ('ick', 'ack'), ()), {} ),
+                )
+        test_func_parsing(self, tester, tests)
+        #
+        self.assertRaisesRegex(
+                ScriptionError,
+                'only one of HUH, UHUH, and WUHUH may be specified',
+                _usage, tester, 'tester -h -u'.split(),
+                )
+        #
+        self.assertRaisesRegex(
+                ScriptionError,
+                'only one of HUH, UHUH, and WUHUH may be specified',
+                _usage, tester, 'tester -h -w'.split(),
+                )
+        #
+        self.assertRaisesRegex(
+                ScriptionError,
+                'only one of HUH, UHUH, and WUHUH may be specified',
+                _usage, tester, 'tester -w -u'.split(),
+                )
+        #
+        self.assertRaisesRegex(
+                ScriptionError,
+                'only one of HUH, UHUH, and WUHUH may be specified',
+                _usage, tester, 'tester -h -u -o maybe'.split(),
+                )
+        #
+        self.assertRaisesRegex(
+                ScriptionError,
+                'only one of HUH, UHUH, and WUHUH may be specified',
+                _usage, tester, 'tester -h -u -t definitely'.split(),
+                )
+        #
+        self.assertRaisesRegex(
+                ScriptionError,
+                'only one of OW and TOOHOO may be specified',
+                _usage, tester, 'tester --ow=google -t yahoo'.split(),
+                )
+        #
+        self.assertRaisesRegex(
+                ScriptionError,
+                'only one of OW and TOOHOO may be specified',
+                _usage, tester, 'tester -h -o google --toohoo=yahoo'.split(),
+                )
+        #
+        self.assertRaisesRegex(
+                ScriptionError,
+                'only one of OW and TOOHOO may be specified',
+                _usage, tester, 'tester -u -o google -t yahoo'.split(),
+                )
+        #
+        self.assertRaisesRegex(
+                ScriptionError,
+                'only one of OW and TOOHOO may be specified',
+                _usage, tester, 'tester --ow=google --toohoo=yahoo'.split(),
+                )
+        #
+        self.assertRaisesRegex(
+                ScriptionError,
+                'only one of DARN and GOSH may be specified',
+                _usage, tester, 'tester -o google --darn=ack -g ick'.split(),
+                )
+
 class TestParamRemoval(TestCase):
 
     template = (
