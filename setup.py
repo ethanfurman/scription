@@ -99,7 +99,7 @@ make = []
 
 data = dict(
         name='scription',
-        version='0.83.1a1',
+        version='0.83.1a2',
         license='BSD License',
         description='simple script parameter parser',
         long_description=description,
@@ -126,6 +126,8 @@ data = dict(
              'Programming Language :: Python :: 3.3',
              'Programming Language :: Python :: 3.4',
              'Programming Language :: Python :: 3.5',
+             'Programming Language :: Python :: 3.6',
+             'Programming Language :: Python :: 3.7',
              ],
     )
 
