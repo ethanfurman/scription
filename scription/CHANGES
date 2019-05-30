@@ -2,6 +2,7 @@
 =======
 
 emit "--no-[flag]" instead of "--[flag]" when force_default is True
+use .wait() for sub-process based Execute/Job to avoid zombie processes
 
 
 0.83.00
