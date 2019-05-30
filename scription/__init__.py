@@ -574,15 +574,16 @@ def _help(func):
         if param[0] == '_':
             # ignore private params
             continue
-        example = annotations[param].usage
-        if annotations[param].kind == 'flag':
-            if annotations[param]._script_default and annotations[param]._use_default:
+        annote = annotations[param]
+        example = annote.usage
+        if annote.kind == 'flag':
+            if annote._script_default is True and annote._use_default:
                 print_params.append('--no-%s' % param)
             else:
                 print_params.append('--%s' % param)
-        elif annotations[param].kind == 'option':
+        elif annote.kind == 'option':
             print_params.append('--%s %s' % (param, example))
-        elif annotations[param].kind == 'multi':
+        elif annote.kind == 'multi':
             print_params.append('--%s %s [--%s ...]' % (param, example, param))
         else:
             print_params.append(example)
