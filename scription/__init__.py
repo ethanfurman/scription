@@ -1626,7 +1626,7 @@ class Job(object):
                         scription_debug('checking if passwords still being requested')
                     # no more passwords -- if pty, check if password still being requested
                     if not self.process:
-                        if not self.get_echo():
+                        if self.is_alive() and not self.get_echo():
                             scription_debug('PASSWORD FAILURE:  invalid passwords or none given')
                             with io_lock:
                                 self._stderr.append('Invalid/too few passwords\n')
