@@ -1,17 +1,26 @@
-0.82.00
+0.83.00
 =======
 
 parameters:
-- do not automatically include options/flag in varargs after a varargs
-- add radio-button capability
 - ignore equals while processing positional arguments
-- support single-dash lead-in for OPTIONs
 
 utilities:
-- make get_response() act like input() by default
-- rename get_response() to input()
 - add table printing capability to print()
 - check for active process before checking terminal status (Job)
+
+
+0.82.0
+======
+
+support "-a=..."
+
+add radio option to parameters: if specified, only one parameter from each
+radio group may be used
+
+get_response() renamed to input(), now acts like input by default
+
+backwards-incompatible change:
+- undo change made in 0.80.0  args after a vararg no longer treated as varargs
 
 
 0.81.10
