@@ -1250,19 +1250,19 @@ class TestCommandNames(TestCase):
         for name in ('test_dash', 'test-dash'):
             cmdline = ' '.join([sys.executable, self.command_file, name])
             result = Execute(cmdline, timeout=10)
-            self.assertTrue(result.returncode == 0, '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
+            self.assertTrue(result.returncode == 0, '%s failed! [%r]\n%s\n%s' % (cmdline, result.returncode, result.stdout, result.stderr))
             self.assertEqual(result.stderr, '', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
             self.assertEqual(result.stdout, 'success!\n', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
 
     def test_capital_in_name(self):
         cmdline = ' '.join([sys.executable, self.command_file])
         result = Execute(cmdline, timeout=10)
-        self.assertTrue(result.returncode == 0, '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
+        self.assertTrue(result.returncode == 0, '%s failed! [%r]\n%s\n%s' % (cmdline, result.returncode, result.stdout, result.stderr))
         self.assertEqual(result.stderr, '', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
         self.assertEqual(result.stdout, 'aint that nice.\n', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
         cmdline = ' '.join([sys.executable, self.command_file, '--help'])
         result = Execute(cmdline, timeout=10)
-        self.assertTrue(result.returncode == 0, '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
+        self.assertTrue(result.returncode == 0, '%s failed! [%r]\n%s\n%s' % (cmdline, result.returncode, result.stdout, result.stderr))
         self.assertEqual(result.stderr, '', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
         self.assertEqual(
                 result.stdout,
@@ -1638,15 +1638,15 @@ class TestExecution(TestCase):
     def test_environ(self):
         "test setting environment"
         command = Execute(
-                [sys.executable, '-c', 'import os; print(os.environ["HAPPYDAY"])'],
-                timeout=1,
+                [sys.executable, '-c', 'import os; print("I found: " + os.environ["HAPPYDAY"])'],
+                timeout=10,
                 pty=False,
                 HAPPYDAY='fonzirelli',
                 )
         self.assertIn('fonzirelli', command.stdout)
         command = Execute(
-                [sys.executable, '-c', 'import os; print(os.environ["HAPPYDAY"])'],
-                timeout=1,
+                [sys.executable, '-c', 'import os; print("I found: " + os.environ["HAPPYDAY"])'],
+                timeout=10,
                 pty=True,
                 HAPPYDAY='fonzirelli',
                 )
