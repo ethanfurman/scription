@@ -919,7 +919,7 @@ def _usage(func, param_line_args):
                 value = None
             else:
                 raise ScriptionError('%s argument %s should not be introduced with --' % (annote.kind, item), use_help=True)
-        elif '=' in item:
+        elif pos >= max_pos and '=' in item:
             # no lead dash, keyword args
             scription_debug('keyword arg', verbose=2)
             if kwd_arg_spec is None:
@@ -936,10 +936,10 @@ def _usage(func, param_line_args):
         else:
             scription_debug('positional?', verbose=2)
             # positional (required?) argument
-            scription_debug('positional argument:', value)
-            scription_debug('  with Spec:', annote)
+            scription_debug('positional argument:', item)
             if pos < max_pos:
                 annote = annotations[pos]
+                scription_debug('  with Spec:', annote)
                 if annote.remove:
                     to_be_removed.append(offset)
                 if annote.kind == 'multireq' and item:

@@ -364,6 +364,18 @@ class TestCommandlineProcessing(TestCase):
                 )
         test_func_parsing(self, tester, tests)
 
+    def test_required_with_equal(self):
+        @Command(
+                huh=('required option that should accept =', 'required'),
+                )
+        def tester(huh):
+            pass
+        tests = (
+                ( 'tester file1=that'.split(), (), {}, ('file1=that', ), {} ),
+                ( shlex.split('tester file2="woohoo"'), (), {}, ('file2="woohoo"', ), {} ),
+                )
+        test_func_parsing(self, tester, tests)
+
     def test_multireq(self):
         @Command(
                 huh=('required option that accepts several values', 'multireq'),
