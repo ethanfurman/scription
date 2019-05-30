@@ -2706,7 +2706,7 @@ for channel in (stdin, stdout, stderr):
     except:
         _is_atty[channel] = False
 def print(*values, **kwds):
-    # kwds can contain sep (' '), end ('\n'), file (sys.stdout), and
+    # kwds can contain sep (' '), end ('\n'), file (sys.stdout), border, and
     # verbose (1)
     with print_lock:
         verbose_level = kwds.pop('verbose', 1)
@@ -2714,6 +2714,34 @@ def print(*values, **kwds):
         if verbose_level > script_module.get('script_verbosity', 1) and target is not stderr:
             return
         border = kwds.pop('border', None)
+        if border == 'table':
+            if (
+                    len(values) != 1
+                 or not isinstance(values[0], (list, tuple))
+                 or not isinstance(values[0][0], (list, tuple))
+                 ):
+                abort("only a list of lists is valid when border is 'table'")
+            values = values[0]
+            if 'sep' in kwds or 'end' in kwds:
+                abort("keyword arguments 'sep' and 'end' are invalid when border is 'table'")
+            # assemble the table
+            widths = [0] * len(values[0])
+            for row in values:
+                if row is None:
+                    continue
+                for i, cell in enumerate(row):
+                    widths[i] = max(widths[i], len(cell))
+            template = ' | '.join([('%-' + str(i) + 's') for i in widths])
+            sep = ' | '.join(['-' * w for w in widths])
+            lines = []
+            for row in values:
+                if row is None:
+                    lines.append(sep)
+                else:
+                    row = template % tuple(row)
+                    lines.append(row)
+            values = ('\n'.join(lines), )
+            border = 'box'
         if border is not None and not isinstance(border, tuple):
             border = (border, )
         sep = kwds.get('sep', ' ')
