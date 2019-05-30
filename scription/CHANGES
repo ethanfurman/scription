@@ -1,3 +1,19 @@
+0.82.00
+=======
+
+parameters:
+- do not automatically include options/flag in varargs after a varargs
+- add radio-button capability
+- ignore equals while processing positional arguments
+- support single-dash lead-in for OPTIONs
+
+utilities:
+- make get_response() act like input() by default
+- rename get_response() to input()
+- add table printing capability to print()
+- check for active process before checking terminal status (Job)
+
+
 0.81.10
 =======
 
