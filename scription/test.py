@@ -372,7 +372,7 @@ class TestCommandlineProcessing(TestCase):
             pass
         tests = (
                 ( 'tester file1=that'.split(), (), {}, ('file1=that', ), {} ),
-                ( shlex.split('tester file2="woohoo"'), (), {}, ('file2="woohoo"', ), {} ),
+                ( shlex.split('tester file2="woohoo"'), (), {}, ('file2=woohoo', ), {} ),
                 )
         test_func_parsing(self, tester, tests)
 
