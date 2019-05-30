@@ -79,7 +79,7 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 83, 0
+version = 0, 83, 1, 1
 
 
 # data
@@ -576,7 +576,10 @@ def _help(func):
             continue
         example = annotations[param].usage
         if annotations[param].kind == 'flag':
-            print_params.append('--[no-]%s' % param)
+            if annotations[param]._script_default and annotations[param]._use_default:
+                print_params.append('--no-%s' % param)
+            else:
+                print_params.append('--%s' % param)
         elif annotations[param].kind == 'option':
             print_params.append('--%s %s' % (param, example))
         elif annotations[param].kind == 'multi':
