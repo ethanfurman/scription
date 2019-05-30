@@ -79,14 +79,14 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 82, 0, 1
+version = 0, 82, 0
 
 
 # data
 __all__ = (
     'Alias', 'Command', 'Script', 'Main', 'Run', 'Spec',
     'Bool','InputFile', 'OutputFile', 'IniError', 'IniFile', 'OrmError', 'OrmFile', 'NameSpace',
-    'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'MULTIREQ', 'REQUIRED',
+    'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'MULTIREQ', 'REQUIRED', 'RADIO',
     'ScriptionError', 'ExecuteError', 'FailedPassword', 'TimeoutError', 'Execute', 'Job', 'ProgressView',
     'abort', 'echo', 'error', 'get_response', 'help', 'input', 'mail', 'user_ids', 'print', 'box',
     'stdout', 'stderr', 'wait_and_check', 'b', 'u', 'ColorTemplate', 'Color',
@@ -310,7 +310,8 @@ class SpecKind(DocEnum):
     MULTI = "multiple values per name (list form, no whitespace)"
     MULTIREQ = "multiple values per name (list form, no whitespace, required)"
     FLAG = "boolean/trivalent value per name"
-    KEYWORD = 'unknown options'
+    KEYWORD = "unknown options"
+    RADIO = "mutually exclusive flags/options"
 
 
 # exceptions
@@ -349,25 +350,35 @@ def _add_annotations(func, annotations, script=False):
     add annotations as __scription__ to func
     '''
     params, varargs, keywords, defaults = inspect.getargspec(func)
-    names = params
+    radio = {}
     if varargs:
-        names.append(varargs)
+        params.append(varargs)
     if keywords:
-        names.append(keywords)
+        params.append(keywords)
     errors = []
-    for spec in annotations:
-        if spec not in names:
+    for name, spec in annotations.items():
+        if name not in params:
             if not script:
-                errors.append(spec)
-            annotations[spec]._global = True
+                errors.append(name)
+            annotations[name]._global = True
         else:
-            annotations[spec]._global = False
+            annotations[name]._global = False
+        if spec._radio:
+            radio.setdefault(spec._radio, []).append(name)
     if errors:
-        raise ScriptionError("names %r not in %s's signature" % (errors, func.__name__))
+        raise ScriptionError("name(s) %r not in %s's signature" % (errors, func.__name__))
     func.__scription__ = annotations
     func.names = sorted(annotations.keys())
-    func.all_params = sorted(names)
+    func.radio = radio
+    func.all_params = sorted(params)
     func.named_params = sorted(params)
+
+def _and_list(names):
+    names = sorted([n.upper() for n in names])
+    if len(names) == 2:
+        return '%s and %s' % tuple(names)
+    else:
+        return '%s, and %s' % (', '.join(names[:-1]), names[-1])
 
 class empty(object):
     def __add__(self, other):
@@ -725,6 +736,7 @@ def _usage(func, param_line_args):
     scription_debug('_usage(%r, %r' % (func, param_line_args), verbose=2)
     # Command = script_module['script_commands']
     program, param_line_args = param_line_args[0], _rewrite_args(param_line_args[1:])
+    radio = set()
     pos = 0
     max_pos = func.max_pos
     scription_debug('max_pos:', max_pos, verbose=2)
@@ -755,6 +767,11 @@ def _usage(func, param_line_args):
                 if annote._script_default:
                     scription_debug('found: %r' % (annote._script_default, ))
                     annote._cli_value = annote._script_default
+                    if annote._cli_value and annote._radio:
+                        if annote._radio in radio:
+                            raise ScriptionError('only one of %s may be specified'
+                                        % _and_list(func.radio[annote._radio]))
+                        radio.add(annote._radio)
                 else:
                     raise ScriptionError('%s has no value' % last_item, use_help=True)
             else:
@@ -768,10 +785,20 @@ def _usage(func, param_line_args):
                     if annote.choices and value not in annote.choices:
                         raise ScriptionError('%s: %r not in [ %s ]' % (annote.usage, value, ' | '.join(annote.choices)), use_help=True)
                     annote._cli_value = annote.type(value)
+                    if annote._cli_value and annote._radio:
+                        if annote._radio in radio:
+                            raise ScriptionError('only one of %s may be specified'
+                                        % _and_list(func.radio[annote._radio]))
+                        radio.add(annote._radio)
                 elif annote.kind in ('multi', 'multireq'):
                     scription_debug('processing as multi', verbose=2)
                     values = [annote.type(a) for a in _split_on_comma(value)]
                     annote._cli_value += tuple(values)
+                    if annote._cli_value and annote._radio:
+                        if annote._radio in radio:
+                            raise ScriptionError('only one of %s may be specified'
+                                        % _and_list(func.radio[annote._radio]))
+                        radio.add(annote._radio)
                 else:
                     raise ScriptionError("Error: %s's kind %r not in (option, multi, multireq)" % (last_item, annote.kind))
                 value = None
@@ -859,17 +886,36 @@ def _usage(func, param_line_args):
                         if annote.choices and value not in annote.choices:
                             raise ScriptionError('%s: %r not in [ %s ]' % (annote.usage, value, ' | '.join(annote.choices)), use_help=True)
                         annote._cli_value = annote.type(value)
+                        scription_debug('checking radio settings for option %s' % (item, ), verbose=2)
+                        if annote._radio:
+                            if annote._radio in radio:
+                                raise ScriptionError('only one of %s may be specified'
+                                        % _and_list(func.radio[annote._radio]))
+                            radio.add(annote._radio)
                     else:
                         scription_debug('processing as multi-option', verbose=2)
                         # value could be a list of comma-separated values
                         scription_debug('_usage:multi ->', annote.type, verbose=2)
                         annote._cli_value += tuple([annote.type(a) for a in _split_on_comma(value)])
                         scription_debug('_usage:multi ->', annote._cli_value, verbose=2)
+                        scription_debug('checking radio settings for multioption %s' % (item, ), verbose=2)
+                        if annote._radio:
+                            if annote._radio in radio:
+                                raise ScriptionError('only one of %s may be specified'
+                                        % _and_list(func.radio[annote._radio]))
+                            radio.add(annote._radio)
                     value = None
             elif annote.kind == 'flag':
                 scription_debug('flag', verbose=2)
                 value = annote.type(value)
                 annote._cli_value = value
+                # check for other radio set
+                scription_debug('checking radio settings for flag %s' % (item, ), verbose=2)
+                if value and annote._radio:
+                    if annote._radio in radio:
+                        raise ScriptionError('only one of %s may be specified'
+                                % _and_list(func.radio[annote._radio]))
+                    radio.add(annote._radio)
                 value = None
             else:
                 raise ScriptionError('%s argument %s should not be introduced with --' % (annote.kind, item), use_help=True)
@@ -1080,13 +1126,13 @@ class Script(object):
 class Spec(object):
     """tuple with named attributes for representing a command-line paramter
 
-    help, kind, abbrev, type, choices, usage_name, remove, default, envvar
+    help, kind, abbrev, type, choices, usage_name, remove, default, envvar, force_default, radio
     """
 
     def __init__(self,
             help=empty, kind=empty, abbrev=empty, type=empty,
             choices=empty, usage=empty, remove=False, default=empty,
-            envvar=empty, force_default=empty,
+            envvar=empty, force_default=empty, radio=empty,
             ):
         if isinstance(help, Spec):
             self.__dict__.update(help.__dict__)
@@ -1141,6 +1187,11 @@ class Spec(object):
         self._use_default = use_default
         self._global = False
         self._envvar = envvar
+        if radio is empty:
+            radio = ''
+        if not isinstance(radio, basestring):
+            raise ScriptionError('radio setting must be a name')
+        self._radio = radio or empty
 
     def __iter__(self):
         return iter((self.help, self.kind, self.abbrev, self.type, self.choices, self.usage, self.remove, self._script_default, self._envvar))

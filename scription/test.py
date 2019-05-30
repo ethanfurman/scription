@@ -965,6 +965,73 @@ class TestCommandlineProcessing(TestCase):
                 'test_choices gark'.split(),
                 )
 
+    def test_radio_single(self):
+        @Command(
+            csv=Spec('output is csv', FLAG, radio='output'),
+            xls=Spec('output is xls', FLAG, radio='output'),
+            txt=Spec('output is fixed-width text', FLAG, radio='output'),
+            output=Spec('output type', OPTION, choices=['csv','xls','txt'], radio='output'),
+            )
+        def test_radio(csv, xls, txt, output):
+            pass
+        tests = (
+                ('test_radio'.split(), (), {}, (False, False, False, None), {}),
+                ('test_radio -c'.split(), (), {}, (True, False, False, None), {}),
+                ('test_radio -x'.split(), (), {}, (False, True, False, None), {}),
+                ('test_radio -t'.split(), (), {}, (False, False, True, None), {}),
+                ('test_radio -o xls'.split(), (), {}, (False, False, False, 'xls'), {}),
+                )
+        test_func_parsing(self, test_radio, tests)
+        self.assertRaisesRegex(
+                ScriptionError,
+                'only one of CSV, OUTPUT, TXT, and XLS may be specified',
+                _usage,
+                test_radio,
+                'test_radio -c -t'.split(),
+                )
+        self.assertRaisesRegex(
+                ScriptionError,
+                'only one of CSV, OUTPUT, TXT, and XLS may be specified',
+                _usage,
+                test_radio,
+                'test_radio -x -o xls'.split(),
+                )
+
+    def test_radio_multiple(self):
+        @Command(
+            csv=Spec('output is csv', FLAG, radio='output'),
+            xls=Spec('output is xls', FLAG, radio='output'),
+            txt=Spec('output is fixed-width text', FLAG, radio='output'),
+            output=Spec('output type', OPTION, choices=['csv','xls','txt'], radio='output'),
+            red=Spec('highlight color', FLAG, radio='color'),
+            yellow=Spec('highlight color', FLAG, radio='color'),
+            )
+        def test_radio(csv, xls, txt, output, red, yellow):
+            pass
+        tests = (
+                ('test_radio'.split(), (), {}, (False, False, False, None, False, False), {}),
+                ('test_radio -c -r'.split(), (), {}, (True, False, False, None, True, False), {}),
+                ('test_radio -x -y'.split(), (), {}, (False, True, False, None, False, True), {}),
+                ('test_radio -t -y'.split(), (), {}, (False, False, True, None, False, True), {}),
+                ('test_radio -o xls -r'.split(), (), {}, (False, False, False, 'xls', True, False), {}),
+                )
+        test_func_parsing(self, test_radio, tests)
+        self.assertRaisesRegex(
+                ScriptionError,
+                'only one of RED and YELLOW may be specified',
+                _usage,
+                test_radio,
+                'test_radio -c -r -y'.split(),
+                )
+        self.assertRaisesRegex(
+                ScriptionError,
+                'only one of RED and YELLOW may be specified',
+                _usage,
+                test_radio,
+                'test_radio -r -y -t -o blah'.split(),
+                )
+
+
 class TestParamRemoval(TestCase):
 
     template = (
