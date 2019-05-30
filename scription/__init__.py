@@ -1647,6 +1647,9 @@ class Job(object):
             process_thread.join()
             scription_debug('process thread joined')
         finally:
+            if self.process:
+                self.returncode = self.process.wait()
+                self.terminated = True
             if deadman_switch is not None:
                 scription_debug('cancelling deadman switch')
                 deadman_switch.cancel()
