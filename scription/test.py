@@ -706,19 +706,33 @@ class TestCommandlineProcessing(TestCase):
                 )
         test_func_parsing(self, sassy, tests)
 
-    def test_varargs_autoconsume_after_first(self):
+    def test_varargs_do_not_autoconsume_after_first(self):
         @Command(
                 job=('job, job args, etc',),
                 )
         def do_job(*job):
             pass
-        tests = (
-                ('do_job hg st'.split(), (), {}, ('hg', 'st'), {}),
-                ('do_job hg diff -r 199'.split(), (), {}, ('hg', 'diff', '-r', '199'), {}),
-                ('do_job hg diff -c 201'.split(), (), {}, ('hg', 'diff', '-c', '201'), {}),
-                (shlex.split('do_job hg commit -m "a message"'), (), {}, ('hg', 'commit', '-m', 'a message'), {}),
+        self.assertRaisesRegex(
+                ScriptionError,
+                '-r not valid',
+                _usage,
+                do_job,
+                'do_job hg diff -r 199'.split(),
                 )
-        test_func_parsing(self, do_job, tests)
+        self.assertRaisesRegex(
+                ScriptionError,
+                '-c not valid',
+                _usage,
+                do_job,
+                'do_job hg diff -c 201'.split(),
+                )
+        self.assertRaisesRegex(
+                ScriptionError,
+                '-m not valid',
+                _usage,
+                do_job,
+                shlex.split('do_job hg commit -m "a message"'),
+                )
 
     def test_kwds(self):
         @Command(
@@ -950,7 +964,6 @@ class TestCommandlineProcessing(TestCase):
                 test_choices,
                 'test_choices gark'.split(),
                 )
-
 
 class TestParamRemoval(TestCase):
 
