@@ -79,7 +79,7 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 83, 2, 1
+version = 0, 83, 2
 
 
 # data
