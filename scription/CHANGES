@@ -1,3 +1,10 @@
+0.83.02
+=======
+
+print(..., border='table') now supports int/long/datetime.*/bool and
+aligns accordingly
+
+
 0.83.01
 =======
 

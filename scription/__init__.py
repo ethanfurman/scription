@@ -79,7 +79,7 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 83, 1
+version = 0, 83, 2, 1
 
 
 # data
@@ -156,6 +156,7 @@ if py_ver < (3, 0):
     bytes = str
     b = str
     u = unicode
+    number = int, long
     from itertools import izip_longest as zip_longest
     from __builtin__ import print as _print
     exec(textwrap.dedent('''\
@@ -168,12 +169,32 @@ else:
     unicode = str
     b = bytes
     u = unicode
+    number = int
     from itertools import zip_longest
     from builtins import print as _print
     exec(textwrap.dedent('''\
         def raise_with_traceback(exc, tb):
             raise exc.with_traceback(tb)
             '''))
+
+# for use with table printing
+try:
+    from dbf import Date, DateTime, Time, Logical, Quantum
+    dates = datetime.date, Date
+    datetimes = datetime.datetime, DateTime
+    times = datetime.time, Time
+    logical = bool, Logical, Quantum
+    fixed = dates + datetimes + times + logical
+    left = basestring
+    right = number
+except ImportError:
+    dates = datetime.date
+    datetimes = datetime.datetime
+    times = datetime.time
+    logical = bool
+    fixed = dates, datetimes, times, bool
+    left = basestring
+    right = number
 
 class undefined(object):
     def __repr__(self):
@@ -2733,19 +2754,65 @@ def print(*values, **kwds):
                 abort("keyword arguments 'sep' and 'end' are invalid when border is 'table'")
             # assemble the table
             widths = [0] * len(values[0])
+            types = [''] * len(values[0])
             for row in values:
                 if row is None:
                     continue
                 for i, cell in enumerate(row):
-                    widths[i] = max(widths[i], len(cell))
-            template = ' | '.join([('%-' + str(i) + 's') for i in widths])
+                    if isinstance(cell, logical):
+                        w = 1
+                    elif isinstance(cell, dates):
+                        w = 10
+                    elif isinstance(cell, datetimes):
+                        w = 19
+                    elif isinstance(cell, times):
+                        w = 8
+                    else:
+                        w = len(str(cell))
+                    widths[i] = max(widths[i], w)
+                    if not types[i]:
+                        if isinstance(cell, number):
+                            types[i] = 'i'
+                        elif isinstance(cell, fixed):
+                            types[i] = 'f'
+            # template = []
+            # for w, t in zip(widths, types):
+            #     f = {'': '-', 'i':'', 'd':'^'}[t]
+                # template.append('%' + f + str(w) + s)
+            # template = ' | '.join(template)
             sep = ' | '.join(['-' * w for w in widths])
             lines = []
             for row in values:
                 if row is None:
                     lines.append(sep)
                 else:
-                    row = template % tuple(row)
+                    line = []
+                    for value, width, align in zip(row, widths, types):
+                        if align == '':
+                            # left
+                            cell = '%-*s' % (width, value)
+                        elif align == 'i':
+                            # right
+                            cell = '%*s' % (width, value)
+                        elif align == 'f':
+                            if isinstance(value, fixed):
+                                if isinstance(value, bool):
+                                    value = 'ft'[value]
+                                else:
+                                    value = str(value)
+                            elif isinstance(value, dates):
+                                value = value.strftime('%Y-%m-%d')
+                            elif isinstance(value, datetimes):
+                                value = value.strftime('%Y-%m-%d %H:%M:%S')
+                            elif isinstance(value, times):
+                                value = value.strftime('%H:%M:%S')
+                            t = len(value)
+                            # center/fixed
+                            l = (width-t) % 2
+                            r = width - t - l
+                            cell = '%*s%s%cs' % (l, ' ', value, r, ' ')
+                        line.append(cell)
+                    row = ' | '.join(line)
                     lines.append(row)
             values = ('\n'.join(lines), )
             border = 'box'
