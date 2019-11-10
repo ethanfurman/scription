@@ -43,6 +43,7 @@ import threading
 import time
 import traceback
 from aenum import Enum, IntEnum, Flag, AutoValue, AutoNumber, export
+from itertools import groupby
 from math import floor
 from sys import stdin, stdout, stderr
 
@@ -79,7 +80,7 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 83, 2
+version = 0, 83, 3, 1
 
 
 # data
@@ -89,7 +90,8 @@ __all__ = (
     'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'MULTIREQ', 'REQUIRED', 'RADIO',
     'ScriptionError', 'ExecuteError', 'FailedPassword', 'TimeoutError', 'Execute', 'Job', 'ProgressView',
     'abort', 'echo', 'error', 'get_response', 'help', 'input', 'mail', 'user_ids', 'print', 'box',
-    'stdout', 'stderr', 'wait_and_check', 'b', 'u', 'ColorTemplate', 'Color',
+    'stdout', 'stderr', 'wait_and_check', 'b', 'bytes', 'str', 'u', 'unicode', 'ColorTemplate', 'Color',
+    'basestring', 'integer', 'number', 'raise_with_traceback',
     'Trivalent', 'Truthy', 'Unknown', 'Falsey', 'Exit',
     # the following are actually injected directly into the calling module, but are
     # added here as well for pylakes' benefit
@@ -153,25 +155,33 @@ run_once = False
 # py 2/3 compatibility shims
 raise_with_traceback = None
 if py_ver < (3, 0):
-    bytes = str
     b = str
     u = unicode
-    number = int, long
+    bytes = b
+    str = u
+    unicode = u
+    basestring = bytes, unicode
+    integer = int, long
+    number = int, long, float
     from itertools import izip_longest as zip_longest
     from __builtin__ import print as _print
+    from __builtin__ import raw_input as _input
     exec(textwrap.dedent('''\
         def raise_with_traceback(exc, tb):
             raise exc, None, tb
             '''))
 else:
-    raw_input = input
-    basestring = str
-    unicode = str
     b = bytes
-    u = unicode
-    number = int
+    u = str
+    bytes = b
+    unicode = u
+    str = u
+    basestring = unicode,
+    integer = int,
+    number = int, float
     from itertools import zip_longest
     from builtins import print as _print
+    from builtins import input as _input
     exec(textwrap.dedent('''\
         def raise_with_traceback(exc, tb):
             raise exc.with_traceback(tb)
@@ -185,16 +195,14 @@ try:
     times = datetime.time, Time
     logical = bool, Logical, Quantum
     fixed = dates + datetimes + times + logical
-    left = basestring
-    right = number
 except ImportError:
     dates = datetime.date
     datetimes = datetime.datetime
     times = datetime.time
     logical = bool
-    fixed = dates, datetimes, times, bool
-    left = basestring
-    right = number
+    fixed = dates, datetimes, times, logical
+left = basestring
+right = integer
 
 class undefined(object):
     def __repr__(self):
@@ -2760,16 +2768,16 @@ def print(*values, **kwds):
                     continue
                 for i, cell in enumerate(row):
                     if isinstance(cell, logical):
-                        w = 1
+                        width = 1
                     elif isinstance(cell, dates):
-                        w = 10
+                        width = 10
                     elif isinstance(cell, datetimes):
-                        w = 19
+                        width = 19
                     elif isinstance(cell, times):
-                        w = 8
+                        width = 8
                     else:
-                        w = len(str(cell))
-                    widths[i] = max(widths[i], w)
+                        width = max([len(p) for p in str(cell).split('\n')])
+                    widths[i] = max(widths[i], width)
                     if not types[i]:
                         if isinstance(cell, number):
                             types[i] = 'i'
@@ -2786,11 +2794,19 @@ def print(*values, **kwds):
                 if row is None:
                     lines.append(sep)
                 else:
+                    more_cells = []
                     line = []
-                    for value, width, align in zip(row, widths, types):
+                    for i, (value, width, align) in enumerate(zip(row, widths, types)):
                         if align == '':
                             # left
-                            cell = '%-*s' % (width, value)
+                            #
+                            # check for newlines
+                            values = value.split('\n')
+                            cell = []
+                            for value in values:
+                                cell.append('%-*s' % (width, value))
+                            if len(cell) == 1:
+                                [cell] = cell
                         elif align == 'i':
                             # right
                             cell = '%*s' % (width, value)
@@ -2811,9 +2827,27 @@ def print(*values, **kwds):
                             l = (width-t) % 2
                             r = width - t - l
                             cell = '%*s%s%cs' % (l, ' ', value, r, ' ')
-                        line.append(cell)
-                    row = ' | '.join(line)
-                    lines.append(row)
+                        if not isinstance(cell, list):
+                            line.append(cell)
+                        else:
+                            line.append(cell[0])
+                            for j, value in enumerate(cell[1:]):
+                                more_cells.append((j, i, value))
+                    lines.append(' | '.join(line))
+                    more_cells.sort()
+                    for next_row, cells in groupby(more_cells, lambda c: c[0]):
+                        line = []
+                        for _, index, cell in cells:
+                            position = 0
+                            while position < index:
+                                line.append(' ' * widths[position])
+                                position += 1
+                            line.append(cell)
+                            position += 1
+                        while position < len(widths):
+                            line.append(' ' * widths[position])
+                            position += 1
+                        lines.append(' | '.join(line))
             values = ('\n'.join(lines), )
             border = 'box'
         if border is not None and not isinstance(border, tuple):
@@ -2985,7 +3019,7 @@ def input(
         raise ScriptionError('supplied default is not valid')
     # setup is done, ask question and get answer
     while 'answer is unacceptable':
-        answer = raw_input(question)
+        answer = _input(question)
         if default and not answer:
             answer = default
         if validate(answer):
