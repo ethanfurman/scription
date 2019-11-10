@@ -1562,6 +1562,7 @@ class Job(object):
                 password_timeout = min(90, timeout / 10.0)
             elif password and password_timeout is None:
                 password_timeout = 90
+            scription_debug('    password_timeout is now: %r' % (password_timeout, ))
             if timeout is not None:
                 def prejudice():
                     scription_debug('timed out')
@@ -1643,29 +1644,43 @@ class Job(object):
                     else:
                         try:
                             # pty -- look for echo off first
-                            while self.get_echo() and self.is_alive():
+                            remaining_timeout = password_timeout
+                            while remaining_timeout and self.get_echo() and self.is_alive():
+                                scription_debug('[echo: %s] waiting for echo off (%s remaining)' % (self.get_echo(), remaining_timeout))
+                                remaining_timeout -= 0.1
                                 time.sleep(0.1)
+                            if self.get_echo():
+                                # too long
+                                self._set_exc(TimeoutError('Password prompt not see.'))
+                                self.kill()
+                                raise TimeoutError('Password prompt not see.')
                             pw, passwords = passwords[0], passwords[1:]
-                            self.write(pw, block=False)
+                            scription_debug('[echo: %s] writing password %r' % (self.get_echo(), pw))
+                            self.write(pw, )
                         except IOError:
                             # ignore get_echo and write errors (probably due to password not needed and job finishing)
                             self._set_exc(None)
                             break
                 else:
                     # wait a moment for any passwords to be sent
-                    if password_timeout is not None:
-                        scription_debug('sleeping so passwords can be sent and response read')
-                        time.sleep(password_timeout)
-                        scription_debug('checking if passwords still being requested')
-                    # no more passwords -- if pty, check if password still being requested
-                    if not self.process:
-                        if self.is_alive() and not self.get_echo():
-                            scription_debug('PASSWORD FAILURE:  invalid passwords or none given')
-                            with io_lock:
-                                self._stderr.append('Invalid/too few passwords\n')
-                            self._set_exc(FailedPassword)
-                            self.kill()
-                            raise FailedPassword
+                    scription_debug('[echo: %s] sleeping at least 5 seconds so passwords can be sent and response read' % (self.get_echo(), ))
+                    waiting_time = 5.0
+                    while waiting_time > 0.0:
+                        scription_debug('[echo: %s]      quick sleep (%s remaning)' % (self.get_echo(), waiting_time))
+                        waiting_time -= 0.1
+                        time.sleep(0.1)
+                        if not self.get_echo():
+                            # host still wants a password -- not good
+                            if not self.process:
+                                if self.is_alive():
+                                    scription_debug('[echo: %s] PASSWORD FAILURE:  invalid passwords or none given' % (self.get_echo(), ))
+                                    with io_lock:
+                                        self._stderr.append('Invalid/too few passwords\n')
+                                    self._set_exc(FailedPassword)
+                                    self.kill()
+                                    raise FailedPassword
+                    else:
+                        scription_debug('[echo: %s] password entry finished' % (self.get_echo(), ))
                 if input is not None:
                     scription_debug('writing input: %r' % input, verbose=2)
                     time.sleep(0.1)
