@@ -39,10 +39,6 @@ py_ver = sys.version_info[:2]
 gubed = False
 print('Scription %s.%s.%s -- Python %d.%d' % (version[:3] + py_ver), verbose=0)
 
-if py_ver >= (3, 0):
-    unicode = str
-    raw_input = input
-
 def test_func_parsing(obj, func, tests, test_type=False):
     global gubed, script_name, script_main, script_commands, script_command, script_commandname
     try:
@@ -79,13 +75,13 @@ def test_func_parsing(obj, func, tests, test_type=False):
                 obj.assertEqual(scription.VERBOSITY, verbose)
             if test_type:
                 for rval, val in zip(res_main_args, main_args):
-                    obj.assertTrue(type(rval) is type(val))
+                    obj.assertTrue(type(rval) is type(val), 'type(%r) is not type(%r) (%s != %s)' % (rval, val, type(rval), type(val)))
                 for rkey, rval in res_main_kwds.items():
-                    obj.assertTrue(type(rval) is type(main_kwds[rkey]))
+                    obj.assertTrue(type(rval) is type(main_kwds[rkey]), 'type(%r) is not type(%r) (%s != %s)' % (rval, main_kwds[rkey], type(rval), type(main_kwds[rkey])))
                 for rval, val in zip(res_sub_args, sub_args):
-                    obj.assertTrue(type(rval) is type(val))
+                    obj.assertTrue(type(rval) is type(val), 'type(%r) is not type(%r) (%s != %s)' % (rval, val, type(rval), type(val)))
                 for rkey, rval in res_sub_kwds.items():
-                    obj.assertTrue(type(rval) is type(sub_kwds[rkey]))
+                    obj.assertTrue(type(rval) is type(sub_kwds[rkey]), 'type(%r) is not type(%r) (%s != %s)' % (rval, sub_kwds[rkey], type(rval), type(sub_kwds[rkey])))
 
             gubed = False
             scription.VERBOSITY = 0
@@ -651,9 +647,9 @@ class TestCommandlineProcessing(TestCase):
         def tester(one='1', two=2, three='/some/path/to/nowhere'):
             pass
         tests = (
-                (['tester'], (), {}, (1, '2', (Path('/some/path/to/nowhere'), )), {} ),
-                ('tester 3 -t 4 --three /somewhere/over/the/rainbow'.split(), (), {}, (3, '4', (Path('/somewhere/over/the/rainbow'), )), {} ),
-                ('tester 5 -t 6 --three=/yellow/brick/road.txt'.split(), (), {}, (5, '6', (Path('/yellow/brick/road.txt'), )), {} ),
+                (['tester'], (), {}, (1, str('2'), (Path('/some/path/to/nowhere'), )), {} ),
+                (str('tester 3 -t 4 --three /somewhere/over/the/rainbow').split(), (), {}, (3, str('4'), (Path('/somewhere/over/the/rainbow'), )), {} ),
+                (str('tester 5 -t 6 --three=/yellow/brick/road.txt').split(), (), {}, (5, str('6'), (Path('/yellow/brick/road.txt'), )), {} ),
                 )
         test_func_parsing(self, tester, tests, test_type=True)
 
@@ -753,7 +749,7 @@ class TestCommandlineProcessing(TestCase):
         def bossy(**hirelings):
             pass
         tests = (
-                ('bossy larry=stupid curly=lazy moe=dumb'.split(), (), {}, (), {'larry':'stupid', 'curly':'lazy', 'moe':'dumb'}),
+                (str('bossy larry=stupid curly=lazy moe=dumb').split(), (), {}, (), {'larry':'stupid', 'curly':'lazy', 'moe':'dumb'}),
                 )
         test_func_parsing(self, bossy, tests)
 
@@ -1904,10 +1900,10 @@ class TestResponse(TestCase):
             self.prompt = prompt
             return self.reply
         def __enter__(self):
-            scription.raw_input = self
+            scription._input = self
             return self
         def __exit__(self, *args):
-            scription.raw_input = raw_input
+            scription._input = input
             return
 
     def test_yesno(self):
