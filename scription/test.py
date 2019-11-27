@@ -2319,6 +2319,7 @@ class TestTrivalent(TestCase):
             self.assertEqual(huh != False, True, "huh is %r from %r, which is not None" % (huh, unk))
             self.assertEqual(huh == False, False, "huh is %r from %r, which is not None" % (huh, unk))
             self.assertEqual((0, 1, -1)[huh], 0)
+        self.assertRaises(ValueError, bool, huh)
 
     def test_true(self):
         "true"
@@ -2332,6 +2333,7 @@ class TestTrivalent(TestCase):
             self.assertEqual(huh != None, True)
             if py_ver >= (2, 5):
                 self.assertEqual((0, 1, -1)[huh], 1)
+        self.assertTrue(bool(true))
 
     def test_false(self):
         "false"
@@ -2345,6 +2347,7 @@ class TestTrivalent(TestCase):
             self.assertEqual(huh == None, False)
             if py_ver >= (2, 5):
                 self.assertEqual((0, 1, -1)[huh], -1)
+        self.assertFalse(bool(false))
 
     def test_singletons(self):
         "singletons"

@@ -2528,6 +2528,7 @@ class Trivalent(object):
             return False
         else:
             raise ValueError('cannot determine boolean value of Unknown')
+    __nonzero__ = __bool__
 
     def __eq__(x, y):
         cls = x.__class__
