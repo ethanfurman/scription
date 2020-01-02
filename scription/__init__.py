@@ -1636,7 +1636,7 @@ class Job(object):
                         for next_pwd in passwords[1:]:
                             pwd += next_pwd
                         try:
-                            self.write(pwd, block=False)
+                            self.write(pwd, )
                         except IOError:
                             # ignore write errors (probably due to password not needed and job finishing)
                             self._set_exc(None)
