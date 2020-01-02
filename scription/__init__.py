@@ -2834,7 +2834,7 @@ def print(*values, **kwds):
                         elif align == 'f':
                             if isinstance(value, fixed):
                                 if isinstance(value, bool):
-                                    value = 'ft'[value]
+                                    value = 'fT'[value]
                                 else:
                                     value = str(value)
                             elif isinstance(value, dates):
