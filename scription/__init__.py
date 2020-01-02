@@ -2791,6 +2791,8 @@ def print(*values, **kwds):
                         width = 19
                     elif isinstance(cell, times):
                         width = 8
+                    elif cell is None:
+                        width = 1
                     else:
                         width = max([len(p) for p in str(cell).split('\n')])
                     widths[i] = max(widths[i], width)
@@ -2813,7 +2815,10 @@ def print(*values, **kwds):
                     more_cells = []
                     line = []
                     for i, (value, width, align) in enumerate(zip(row, widths, types)):
-                        if align == '':
+                        if value is None:
+                            # special case: emit dashes
+                            cell = width * '-'
+                        elif align == '':
                             # left
                             #
                             # check for newlines
