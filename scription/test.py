@@ -1,6 +1,7 @@
 from __future__ import print_function
 from scription import *
 from scription import _usage, version, empty, pocket
+from StringIO import StringIO
 from textwrap import dedent
 from unittest import skip, skipUnless, SkipTest, TestCase as unittest_TestCase, main
 import datetime
@@ -1594,7 +1595,7 @@ class TestExecution(TestCase):
         if py_ver >= (3, 3):
             def test_timeout(self):
                 "test timeout with subprocess alone"
-                command = Execute([sys.executable, '-c', 'import time; time.sleep(30)'], timeout=1, pty=False)
+                command = Execute([sys.executable, '-c', 'import time; time.sleep(30)'], timeout=3, pty=False)
                 self.assertTrue(command.returncode)
         else:
             def test_timeout(self):
@@ -1603,30 +1604,38 @@ class TestExecution(TestCase):
                         OSError,
                         Execute,
                         [sys.executable, '-c', 'import time; time.sleep(30)'],
-                        timeout=1,
+                        timeout=3,
                         pty=False,
                         )
                 self.assertRaises(
                         OSError,
                         Execute,
                         [sys.executable, '-c', 'import time; time.sleep(30)'],
-                        timeout=1,
+                        timeout=3,
                         pty=True,
                         )
     else:
         def test_timeout(self):
             "test timeout with pty, and with subprocess/signals"
-            command = Execute(
+            command = Job(
                     [sys.executable, '-c', 'import time; time.sleep(30); raise Exception("did not time out!")'],
-                    timeout=1,
                     pty=True,
+                    )
+            self.assertRaises(
+                    TimeoutError,
+                    command.communicate,
+                    timeout=3,
                     )
             self.assertTrue('TIMEOUT' in command.stderr)
             self.assertTrue(command.returncode)
-            command = Execute(
+            command = Job(
                     [sys.executable, '-c', 'import time; time.sleep(30); raise Exception("did not time out!")'],
-                    timeout=1,
                     pty=False,
+                    )
+            self.assertRaises(
+                    TimeoutError,
+                    command.communicate,
+                    timeout=3,
                     )
             self.assertTrue('TIMEOUT' in command.stderr)
             self.assertTrue(command.returncode)
@@ -2057,9 +2066,14 @@ class TestExecutionThreads(TestCase):
                 '''import time\n'''
                 '''time.sleep(5)\n'''
                 )
-        job = Execute([sys.executable, test_file], pty=False, timeout=1)
+        job = Job([sys.executable, test_file], pty=False)
+        self.assertRaises(
+                TimeoutError,
+                job.communicate,
+                timeout=3,
+                )
         self.assertEqual(thread_count, threading.active_count())
-        self.assertEqual(job.stderr.strip(), 'TIMEOUT: process failed to complete in 1 seconds', '\n out: %r\n err: %r' % (job.stdout, job.stderr))
+        self.assertEqual(job.stderr.strip(), 'TIMEOUT: process failed to complete in 3 seconds', '\n out: %r\n err: %r' % (job.stdout, job.stderr))
         self.assertNotEqual(job.returncode, 0, '-- stdout --\n%s\n-- stderr --\n%s' % (job.stdout, job.stderr))
 
     def test_killed_pty(self):
@@ -2068,9 +2082,14 @@ class TestExecutionThreads(TestCase):
                 '''import time\n'''
                 '''time.sleep(5)\n'''
                 )
-        job = Execute([sys.executable, test_file], pty=True, timeout=1)
+        job = Job([sys.executable, test_file], pty=True)
+        self.assertRaises(
+                TimeoutError,
+                job.communicate,
+                timeout=3,
+                )
         self.assertEqual(thread_count, threading.active_count())
-        self.assertEqual(job.stderr.strip(), 'TIMEOUT: process failed to complete in 1 seconds', '\n out: %r\n err: %r' % (job.stdout, job.stderr))
+        self.assertEqual(job.stderr.strip(), 'TIMEOUT: process failed to complete in 3 seconds', '\n out: %r\n err: %r' % (job.stdout, job.stderr))
         self.assertNotEqual(job.returncode, 0, '-- stdout --\n%s\n-- stderr --\n%s' % (job.stdout, job.stderr))
 
     def test_died_process(self):
@@ -2080,9 +2099,9 @@ class TestExecutionThreads(TestCase):
                 '''def hello(x\n'''
                 '''time.sleep(5)\n'''
                 )
-        job = Execute([sys.executable, test_file], pty=False, timeout=1)
+        job = Execute([sys.executable, test_file], pty=False, timeout=3)
         self.assertEqual(thread_count, threading.active_count())
-        self.assertTrue('TIMEOUT: process failed to complete in 1 seconds' not in job.stdout)
+        self.assertTrue('TIMEOUT: process failed to complete in 3 seconds' not in job.stdout)
         self.assertNotEqual(job.returncode, 0, '-- stdout --\n%s\n-- stderr --\n%s' % (job.stdout, job.stderr))
 
     def test_died_pty(self):
@@ -2092,9 +2111,9 @@ class TestExecutionThreads(TestCase):
                 '''def hello(x\n'''
                 '''time.sleep(5)\n'''
                 )
-        job = Execute([sys.executable, test_file], pty=True, timeout=1)
+        job = Execute([sys.executable, test_file], pty=True, timeout=5)
         self.assertEqual(thread_count, threading.active_count())
-        self.assertTrue('TIMEOUT: process failed to complete in 1 seconds' not in job.stdout)
+        self.assertTrue('TIMEOUT: process failed to complete in 3 seconds' not in job.stdout)
         self.assertNotEqual(job.returncode, 0, '-- stdout --\n%s\n-- stderr --\n%s' % (job.stdout, job.stderr))
 
 
@@ -2238,6 +2257,32 @@ class TestBox(TestCase):
                 "------",
                 )
 
+
+class TestTable(TestCase):
+
+    def test_table_with_header_separation(self):
+        rows = (
+            ('id', 'name', 'age', 'income', 'married'),
+            None,
+            (1, 'Ethan', 33, 134000, True),
+            (2, 'Allen', 49, 67500, False),
+            (3, 'Bartholomew', 11, 67, False),
+            (4, 'Ed', 101, 0, True),
+            )
+        should_be = dedent("""\
+                ---------------------------------------------
+                | id | name        | age | income | married |
+                | -- | ----------- | --- | ------ | ------- |
+                |  1 | Ethan       |  33 | 134000 |    T    |
+                |  2 | Allen       |  49 |  67500 |    f    |
+                |  3 | Bartholomew |  11 |     67 |    f    |
+                |  4 | Ed          | 101 |      0 |    T    |
+                ---------------------------------------------
+                """)
+        buffer = StringIO()
+        echo(rows, border='table', file=buffer)
+        self.assertEqual(buffer.getvalue(), should_be, '\n%s\n%s' % (buffer.getvalue(), should_be))
+        
 
 if not is_win:
     @skipUnless(INCLUDE_SLOW, 'skipping slow tests')

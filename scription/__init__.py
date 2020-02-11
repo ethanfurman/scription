@@ -24,9 +24,9 @@ else:
     from subprocess import Popen, PIPE
 from threading import Thread
 try:
-    from Queue import Queue
+    from Queue import Queue, Empty
 except ImportError:
-    from queue import Queue
+    from queue import Queue, Empty
 import datetime
 import email
 import errno
@@ -357,6 +357,9 @@ class FailedPassword(ExecuteError):
 
 class TimeoutError(ExecuteError):
     "Execute timed out"
+
+class UnableToKillJob(ExecuteError):
+    "Job will not die"
 
 ExecutionError = ExecuteError   # deprecated
 ExecuteTimeout = TimeoutError   # deprecated
@@ -1378,8 +1381,7 @@ def Execute(args, cwd=None, password=None, password_timeout=None, input=None, ti
         job.communicate(timeout=timeout, interactive=interactive, password=password, password_timeout=password_timeout, input=input)
     except BaseException as exc:
         scription_debug(exc)
-        if not isinstance(exc, TimeoutError):
-            raise
+        raise
     finally:
         job.close()
     scription_debug('returning')
@@ -1402,13 +1404,16 @@ class Job(object):
     # str of stdout and stderr from job
     stdout = None
     stderr = None
-    # any exception that occured (just the first one)
-    exception = None
+    # all exceptions that occured (set to a list in __init__)
+    exceptions = None
+    # emergency abort
+    abort = False
 
     def __init__(self, args, cwd=None, pty=None, env=None, **new_env_vars):
         # args        -> command to run
         # cwd         -> directory to run in
         # pty         -> False = subprocess, True = fork
+        self.exceptions = []
         self._process_thread = None
         env = self.env = (env or os.environ).copy()
         if new_env_vars:
@@ -1481,7 +1486,7 @@ class Job(object):
                     read = lambda size: os.read(channel, size)
                 else:
                     read = channel.read
-                while True:
+                while not self.abort:
                     scription_debug('reading', name)
                     data = read(1024)
                     with io_lock:
@@ -1491,13 +1496,16 @@ class Job(object):
                         q.put((name, data))
                         if data is None:
                             break
+                else:
+                    q.put((name, None))
+                    scription_debug('read_comm dying from self.abort')
             except Exception:
                 _, exc, tb = sys.exc_info()
                 with io_lock:
                     q.put((name, None))
                     scription_debug('dying %s (from exception %s)' % (name, exc))
                     if not isinstance(exc, OSError) or exc.errno not in (errno.EBADF, errno.EIO):
-                        raise self._set_exc(exc, tb)
+                        raise self._set_exc(exc, traceback=tb)
         def write_comm(channel, q):
             try:
                 if isinstance(channel, int):
@@ -1506,7 +1514,7 @@ class Job(object):
                 else:
                     write = channel.write
                     flush = channel.flush
-                while True:
+                while not self.abort:
                     scription_debug('stdin waiting')
                     data = q.get()
                     with io_lock:
@@ -1516,9 +1524,11 @@ class Job(object):
                         scription_debug('stdin writing', repr(data))
                         write(data)
                         flush()
+                else:
+                    scription_debug('write_comm dying from self.abort')
             except Exception:
                 _, exc, tb = sys.exc_info()
-                raise self._set_exc(exc, tb)
+                raise self._set_exc(exc, traceback=tb)
         t = Thread(target=read_comm, name='stdout', args=('stdout', self.child_fd_out, self._all_output))
         t.daemon = True
         t.start()
@@ -1537,13 +1547,15 @@ class Job(object):
             return func(*args, **kwds)
         return wrapper
 
-    def _set_exc(self, exc, tb=None):
-        'sets self.exception if not already set, or unsets if exc is None'
+    def _set_exc(self, exc, message=None, traceback=None):
+        'sets self.exceptions if not already set, or unsets if exc is None'
         scription_debug('setting exception to: %r' % (exc,))
-        if self.exception is None and exc is not None:
-            self.exception = exc, tb
-        elif exc is None:
-            self.exception = None
+        if not isinstance(exc, Exception) and issubclass(exc, Exception):
+            exc = exc(message)
+        if exc is None:
+            self.exceptions[:] = []
+        elif exc is not None:
+            self.exceptions.append((exc, traceback))
         return exc
 
     def communicate(self, input=None, password=None, timeout=None, interactive=None, encoding='utf-8', password_timeout=None):
@@ -1555,7 +1567,7 @@ class Job(object):
             deadman_switch = None
             scription_debug('timeout: %r, password_timeout: %r' % (timeout, password_timeout))
             if timeout is not None and password_timeout is not None and password_timeout >= timeout:
-                self._set_exc(ValueError('password_timeout must be less than timeout'))
+                self._set_exc(ValueError, 'password_timeout must be less than timeout')
                 self.kill()
                 return
             if timeout is not None and password and password_timeout is None:
@@ -1569,7 +1581,7 @@ class Job(object):
                     message = '\nTIMEOUT: process failed to complete in %s seconds\n' % timeout
                     with io_lock:
                         self._stderr.append(message)
-                    self._set_exc(TimeoutError(message.strip()))
+                    self._set_exc(TimeoutError, message.strip())
                     self.kill()
                 deadman_switch = threading.Timer(timeout, prejudice)
                 deadman_switch.name = 'deadman'
@@ -1577,9 +1589,12 @@ class Job(object):
             if self._process_thread is None:
                 def process_comm():
                     active = 2
-                    while active:
+                    while active and not self.abort:
                         # check if any threads still alive
-                        stream, data = self._all_output.get()
+                        try:
+                            stream, data = self._all_output.get(timeout=1)
+                        except Empty:
+                            continue
                         with io_lock:
                             if data is None:
                                 active -= 1
@@ -1599,12 +1614,10 @@ class Job(object):
                                     echo(data, end='', file=stderr)
                                     sys.stderr.flush()
                             else:
-                                try:
-                                    raise Exception('unknown stream: %r' % stream)
-                                except Exception:
-                                    _, exc, tb = sys.exc_info()
-                                    self._set_exc(exc, tb)
-                                    self.kill()
+                                self._set_exc(Exception, 'unknown stream: %r' % stream)
+                                self.kill()
+                    else:
+                        scription_debug('process_comm dying from self.abort')
                 process_thread = self._process_thread = Thread(target=process_comm, name='process')
                 process_thread.start()
             passwords = []
@@ -1645,15 +1658,19 @@ class Job(object):
                         try:
                             # pty -- look for echo off first
                             remaining_timeout = password_timeout
-                            while remaining_timeout and self.get_echo() and self.is_alive():
+                            while remaining_timeout > 0 and self.get_echo() and self.is_alive():
                                 scription_debug('[echo: %s] waiting for echo off (%s remaining)' % (self.get_echo(), remaining_timeout))
                                 remaining_timeout -= 0.1
                                 time.sleep(0.1)
                             if self.get_echo():
                                 # too long
-                                self._set_exc(TimeoutError('Password prompt not see.'))
-                                self.kill()
-                                raise TimeoutError('Password prompt not see.')
+                                try:
+                                    raise TimeoutError('Password prompt not seen.')
+                                except TimeoutError:
+                                    cls, exc, tb = sys.exc_info()
+                                    self._set_exc(exc, traceback=tb)
+                                    self.kill()
+                                    raise exc
                             pw, passwords = passwords[0], passwords[1:]
                             scription_debug('[echo: %s] writing password %r' % (self.get_echo(), pw))
                             self.write(pw, )
@@ -1665,7 +1682,7 @@ class Job(object):
                     # wait a moment for any passwords to be sent
                     scription_debug('[echo: %s] sleeping at least 5 seconds so passwords can be sent and response read' % (self.get_echo(), ))
                     waiting_time = 5.0
-                    while waiting_time > 0.0:
+                    while waiting_time > 0.05:
                         scription_debug('[echo: %s]      quick sleep (%s remaning)' % (self.get_echo(), waiting_time))
                         waiting_time -= 0.1
                         time.sleep(0.1)
@@ -1676,9 +1693,9 @@ class Job(object):
                                     scription_debug('[echo: %s] PASSWORD FAILURE:  invalid passwords or none given' % (self.get_echo(), ))
                                     with io_lock:
                                         self._stderr.append('Invalid/too few passwords\n')
-                                    self._set_exc(FailedPassword)
+                                    e = self._set_exc(FailedPassword)
                                     self.kill()
-                                    raise FailedPassword
+                                    raise e
                     else:
                         scription_debug('[echo: %s] password entry finished' % (self.get_echo(), ))
                 if input is not None:
@@ -1688,11 +1705,15 @@ class Job(object):
                         self.write(line)
                     time.sleep(0.1)
             scription_debug('joining process thread...')
-            process_thread.join()
-            scription_debug('process thread joined')
+            while not self.abort:
+                process_thread.join(1)
+                if not process_thread.is_alive():
+                    break
+            scription_debug('process thread joined (or abort registered)')
         finally:
             if self.process:
-                self.returncode = self.process.wait()
+                if not self.abort:
+                    self.returncode = self.process.wait()
                 self.terminated = True
             if deadman_switch is not None:
                 scription_debug('cancelling deadman switch')
@@ -1700,25 +1721,16 @@ class Job(object):
                 deadman_switch.join()
             scription_debug('closing job')
             self.close()
-            scription_debug('saved exception: %r' % (self.exception, ))
-            if self.exception is not None:
-                exc, tb = self.exception
-                if tb is None:
-                    scription_debug('raising...')
-                    raise exc
-                else:
-                    scription_debug('raising w/traceback...')
-                    raise_with_traceback(exc, tb)
 
     def close(self, force=True):
         'parent method'
-        try:
-            if not self.closed:
-                if self.is_alive():
+        if not self.closed:
+            try:
+                if self.is_alive() and not self.abort:
                     self.terminate()
                     time.sleep(0.1)
                     if force and self.is_alive():
-                        self.kill()
+                        self.kill(error='ignore')
                         time.sleep(0.1)
                         self.is_alive()
                 # shutdown stdin thread
@@ -1737,19 +1749,23 @@ class Job(object):
                             if exc_type is OSError and exc.errno == errno.EBADF:
                                 pass
                             else:
-                                self._set_exc(exc, tb)
+                                self._set_exc(exc, traceback=tb)
                 self.child_fd = -1
                 self.child_fd_in = -1
                 self.child_fd_out = -1
                 self.child_fd_err = -1
                 time.sleep(0.1)
                 self.closed = True
-        finally:
-            with io_lock:
-                scription_debug('saving stdout')
-                self.stdout = ''.join(self._stdout).replace('\r\n', '\n')
-                scription_debug('saving stderr')
-                self.stderr = ''.join(self._stderr).replace('\r\n', '\n')
+            except Exception:
+                exc_type, exc, tb = sys.exc_info()
+                self._set_exc(exc, traceback=tb)
+            finally:
+                with io_lock:
+                    scription_debug('saving stdout')
+                    self.stdout = ''.join(self._stdout).replace('\r\n', '\n')
+                    scription_debug('saving stderr')
+                    self.stderr = ''.join(self._stderr).replace('\r\n', '\n')
+                self.raise_if_exceptions()
 
     def fileno(self):
         'parent method'
@@ -1765,7 +1781,7 @@ class Job(object):
             attr = termios.tcgetattr(child_fd)
         except Exception:
             _, exc, tb = sys.exc_info()
-            raise self._set_exc(IOError(errno.EBADF, str(exc)), tb)
+            raise self._set_exc(IOError, errno.EBADF, str(exc), traceback=tb)
         else:
             if attr[3] & termios.ECHO:
                 return True
@@ -1786,8 +1802,7 @@ class Job(object):
             _, exc, tb = sys.exc_info()
             if isinstance(exc, OSError) and exc.errno == errno.ECHILD:
                 return False
-            exc = ExecuteError(str(exc))
-            raise self._set_exc(exc, tb)
+            raise self._set_exc(ExecuteError, str(exc), traceback=tb)
         if pid != 0:
             self.signal = status % 256
             if self.signal:
@@ -1798,10 +1813,11 @@ class Job(object):
             return False
         return True
 
-    def kill(self):
-        '''kills child job, and self if child will not die
+    def kill(self, error='raise'):
+        '''kills child job, or raises UnableToKillJob                              
 
         parent method'''
+        exc = None
         for s in self.kill_signals:
             try:
                 scription_debug('killing with', s)
@@ -1811,19 +1827,18 @@ class Job(object):
                     scription_debug('dead, exiting')
                     break
             except Exception:
-                cls, exc = sys.exc_info()[:2]
+                cls, exc, tb = sys.exc_info()
                 scription_debug('received', exc)
                 if cls in (IOError, OSError) and exc.errno in (errno.ESRCH, errno.ECHILD):
+                    # child already died
                     break
         else:
             # unable to kill job
-            if self.exception is not None:
-                message = self.exception[0].args[0]
-            else:
-                message = ''
-            message = message.strip() + '; unable to kill job -- killing self\n'
-            error(message)
-            os.kill(os.getpid(), signal.SIGKILL)
+            self.abort = True
+            scription_debug('abort switch set')
+            e = self._set_exc(UnableToKillJob, '%s: %s' % (exc.__class__.__name__, exc), traceback=tb)
+            if error == 'raise':
+                raise e
 
     def poll(self):
         scription_debug('polling')
@@ -1831,6 +1846,35 @@ class Job(object):
             return None
         else:
             return self.returncode
+
+    def raise_if_exceptions(self):
+        "raise if any stored exceptions"
+        scription_debug('saved exceptions: %r' % (self.exceptions, ))
+        if not self.exceptions:
+            return
+        if len(self.exceptions) == 1:
+            raise_with_traceback(*self.exceptions[0])
+        error_text = ['', '-' * 50]
+        final_exc = None
+        for exc, tb in self.exceptions:
+            if isinstance(exc, UnableToKillJob):
+                scription_debug('setting final_exc to', exc)
+                final_exc = exc
+            if tb is None:
+                scription_debug('encountered %r' % (exc, ))
+                error_text.append('%s: %s' % (exc.__class__.__name__, exc))
+            else:
+                scription_debug('encountered %r w/traceback' % (exc, ))
+                lines = traceback.format_list(traceback.extract_tb(tb))
+                error_text.extend(lines)
+                error_text.append('%s: %s' % (exc.__class__.__name__, exc))
+            error_text.append('-' * 50)
+        if final_exc is None:
+            scription_debug('setting final_exc to', exc)
+            final_exc = exc
+        error_text = "\n%s" % '\n'.join('  '+l for r in error_text for l in r.split('\n') if l)
+        final_exc = final_exc.__class__(error_text)
+        raise_with_traceback(final_exc, None)
 
     def read(self, max_size, block=True, encoding='utf-8'):
         # if block is False, return None if no data ready
@@ -1852,7 +1896,7 @@ class Job(object):
                         raise Exception('unknown stream: %r' % stream)
                     except Exception:
                         _, exc, tb = sys.exc_info()
-                        raise self._set_exc(exc, tb)
+                        raise self._set_exc(exc, traceback=tb)
                 if self._stdout:
                     break
             if self._stdout:
@@ -1873,7 +1917,10 @@ class Job(object):
         time.sleep(0.1)
 
     def terminate(self):
-        'parent method'
+        '''
+        Send SIGTERM to child.
+        
+        parent method'''
         scription_debug('terminating')
         if self.is_alive() and self.kill_signals:
             sig = self.kill_signals[0]
@@ -1888,7 +1935,7 @@ class Job(object):
                 raise IOError(errno.EPIPE, 'Broken pipe.')
             except Exception:
                 _, exc, tb = sys.exc_info()
-                raise self._set_exc(exc, tb)
+                raise self._set_exc(exc, traceback=tb)
         if not isinstance(data, bytes):
             data = data.encode('utf-8')
         self._all_input.put(data)
@@ -2776,9 +2823,11 @@ def print(*values, **kwds):
             values = values[0]
             if 'sep' in kwds or 'end' in kwds:
                 abort("keyword arguments 'sep' and 'end' are invalid when border is 'table'")
+            header = kwds.pop('header', True)
             # assemble the table
             widths = [0] * len(values[0])
             types = [''] * len(values[0])
+            first_row = header
             for row in values:
                 if row is None:
                     continue
@@ -2796,11 +2845,15 @@ def print(*values, **kwds):
                     else:
                         width = max([len(p) for p in str(cell).split('\n')])
                     widths[i] = max(widths[i], width)
+                    if cell in [None, ''] or first_row:
+                        continue
                     if not types[i]:
-                        if isinstance(cell, number):
-                            types[i] = 'i'
-                        elif isinstance(cell, fixed):
+                        # check fixed first as bool is both number and fixed
+                        if isinstance(cell, fixed):
                             types[i] = 'f'
+                        elif isinstance(cell, number):
+                            types[i] = 'i'
+                first_row = False
             # template = []
             # for w, t in zip(widths, types):
             #     f = {'': '-', 'i':'', 'd':'^'}[t]
@@ -2845,9 +2898,11 @@ def print(*values, **kwds):
                                 value = value.strftime('%H:%M:%S')
                             t = len(value)
                             # center/fixed
-                            l = (width-t) % 2
+                            l = (width-t) // 2
                             r = width - t - l
-                            cell = '%*s%s%cs' % (l, ' ', value, r, ' ')
+                            l = l * ' '
+                            r = r * ' '
+                            cell = '%s%s%s' % (l, value, r)
                         if not isinstance(cell, list):
                             line.append(cell)
                         else:
