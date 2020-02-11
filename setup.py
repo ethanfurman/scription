@@ -103,7 +103,7 @@ data = dict(
         license='BSD License',
         description='simple script parameter parser',
         long_description=description,
-        url='https://bitbucket.org/stoneleaf/scription',
+        url='https://github.com/ethanfurman/scription.git',
         install_requires=['aenum >= 2.0.10'],
         packages=['scription'],
         package_data={
