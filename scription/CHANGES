@@ -1,3 +1,22 @@
+0.84.00
+=======
+
+- fix `bool(Trivalent.unknown)` (Python 2.7 only)
+- `Job`: wait for passwords to be written
+- add Sentinal: generates unique objects with helpful __repr__s
+- add Singleton: used to turn a class into a single instance of that class
+- add Var: := for Python's less than 3.8
+
+backwards-incompatible change:
+- Job now raises TimeoutError instead of stuffing it into stderr
+
+
+0.83.03
+=======
+
+internal improvements
+
+
 0.83.02
 =======
 
