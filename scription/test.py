@@ -8,6 +8,7 @@ import datetime
 import functools
 import os
 import pty
+import re
 import scription
 import shlex
 import shutil
@@ -147,9 +148,13 @@ if hypothesis:
 class TestPocket(TestCase):
 
     def test_single_arg_is_arg(self):
-        if (pocket(value=3)):
+        if not (pocket(value=3)):
+            self.assertTrue(False, "pocket() did not return value")
+        else:
             self.assertEqual(3, pocket.value)
-        if not (pocket(value=None)):
+        if (pocket(value=None)):
+            self.assertTrue(False, "pocket() did not return None")
+        else:
             self.assertIs(None, pocket.value)
 
     def test_multi_args(self):
@@ -160,6 +165,29 @@ class TestPocket(TestCase):
         self.assertTrue(7 in val)
         self.assertEqual(pocket.value1, 3)
         self.assertEqual(pocket.value2, 7)
+
+class TestVar(TestCase):
+
+    def test_function(self):
+        match = Var(re.match)
+        if match(r"it.*(worked)!", "it   worked!"):
+            self.assertEqual(match().groups(), ('worked', ))
+        else:
+            self.assertTrue(False, 'match returned %r' % match())
+
+    def test_no_function_single_arg(self):
+        var = Var()
+        if var(3+8):
+            self.assertEqual(var(), 11)
+        else:
+            self.assertTrue(False, 'var returned %r (should be 11)' % var())
+
+    def test_no_function_multi_arg(self):
+        var = Var()
+        if var(3+8, 7*7):
+            self.assertEqual(var(), (11, 49))
+        else:
+            self.assertTrue(False, 'var returned %r (should be (11, 49))' % (var(), ))
 
 
 class TestExports(TestCase):

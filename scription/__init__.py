@@ -92,7 +92,7 @@ __all__ = (
     'abort', 'echo', 'error', 'get_response', 'help', 'input', 'mail', 'user_ids', 'print', 'box',
     'stdout', 'stderr', 'wait_and_check', 'b', 'bytes', 'str', 'u', 'unicode', 'ColorTemplate', 'Color',
     'basestring', 'integer', 'number', 'raise_with_traceback',
-    'Trivalent', 'Truthy', 'Unknown', 'Falsey', 'Exit',
+    'Trivalent', 'Truthy', 'Unknown', 'Falsey', 'Exit', 'Var', 'Sentinel',
     # the following are actually injected directly into the calling module, but are
     # added here as well for pylakes' benefit
     'script_main',          # Script decorator instance if used
@@ -3182,6 +3182,28 @@ def mail(server=None, port=25, message=None):
     return errs
 
 ### miscellaneous
+class Sentinel(object):
+    "provides better help for sentinels"
+    #
+    def __init__(self, text, boolean=True):
+        self.text = text
+        self.boolean = boolean
+    #
+    def __repr__(self):
+        return "<%s: %s>" % (self.__class__.__name__, self.text)
+    #
+    def __str__(self):
+        return '<%s>' % self.text
+    #
+    def __bool__(self):
+        return self.boolean
+    __nonzero__ = __bool__
+
+def Singleton(cls):
+    "transforms class into a Singleton object"
+    return cls()
+
+@Singleton
 class pocket(object):
     '''
     container to save values from intermediate expressions
@@ -3214,7 +3236,35 @@ class pocket(object):
             return self.pocket.data[name]
         except KeyError:
             raise AttributeError('%s has not been saved' % name)
-pocket = pocket()
+
+_Var_Sentinel = Sentinel("Var")
+class Var(object):
+    '''
+    := for Python's less than 3.8
+    '''
+    def __init__(self, func=None):
+        self.data = _Var_Sentinel
+        self.func = func
+    #
+    def __call__(self, *args):
+        if not args and self.data is _Var_Sentinel:
+            raise ValueError('nothing saved in var')
+        elif not args:
+            return self.data
+        elif self.func is not None:
+            # run user-supplied function
+            self.data = self.func(*args)
+            return self.data
+        elif len(args) == 0:
+            # reset
+            self.data = _Var_Sentinel
+        elif len(args) == 1:
+            self.data = args[0]
+            return self.data
+        else:
+            self.data = args
+            return self.data
+
 
 class user_ids(object):
     """
