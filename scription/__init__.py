@@ -80,7 +80,7 @@ io_lock = threading.Lock()
     specified, or type becomes the default value's type if unspecified
 """
 
-version = 0, 84, 0, 0
+version = 0, 84, 0, 1
 
 
 # data
@@ -2569,9 +2569,9 @@ class Trivalent(object):
         """
         boolean value of Unknown is Unknown, and will raise
         """
-        if x.value is 1:
+        if x.value == 1:
             return True
-        elif x.value is -1:
+        elif x.value == -1:
             return False
         else:
             raise ValueError('cannot determine boolean value of Unknown')

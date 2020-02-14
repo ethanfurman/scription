@@ -99,7 +99,7 @@ make = []
 
 data = dict(
         name='scription',
-        version='0.83.3',
+        version='0.84.0a1',
         license='BSD License',
         description='simple script parameter parser',
         long_description=description,
