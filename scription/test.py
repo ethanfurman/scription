@@ -1,7 +1,6 @@
 from __future__ import print_function
 from scription import *
 from scription import _usage, version, empty, pocket
-from StringIO import StringIO
 from textwrap import dedent
 from unittest import skip, skipUnless, SkipTest, TestCase as unittest_TestCase, main
 import datetime
@@ -24,6 +23,10 @@ except ImportError:
     hypothesis = None
 scription.VERBOSITY = 0
 
+try:
+    from StringIO import StringIO
+except ImportError:
+    from io import StringIO
 remove = []
 INCLUDE_SLOW = UNITTEST_VERBOSE = False
 for i, arg in enumerate(sys.argv):
@@ -1731,7 +1734,7 @@ class TestExecution(TestCase):
         self.assertEqual(
                 command.stdout,
                 "super secret santa soda sizzle?\nmake sure no one is watching you type!: 'Salutations!'?  Are you sure??\n",
-                'Failed (actual results):\n%r' % command.stdout,
+                'Failed (actual results):\nstdout:\n%s\nstderr:\n%s' % (command.stdout, command.stderr),
                 )
         self.assertEqual(command.stderr, '')
 

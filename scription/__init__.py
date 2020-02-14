@@ -2933,7 +2933,7 @@ def print(*values, **kwds):
         try:
             is_tty = os.isatty(target.fileno())
             _is_atty[target] = is_tty
-        except (AttributeError, TypeError):
+        except (AttributeError, TypeError, OSError):
             _is_atty[target] = is_tty = False
         if not is_tty or border is not None:
             old_values = []
