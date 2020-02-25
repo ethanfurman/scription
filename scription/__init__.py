@@ -301,6 +301,7 @@ class Exit(IntEnum):
     CannotExecute   = 126, 'command invoked cannot execute'
     ExitOutOfRange  = 255, 'exit code out of range'
     InvalidExitCode = 127, 'invalid argument to exit'
+    UserCancelled   = 130, 'ctrl-c received'
 
     # add signal exit codes
     v = vars()
@@ -1268,8 +1269,7 @@ def Main(module=None):
         except (AttributeError, KeyError):
             module = script_module['__name__']
     if module == '__main__':
-        result = Run()
-        sys.exit(result)
+        Run()
 
 
 def Run():
@@ -1356,7 +1356,7 @@ def Run():
         script_module['script_verbosity'] = VERBOSITY
         if main_cmd:
             main_cmd(*main_args, **main_kwds)
-        return subcommand()
+        sys.exit(subcommand())
     except Exception:
         exc = sys.exc_info()[1]
         scription_debug(exc)
@@ -1370,7 +1370,7 @@ def Run():
         raise
     except KeyboardInterrupt:
         _print('\n<Ctrl-C> detected, aborting')
-
+        sys.exit(Exit.UserCancelled)
 
 ## optional
 def Execute(args, cwd=None, password=None, password_timeout=None, input=None, timeout=None, pty=None, interactive=None, env=None, **new_env_vars):
