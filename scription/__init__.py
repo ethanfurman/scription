@@ -1,12 +1,41 @@
 """
 intelligently parses command lines
 
-flags: true/false values
-options: other specified value (e.g. user name)
+(help, kind, abbrev, type, choices, usage_name, remove, default)
+
+  - help --> the help message
+
+  - kind --> what kind of parameter
+    - flag       --> simple boolean
+    - option     --> option_name value
+    - multi      --> option_name value option_name value
+    - required   --> required_name value
+
+  - abbrev is a one-character string (defaults to first letter of
+    argument)
+
+  - type is a callable that converts the arguments to any Python
+    type; by default there is no conversion and type is effectively str
+
+  - choices is a discrete sequence of values used to restrict the
+    number of the valid options; by default there are no restrictions
+    (i.e. choices=None)
+
+  - usage_name is used as the name of the parameter in the help message
+
+  - remove determines if this argument is removed from sys.argv
+
+  - default is the default value, either converted with type if type is
+    specified, or type becomes the default value's type if unspecified
 """
-# imports
+
+# future imports
 from __future__ import print_function
 
+# version
+version = 0, 84, 0
+
+# imports
 import sys
 py_ver = sys.version_info[:2]
 is_win = sys.platform.startswith('win')
@@ -51,37 +80,40 @@ from sys import stdin, stdout, stderr
 print_lock = threading.RLock()
 io_lock = threading.Lock()
 
-"""
-(help, kind, abbrev, type, choices, usage_name, remove, default)
-
-  - help --> the help message
-
-  - kind --> what kind of parameter
-    - flag       --> simple boolean
-    - option     --> option_name value
-    - multi      --> option_name value option_name value
-    - required   --> required_name value
-
-  - abbrev is a one-character string (defaults to first letter of
-    argument)
-
-  - type is a callable that converts the arguments to any Python
-    type; by default there is no conversion and type is effectively str
-
-  - choices is a discrete sequence of values used to restrict the
-    number of the valid options; by default there are no restrictions
-    (i.e. choices=None)
-
-  - usage_name is used as the name of the parameter in the help message
-
-  - remove determines if this argument is removed from sys.argv
-
-  - default is the default value, either converted with type if type is
-    specified, or type becomes the default value's type if unspecified
-"""
-
-version = 0, 84, 0
-
+# py 2/3 compatibility shims
+raise_with_traceback = None
+if py_ver < (3, 0):
+    b = str
+    u = unicode
+    bytes = b
+    str = u
+    unicode = u
+    basestring = bytes, unicode
+    integer = int, long
+    number = int, long, float
+    from itertools import izip_longest as zip_longest
+    from __builtin__ import print as _print
+    from __builtin__ import raw_input as _input
+    exec(textwrap.dedent('''\
+        def raise_with_traceback(exc, tb):
+            raise exc, None, tb
+            '''))
+else:
+    b = bytes
+    u = str
+    bytes = b
+    unicode = u
+    str = u
+    basestring = unicode,
+    integer = int,
+    number = int, float
+    from itertools import zip_longest
+    from builtins import print as _print
+    from builtins import input as _input
+    exec(textwrap.dedent('''\
+        def raise_with_traceback(exc, tb):
+            raise exc.with_traceback(tb)
+            '''))
 
 # data
 __all__ = (
@@ -151,41 +183,6 @@ script_module = {}
 
 registered = False
 run_once = False
-
-# py 2/3 compatibility shims
-raise_with_traceback = None
-if py_ver < (3, 0):
-    b = str
-    u = unicode
-    bytes = b
-    str = u
-    unicode = u
-    basestring = bytes, unicode
-    integer = int, long
-    number = int, long, float
-    from itertools import izip_longest as zip_longest
-    from __builtin__ import print as _print
-    from __builtin__ import raw_input as _input
-    exec(textwrap.dedent('''\
-        def raise_with_traceback(exc, tb):
-            raise exc, None, tb
-            '''))
-else:
-    b = bytes
-    u = str
-    bytes = b
-    unicode = u
-    str = u
-    basestring = unicode,
-    integer = int,
-    number = int, float
-    from itertools import zip_longest
-    from builtins import print as _print
-    from builtins import input as _input
-    exec(textwrap.dedent('''\
-        def raise_with_traceback(exc, tb):
-            raise exc.with_traceback(tb)
-            '''))
 
 # for use with table printing
 try:
@@ -2805,8 +2802,8 @@ for channel in (stdin, stdout, stderr):
     except:
         _is_atty[channel] = False
 def print(*values, **kwds):
-    # kwds can contain sep (' '), end ('\n'), file (sys.stdout), border, and
-    # verbose (1)
+    # kwds can contain sep (' '), end ('\n'), file (sys.stdout), border (None),
+    # and verbose (1)
     with print_lock:
         verbose_level = kwds.pop('verbose', 1)
         target = kwds.get('file') or stdout
