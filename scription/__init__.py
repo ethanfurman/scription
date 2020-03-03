@@ -56,6 +56,7 @@ try:
     from Queue import Queue, Empty
 except ImportError:
     from queue import Queue, Empty
+import codecs
 import datetime
 import email
 import errno
@@ -2302,7 +2303,7 @@ class ProgressView(object):
                     'unknown value %r for view_type; allowed values: %s'
                         % ', '.join(repr(vt.value) for vt in self.ViewType)
                     )
-        headless = not _is_atty[stdout]
+        headless = not stdout_is_atty
         if total is None and iterable is None:
             raise ValueError('total must be specified if not wrapping an iterable')
         elif total is None:
@@ -2795,12 +2796,53 @@ def box(message, *style, **kwds):
         box.append(bottom_line)
     return '\n'.join(box)
 
+# get/set terminal writers
 _is_atty = {}
-for channel in (stdin, stdout, stderr):
-    try:
-        _is_atty[channel] = os.isatty(channel.fileno())
-    except:
-        _is_atty[channel] = False
+try:
+    _is_atty[stdin] = os.isatty(stdin.fileno())
+except Exception:
+    _is_atty[stdin] = False
+stdin_is_atty = _is_atty[stdin]
+
+try:
+    stdout_is_atty = os.isatty(stdout.fileno())
+except Exception:
+    stdout_is_atty = False
+
+try:
+    stderr_is_atty = os.isatty(stderr.fileno())
+except Exception:
+    stderr_is_atty = False
+
+# ensure proper unicode handling; based on
+# https://stackoverflow.com/a/27347906, and
+# https://stackoverflow.com/a/27347913
+if stdout.encoding is None or stdout.encoding == 'ANSI_X3.4-1968' or not stdout_is_atty:
+    channel_writer = codecs.getwriter('UTF-8')
+    errors = None
+else:
+    channel_writer = codecs.getwriter(sys.stdout.encoding)
+    errors = 'replace'
+if sys.version_info.major < 3:
+    sys.stdout = channel_writer(sys.stdout, errors=errors)
+else:
+    sys.stdout = channel_writer(sys.stdout.buffer, errors=errors)
+stdout = sys.stdout
+_is_atty[stdout] = stdout_is_atty
+
+if stderr.encoding is None or stderr.encoding == 'ANSI_X3.4-1968' or not stderr_is_atty:
+    channel_writer = codecs.getwriter('UTF-8')
+    errors = None
+else:
+    channel_writer = codecs.getwriter(sys.stderr.encoding)
+    errors = 'replace'
+if sys.version_info.major < 3:
+    sys.stderr = channel_writer(sys.stderr, errors=errors)
+else:
+    sys.stderr = channel_writer(sys.stderr.buffer, errors=errors)
+stderr = sys.stderr
+_is_atty[stderr] = stderr_is_atty
+
 def print(*values, **kwds):
     # kwds can contain sep (' '), end ('\n'), file (sys.stdout), border (None),
     # and verbose (1)
@@ -2926,12 +2968,14 @@ def print(*values, **kwds):
         if border is not None and not isinstance(border, tuple):
             border = (border, )
         sep = kwds.get('sep', ' ')
-        is_tty = _is_atty.get(target)
-        try:
-            is_tty = os.isatty(target.fileno())
-            _is_atty[target] = is_tty
-        except (AttributeError, TypeError, OSError):
-            _is_atty[target] = is_tty = False
+        if target in _is_atty:
+            is_tty = _is_atty[target]
+        else:
+            try:
+                is_tty = os.isatty(target.fileno())
+                _is_atty[target] = is_tty
+            except Exception:
+                _is_atty[target] = is_tty = False
         if not is_tty or border is not None:
             old_values = []
             new_values = []
