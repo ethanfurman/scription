@@ -33,7 +33,7 @@ intelligently parses command lines
 from __future__ import print_function
 
 # version
-version = 0, 84, 0
+version = 0, 84, 1, 6
 
 # imports
 import sys
@@ -2284,7 +2284,7 @@ class Color(str, Flag):
     def __exit__(self, *args):
         print(self.AllReset, end='', verbose=0)
 
-class ProgressView(object):
+class ViewProgress(object):
     """
     Displays progress as a bar or a numeric count.
     """
@@ -2295,7 +2295,7 @@ class ProgressView(object):
             )
     export(ViewType, vars())
 
-    def __init__(self, total=None, view_type='count', message=None, bar_char='*', sep=': ', iterable=None):
+    def __init__(self, iterable, message=None, total=None, sep=': ', view_type='bar', bar_char='*'):
         try:
             view_type = self.ViewType(view_type)
         except KeyError:
@@ -2331,21 +2331,18 @@ class ProgressView(object):
         self.last_count = 0
         self.last_time = time.time()
         self.f = sys.stdout
-        if message is not None:
-            if total is not None and '$total' in message:
-                message = message.replace('$total', str(total))
-            else:
-                message = ' '.join([w for w in message.split() if w != '$total'])
-            if view_type is self.BAR:
-                message = '\n' + message
-            self.f.write('%s' % message)
-            if self.blank:
-                self.f.write('\n')
-                self.f.flush()
-                return
-            if self.view_type is not self.BAR:
-                self.f.write(sep)
         if not self.blank:
+            if message is not None:
+                if total is not None and '$total' in message:
+                    message = message.replace('$total', str(total))
+                else:
+                    message = ' '.join([w for w in message.split() if w != '$total'])
+                if view_type is self.BAR:
+                    message = '\n' + message
+                if verbosity:
+                    self.f.write('%s' % message)
+                    if self.view_type is not self.BAR:
+                        self.f.write(sep)
             if self.view_type is self.PERCENT:
                 self.progress = self._bar_progress
                 self.f.write('  0%')
@@ -2438,6 +2435,16 @@ class ProgressView(object):
         """
         self.current_count += 1
         self.progress(self.current_count)
+
+
+class ProgressView(ViewProgress):
+    """
+    deprecated: use ViewProgress instead
+    """
+    def __init__(self, total=None, view_type='count', message=None, bar_char='*', sep=': ', iterable=None):
+        from warnings import warn
+        warn('ProgressView is deprecated; use ViewProgress (and double-check argument order).')
+        return super(ProgressView, self).__init__(iterable, message, total, sep, view_type, bar_char)
 
 
 class Trivalent(object):

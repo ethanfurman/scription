@@ -5,6 +5,8 @@
 - Run() now exits with returnncode (used be Main() only)
 - ensure stdout/stderr are not ASCII, and will not raise Unicode exceptions
   if not set for UTF-8
+- deprecate ProgressView in favor of ViewProgress
+  (check argument order when switching)
 
 
 0.84.00
