@@ -56,6 +56,8 @@ try:
     from Queue import Queue, Empty
 except ImportError:
     from queue import Queue, Empty
+
+import ast
 import codecs
 import datetime
 import email
@@ -119,7 +121,7 @@ else:
 # data
 __all__ = (
     'Alias', 'Command', 'Script', 'Main', 'Run', 'Spec',
-    'Bool','InputFile', 'OutputFile', 'IniError', 'IniFile', 'OrmError', 'OrmFile', 'NameSpace',
+    'Bool','InputFile', 'OutputFile', 'IniError', 'IniFile', 'OrmError', 'OrmFile', 'NameSpace', 'OrmSection',
     'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'MULTIREQ', 'REQUIRED', 'RADIO',
     'ScriptionError', 'ExecuteError', 'FailedPassword', 'TimeoutError', 'Execute', 'Job', 'ProgressView',
     'abort', 'echo', 'error', 'get_response', 'help', 'input', 'mail', 'user_ids', 'print', 'box',
@@ -674,24 +676,42 @@ def _init_script_module(func):
     script_module['script_abort_message'] = ''
     script_module['script_exception_lines'] = []
 
+
 class NameSpace(object):
+
     def __init__(self, wrapped_dict=None):
         if wrapped_dict is not None:
             self.__dict__ = wrapped_dict
+
     def __repr__(self):
         return '%s(%r)' % (self.__class__.__name__, self.__dict__)
+    
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__):
+            return NotImplemented
+        return self.__dict__ == other.__dict__
+
+    def __ne__(self, other):
+        if not isinstance(other, self.__class__):
+            return NotImplemented
+        return self.__dict__ != other.__dict__
+
     def __contains__(self, name):
         return name in self.__dict__
+    
     def __iter__(self):
         for key, value in sorted(self.__dict__.items()):
             yield key, value
+    
     def __getitem__(self, name):
         try:
             return self.__dict__[name]
         except KeyError:
             raise ScriptionError("namespace object has nothing named %r" % name)
+    
     def __setitem__(self, name, value):
         self.__dict__[name] = value
+    
     def get(self, key, default=None):
         # deprecated, will be removed by 1.0
         try:
@@ -1948,6 +1968,23 @@ class Job(object):
             data = data.encode('utf-8')
         os.write(self.error_pipe, data)
 
+class OrmSection(NameSpace):
+
+    def __repr__(self):
+        return '%r' % (tuple(self.__dict__.items()), )
+
+    
+class ormclassmethod(object):
+
+    def __init__(self, func):
+        self.func = func
+
+    def __get__(self, instance, owner):
+        if instance:
+            return owner.__getattr__(instance, self.func.__name__)
+        return lambda *a, **kw: self.func(*a, **kw)
+
+
 class OrmFile(object):
     """
     lightweight ORM for scalar values
@@ -1959,7 +1996,7 @@ class OrmFile(object):
       - presence of colons and/or hyphens
       - presence of period
 
-    if `plain` is True, then only True/False/None and numbers are,
+    if `plain` is True, then only True/False/None and numbers are
     converted, everything else is a string.
     """
     _str = unicode
@@ -1985,12 +2022,16 @@ class OrmFile(object):
                 raise TypeError('OrmFile %r: invalid orm type -> %r' % (filename, n))
             setattr(self, n, t)
         target_sections = []
+        self._saveable = True
         if section:
             target_sections = section.lower().split('.')
+            self._saveable = False
         self._section = section
         self._filename = filename
         defaults = {}
-        settings = self._settings = NameSpace()
+        settings = self._settings = OrmSection()
+        if not os.path.exists(filename):
+            open(filename, 'w').close()
         if py_ver < (3, 0):
             fh = open(filename)
         else:
@@ -2009,7 +2050,7 @@ class OrmFile(object):
                         raise OrmError('OrmFile %r; section headers must start and end with "[]" [got %r]' % (filename, line, ))
                     sections = self._verify_section_header(line[1:-1])
                     prior, section = sections[:-1], sections[-1]
-                    new_section = NameSpace()
+                    new_section = OrmSection()
                     for key, value in defaults.items():
                         setattr(new_section, key, value)
                     prev_namespace = self
@@ -2017,7 +2058,7 @@ class OrmFile(object):
                         prev_namespace = prev_namespace[prev_name]
                         for key_value in prev_namespace:
                             key, value = key_value
-                            if not isinstance(value, NameSpace):
+                            if not isinstance(value, OrmSection):
                                 setattr(new_section, key, value)
                     setattr(prev_namespace, section, new_section)
                 else:
@@ -2046,11 +2087,21 @@ class OrmFile(object):
         else:
             return '%s(%r, section=%r)' % (self.__class__.__name__, self._filename, self._section)
 
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__):
+            return NotImplemented
+        return self._settings == other._settings
+
+    def __ne__(self, other):
+        if not isinstance(other, self.__class__):
+            return NotImplemented
+        return self._settings != other._settings
+
     def __iter__(self):
         values = []
         sections = []
         for key, value in self._settings:
-            if isinstance(value, NameSpace):
+            if isinstance(value, OrmSection):
                 sections.append((key, value))
             else:
                 values.append((key, value))
@@ -2071,7 +2122,7 @@ class OrmFile(object):
 
     def __setattr__(self, name, value):
         if name in (
-                '_settings', '_filename', '_section',
+                '_settings', '_filename', '_section', '_saveable',
                 '_str', '_path', '_date', '_time', '_datetime', '_bool', '_float', '_int',
                 ):
             object.__setattr__(self, name, value)
@@ -2107,7 +2158,7 @@ class OrmFile(object):
     def _verify_value(self, value, plain=False):
         # quotes indicate a string
         # / or \ indicates a path
-        # : or - indicates time, date, datetime
+        # : or - indicates time, date, datetime (big-endian)
         # . indicates float
         # True/False indicates True/False
         # anything else is fed through int()
@@ -2140,6 +2191,9 @@ class OrmFile(object):
                     raise OrmError('OrmFile %r: invalid string value: %r' % (self._filename, value))
                 start, end = 3, -3
             return self._str(value[start:end])
+        elif value.startswith(('[', '(', '{')):
+            # list/tuple/dict
+            return ast.literal_eval(value)
         elif '/' in value or '\\' in value:
             # path
             return self._path(value)
@@ -2189,6 +2243,71 @@ class OrmFile(object):
         else:
             # must be a string
             return value
+
+    @ormclassmethod
+    def save(orm, filename=None, force=False):
+        # quotes indicate a string
+        # / or \ indicates a path
+        # : or - indicates time, date, datetime (big-endian)
+        # . indicates float
+        # True/False/None indicates True/False/None
+        # anything else is fed through int()
+        #
+        # except if `plain` is True, then
+        # True/False/None are True/False/None
+        # numbers are integer or float
+        # everything else is a string
+        if not orm._saveable:
+            raise OrmError('unable to save when sections specified on opening')
+        filename = filename or orm._filename
+        def savelines(settings, lines=None, section_name=''):
+            if lines is None:
+                lines = []
+            if section_name:
+                lines.append('\n[%s]' % (section_name, ))
+            items = sorted(
+                    settings.__dict__.items(),
+                    key=lambda item: (isinstance(item[1], OrmSection), item[0]),
+                    )
+            for setting_name, obj in items:
+                if obj in (True, False, None) or isinstance(obj, number):
+                    lines.append('%s = %s' % (setting_name, obj))
+                elif isinstance(obj, orm._datetime):
+                    if obj.second:
+                        lines.append(obj.strftime('%%s = %Y-%m-%d %H:%M:%S') % (setting_name, ))
+                    else:
+                        lines.append(obj.strftime('%%s = %Y-%m-%d %H:%M') % (setting_name, ))
+                elif isinstance(obj, orm._date):
+                        lines.append(obj.strftime('%%s = %Y-%m-%d') % (setting_name, ))
+                elif isinstance(obj, orm._time):
+                    if obj.second:
+                        lines.append(obj.strftime('%%s = %H:%M:%S') % (setting_name, ))
+                    else:
+                        lines.append(obj.strftime('%%s = %H:%M') % (setting_name, ))
+                elif isinstance(obj, orm._path) and not orm._path in basestring:
+                    lines.append('%s = %s' % (setting_name, obj))
+                elif not isinstance(obj, basestring) and not isinstance(obj, OrmSection):
+                    # list, tuple, dict, etc.
+                    lines.append('%s = %s' % (setting_name, obj))
+                elif isinstance(obj, basestring):
+                    lines.append('%s = "%s"' % (setting_name, obj))
+                else:
+                    # at this point, it's a Section
+                    savelines(obj, lines, ('%s.%s' % (section_name, setting_name)).strip('.'))
+            return lines
+        lines = savelines(orm._settings)
+        if (
+                orm._filename
+                and filename != orm._filename
+                and os.path.exists(filename)
+                and not force
+            ):
+            raise Exception('file %r exists; use force=True to overwrite' % (filename, ))
+        with open(filename, 'w') as f:
+            f.write('\n'.join(lines))
+
+
+
 IniError = OrmError     # deprecated, will be removed by 1.0
 IniFile = OrmFile       # deprecated, will be removed by 1.0
 

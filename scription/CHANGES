@@ -7,6 +7,8 @@
   if not set for UTF-8
 - deprecate ProgressView in favor of ViewProgress
   (check argument order when switching)
+- add list, tuple, and dict support to OrmFile
+- support saving OrmFile objects back to disk
 
 
 0.84.00
