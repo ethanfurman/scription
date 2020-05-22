@@ -1,3 +1,9 @@
+0.84.02
+=======
+
+- OrmFile: allow comment to be specified when creating OrmSection
+
+
 0.84.01
 =======
 

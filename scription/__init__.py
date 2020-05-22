@@ -33,7 +33,7 @@ intelligently parses command lines
 from __future__ import print_function
 
 # version
-version = 0, 84, 1
+version = 0, 84, 2, 2
 
 # imports
 import sys
@@ -1970,6 +1970,11 @@ class Job(object):
 
 class OrmSection(NameSpace):
 
+    def __init__(self, comment=''):
+        super(OrmSection, self).__init__()
+        if comment:
+            self[';'] = '; ' + comment.replace('\n','\n; ')
+
     def __repr__(self):
         return '%r' % (tuple(self.__dict__.items()), )
 
@@ -2270,6 +2275,9 @@ class OrmFile(object):
                     key=lambda item: (isinstance(item[1], OrmSection), item[0]),
                     )
             for setting_name, obj in items:
+                if setting_name == ';':
+                    lines.append(obj)
+                    continue
                 if obj in (True, False, None) or isinstance(obj, number):
                     lines.append('%s = %s' % (setting_name, obj))
                 elif isinstance(obj, orm._datetime):
@@ -2305,8 +2313,6 @@ class OrmFile(object):
             raise Exception('file %r exists; use force=True to overwrite' % (filename, ))
         with open(filename, 'w') as f:
             f.write('\n'.join(lines))
-
-
 
 IniError = OrmError     # deprecated, will be removed by 1.0
 IniFile = OrmFile       # deprecated, will be removed by 1.0
