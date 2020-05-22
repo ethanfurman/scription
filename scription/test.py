@@ -2007,6 +2007,74 @@ class TestOrm(TestCase):
         with self.assertRaisesRegex(OrmError, 'no section/default named'):
             hah.save()
 
+    def test_write_from_index(self):
+        test_orm_file_name = os.path.join(tempdir, 'written_from_index.orm')
+        huh = OrmFile(test_orm_file_name)
+
+        huh['home'] = '/usr/bin'
+        huh['who'] = "ethan"
+        huh['why'] = 'why not?'
+        huh['why_not'] = True
+        huh['where'] = False
+
+        huh['not_used'] = OrmSection('nothing to see here')
+        huh['not_used']['this'] = "that"
+        huh['not_used']['these'] = "those"
+
+        huh['hg'] = OrmSection('cvs: active\ntype: hg')
+        huh['hg']['home'] = '/usr/local/bin'
+        huh['hg']['when'] = datetime.time(12, 45)
+        huh['hg']['why_not'] = None
+
+        huh['data_types'] = OrmSection()
+        huh['data_types']['list'] = [1, 2, 3]
+        huh['data_types']['tuple'] = (4, 5, 6)
+        huh['data_types']['dict'] = {7:8, 9:10}
+
+        OrmFile.save(huh)
+        # sanity check
+        heh = OrmFile(self.orm_file)
+        hah = OrmFile(self.orm_file)
+        self.assertEqual(heh, hah)
+        # and piecemeal
+        self.assertEqual(huh.home, hah.home)
+        self.assertEqual(huh.who, hah.who)
+        self.assertEqual(huh.why, hah.why)
+        self.assertEqual(huh.why_not, hah.why_not)
+        self.assertEqual(huh.where, hah.where)
+        self.assertEqual(huh.not_used.this, hah.not_used.this)
+        self.assertEqual(huh.not_used.these, hah.not_used.these)
+        self.assertEqual(huh.hg.home, hah.hg.home)
+        self.assertEqual(huh.hg.when, hah.hg.when)
+        self.assertEqual(huh.hg.why_not, hah.hg.why_not)
+        self.assertEqual(huh.data_types.list, hah.data_types.list)
+        self.assertEqual(huh.data_types.tuple, hah.data_types.tuple)
+        self.assertEqual(huh.data_types.dict, hah.data_types.dict)
+        # now a real check
+        # piecemeal
+        hah = OrmFile(test_orm_file_name)
+        self.assertEqual(huh.home, hah.home)
+        self.assertEqual(huh.who, hah.who)
+        self.assertEqual(huh.why, hah.why)
+        self.assertEqual(huh.why_not, hah.why_not)
+        self.assertEqual(huh.where, hah.where)
+        self.assertEqual(huh.not_used.this, hah.not_used.this)
+        self.assertEqual(huh.not_used.these, hah.not_used.these)
+        self.assertEqual(huh.hg.home, hah.hg.home)
+        self.assertEqual(huh.hg.when, hah.hg.when)
+        self.assertEqual(huh.hg.why_not, hah.hg.why_not)
+        self.assertEqual(huh.data_types.list, hah.data_types.list)
+        self.assertEqual(huh.data_types.tuple, hah.data_types.tuple)
+        self.assertEqual(huh.data_types.dict, hah.data_types.dict)
+        # and whole enchilada
+        self.assertEqual(heh._settings, hah._settings)
+        self.assertEqual(heh, hah)
+        plain = OrmFile(self.orm_file_plain, plain=True)
+        self.assertNotEqual(plain, hah)
+        # and test .save not in settings
+        with self.assertRaisesRegex(OrmError, 'no section/default named'):
+            hah.save()
+
     def test_namespace(self):
         one = NameSpace({'one': 1, 'two':2})
         two = NameSpace(dict(two=2, one=1))
@@ -2020,6 +2088,8 @@ class TestOrm(TestCase):
         self.assertNotEqual(one, three)
         self.assertNotEqual(two, three)
         self.assertEqual(one, two)
+
+
 class TestResponse(TestCase):
 
     class raw_input_cm(object):
