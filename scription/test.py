@@ -1769,8 +1769,8 @@ class TestOrm(TestCase):
         orm_file = open(orm_file_name, 'w')
         try:
             orm_file.write(
-                    "home = \n"
                     'who = ethan\n'
+                    "home = \n"
                     "\n"
                     "what = False\n"
                     "where = True\n"
@@ -1877,6 +1877,13 @@ class TestOrm(TestCase):
         self.assertTrue(type(hg.when) is datetime.time)
         self.assertTrue(type(hg.why_not) is type(None))
 
+    def test_limited_defaults(self):
+        'ensure default changes in one section do not affect peer sections'
+        complete = OrmFile(self.orm_file)
+        self.assertEqual(complete.home, '/usr/bin')
+        self.assertEqual(complete.hg.home, '/usr/local/bin')
+        self.assertEqual(complete.data_types.home, '/usr/bin')
+
     def test_custom(self):
         'test custom data types'
         class Path(unicode):
@@ -1899,6 +1906,29 @@ class TestOrm(TestCase):
         self.assertTrue(type(hg.home) is Path)
         self.assertTrue(type(hg.who) is str)
         self.assertTrue(type(hg.when) is Time)
+
+    def test_order_kept(self):
+        complete = OrmFile(self.orm_file)
+        self.assertEqual(
+                [t[0] for t in list(complete)[:5]],
+                ['home', 'who', 'why', 'why_not', 'where'],
+                )
+        self.assertEqual(list(complete)[5][0], 'not_used')
+        self.assertEqual(list(complete)[6][0], 'hg')
+        self.assertEqual(list(complete)[7][0], 'data_types')
+        self.assertEqual(
+                [t[0] for t in list(list(complete)[5][1])],
+                ['home', 'who', 'why', 'why_not', 'where', 'this', 'these'],
+                )
+        self.assertEqual(
+                [t[0] for t in list(list(complete)[6][1])],
+                ['home', 'who', 'why', 'why_not', 'where', 'when'],
+                )
+        self.assertEqual(
+                [t[0] for t in list(list(complete)[7][1])],
+                ['home', 'who', 'why', 'why_not', 'where', 'list', 'tuple', 'dict'],
+                )
+
 
     def test_subheader(self):
         complete = OrmFile(self.orm_file_sub)

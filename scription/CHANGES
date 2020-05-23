@@ -2,6 +2,7 @@
 =======
 
 - OrmFile: allow comment to be specified when creating OrmSection
+- OrmFile: maintain insertion order
 
 
 0.84.01

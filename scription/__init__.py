@@ -75,6 +75,7 @@ import threading
 import time
 import traceback
 from aenum import Enum, IntEnum, Flag, AutoValue, AutoNumber, export
+from collections import OrderedDict
 from itertools import groupby
 from math import floor
 from sys import stdin, stdout, stderr
@@ -1970,10 +1971,40 @@ class Job(object):
 
 class OrmSection(NameSpace):
 
-    def __init__(self, comment=''):
+    __slots__ = '_OrmSection__name_', '_OrmSection__order_', '_OrmSection__comment_'
+
+    def __init__(self, comment='', name=None):
         super(OrmSection, self).__init__()
+        self.__order_ = []
+        self.__name_ = name
+        self.__comment_ = None
         if comment:
-            self[';'] = '; ' + comment.replace('\n','\n; ')
+            self.__comment_ = '; ' + comment.replace('\n','\n; ')
+
+    def __hash__(self):
+        if self.__name_ is None:
+            raise TypeError('nameless OrmSection is not hashable')
+        return hash(self.__name_)
+
+    def __iter__(self):
+        for key in self.__order_:
+            yield key, self[key]
+
+    def __setattr__(self, name, value):
+        if isinstance(value, OrmSection) and value._OrmSection__name_ is None:
+            value._OrmSection__name_ = name
+        res = super(OrmSection, self).__setattr__(name, value)
+        if name not in self.__slots__ and name not in self.__order_:
+            self.__order_.append(name)
+        return res
+
+    def __setitem__(self, name, value):
+        if isinstance(value, OrmSection) and value._OrmSection__name_ is None:
+            value._OrmSection__name_ = name
+        res = super(OrmSection, self).__setitem__(name, value)
+        if name not in self.__slots__ and name not in self.__order_:
+            self.__order_.append(name)
+        return res
 
     def __repr__(self):
         return '%r' % (tuple(self.__dict__.items()), )
@@ -2033,8 +2064,8 @@ class OrmFile(object):
             self._saveable = False
         self._section = section
         self._filename = filename
-        defaults = {}
-        settings = self._settings = OrmSection()
+        defaults = OrderedDict()
+        settings = self._settings = OrmSection(name=filename)
         if not os.path.exists(filename):
             open(filename, 'w').close()
         if py_ver < (3, 0):
@@ -2055,7 +2086,7 @@ class OrmFile(object):
                         raise OrmError('OrmFile %r; section headers must start and end with "[]" [got %r]' % (filename, line, ))
                     sections = self._verify_section_header(line[1:-1])
                     prior, section = sections[:-1], sections[-1]
-                    new_section = OrmSection()
+                    new_section = OrmSection(name=section)
                     for key, value in defaults.items():
                         setattr(new_section, key, value)
                     prev_namespace = self
@@ -2270,14 +2301,13 @@ class OrmFile(object):
                 lines = []
             if section_name:
                 lines.append('\n[%s]' % (section_name, ))
+            if settings._OrmSection__comment_:
+                lines.append(settings._OrmSection__comment_)
             items = sorted(
-                    settings.__dict__.items(),
-                    key=lambda item: (isinstance(item[1], OrmSection), item[0]),
+                    settings,
+                    key=lambda item: (isinstance(item[1], OrmSection)),
                     )
             for setting_name, obj in items:
-                if setting_name == ';':
-                    lines.append(obj)
-                    continue
                 if obj in (True, False, None) or isinstance(obj, number):
                     lines.append('%s = %s' % (setting_name, obj))
                 elif isinstance(obj, orm._datetime):
