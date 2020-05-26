@@ -1118,7 +1118,12 @@ class Command(object):
             func.__doc__ = textwrap.dedent(func.__doc__).strip()
         _add_annotations(func, self.annotations)
         func_name = func.__name__.replace('_', '-')
-        script_module['script_commands'][func_name] = func
+        if func_name.startswith('-'):
+            # internal name, possibly shadowing a keyword or data type -- an alias will be needed
+            # to access this command
+            pass
+        else:
+            script_module['script_commands'][func_name] = func
         _help(func)
         return func
 

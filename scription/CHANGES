@@ -3,6 +3,8 @@
 
 - OrmFile: allow comment to be specified when creating OrmSection
 - OrmFile: maintain insertion order
+- do not show _commands to user (use an @Alias to expose command
+  with a different name)
 
 
 0.84.01
