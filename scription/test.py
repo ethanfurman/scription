@@ -274,6 +274,19 @@ class TestCommandlineProcessing(TestCase):
                 )
         test_func_parsing(self, tester, tests)
 
+    def test_multi_with_choices_as_string(self):
+        @Command(
+                huh=Spec('misc options', 'multi', choices='mine yours theirs'),
+                )
+        def tester(huh):
+            pass
+        tests = (
+                ( 'tester'.split(), (), {}, (tuple(), ), {} ),
+                ( 'tester -h theirs'.split(), (), {}, (('theirs', ), ), {} ),
+                ( 'tester -h mine -h yours'.split(), (), {}, (('mine', 'yours'), ), {} ),
+                )
+        test_func_parsing(self, tester, tests)
+
     def test_multi_with_bad_choices(self):
         @Command(
                 huh=Spec('misc options', 'multi', choices=['mine', 'yours', 'theirs']),
