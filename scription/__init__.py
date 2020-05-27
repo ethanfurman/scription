@@ -851,7 +851,17 @@ def _usage(func, param_line_args):
                         radio.add(annote._radio)
                 elif annote.kind in ('multi', 'multireq'):
                     scription_debug('processing as multi', verbose=2)
-                    values = [annote.type(a) for a in _split_on_comma(value)]
+                    scription_debug('checking choice membership: %r in %r?' % (item, annote.choices), verbose=2)
+                    values = _split_on_comma(value)
+                    if annote.choices:
+                        for v in values:
+                            if v not in annote.choices:
+                                raise ScriptionError(
+                                        '%s: %r not in [ %s ]'
+                                            % (annote.usage, v, ' | '.join(annote.choices)),
+                                        use_help=True,
+                                        )
+                    values = [annote.type(v) for v in values]
                     annote._cli_value += tuple(values)
                     if annote._cli_value and annote._radio:
                         if annote._radio in radio:
@@ -955,7 +965,18 @@ def _usage(func, param_line_args):
                         scription_debug('processing as multi-option', verbose=2)
                         # value could be a list of comma-separated values
                         scription_debug('_usage:multi ->', annote.type, verbose=2)
-                        annote._cli_value += tuple([annote.type(a) for a in _split_on_comma(value)])
+                        scription_debug('checking choice membership: %r in %r?' % (item, annote.choices), verbose=2)
+                        values = _split_on_comma(value)
+                        if annote.choices:
+                            for v in values:
+                                if v not in annote.choices:
+                                    raise ScriptionError(
+                                            '%s: %r not in [ %s ]'
+                                                % (annote.usage, v, ' | '.join(annote.choices)),
+                                            use_help=True,
+                                            )
+                        values = [annote.type(v) for v in values]
+                        annote._cli_value += tuple(values)
                         scription_debug('_usage:multi ->', annote._cli_value, verbose=2)
                         scription_debug('checking radio settings for multioption %s' % (item, ), verbose=2)
                         if annote._radio:
@@ -1003,7 +1024,16 @@ def _usage(func, param_line_args):
                     to_be_removed.append(offset)
                 if annote.kind == 'multireq' and item:
                     scription_debug('_usage:multireq ->', annote.type, verbose=2)
-                    annote._cli_value += tuple([annote.type(a) for a in _split_on_comma(item)])
+                    values = _split_on_comma(item)
+                    if annote.choices:
+                        for v in values:
+                            if v not in annote.choices:
+                                raise ScriptionError(
+                                        '%s: %r not in [ %s ]'
+                                            % (annote.usage, v, ' | '.join(annote.choices)),
+                                        use_help=True,
+                                        )
+                    annote._cli_value += tuple([annote.type(v) for v in values])
                     scription_debug('_usage:multireq ->', annote._cli_value, verbose=2)
                 else:
                     # check for choices membership before transforming into a type

@@ -261,6 +261,33 @@ class TestCommandlineProcessing(TestCase):
                 )
         test_func_parsing(self, copy, tests)
 
+    def test_multi_with_choices(self):
+        @Command(
+                huh=Spec('misc options', 'multi', choices=['mine', 'yours', 'theirs']),
+                )
+        def tester(huh):
+            pass
+        tests = (
+                ( 'tester'.split(), (), {}, (tuple(), ), {} ),
+                ( 'tester -h theirs'.split(), (), {}, (('theirs', ), ), {} ),
+                ( 'tester -h mine -h yours'.split(), (), {}, (('mine', 'yours'), ), {} ),
+                )
+        test_func_parsing(self, tester, tests)
+
+    def test_multi_with_bad_choices(self):
+        @Command(
+                huh=Spec('misc options', 'multi', choices=['mine', 'yours', 'theirs']),
+                )
+        def tester(huh):
+            pass
+        self.assertRaisesRegex(
+                ScriptionError,
+                r"HUH: 'ours' not in \[ mine | yours | theirs \]",
+                _usage,
+                tester,
+                "tester --huh ours".split(),
+                )
+
     def test_multi(self):
         @Command(
                 huh=('misc options', 'multi'),
@@ -519,6 +546,34 @@ class TestCommandlineProcessing(TestCase):
                 ( 'tester 11,13'.split(), (), {}, ((11, 13), ), {} ),
                 )
         test_func_parsing(self, tester, tests)
+
+    def test_multireq_with_choices(self):
+        @Command(
+                huh=Spec('misc options', 'multireq', choices=['7','8','9'], type=int),
+                )
+        def tester(huh):
+            pass
+        tests = (
+                ( 'tester 8,9'.split(), (), {}, ((8, 9), ), {} ),
+                ( 'tester 7'.split(), (), {}, ((7, ), ), {} ),
+                ( 'tester 8'.split(), (), {}, ((8, ), ), {} ),
+                )
+        test_func_parsing(self, tester, tests)
+
+    def test_multireq_with_bad_choices(self):
+        @Command(
+            word=Spec('a silly argument', MULTIREQ, choices=['this', 'that']),
+            )
+        def test_choices(word):
+            pass
+        self.assertRaisesRegex(
+                ScriptionError,
+                r"WORD: 'gark' not in \[ this \| that \]",
+                _usage,
+                test_choices,
+                'test_choices gark'.split(),
+                )
+
 
     def test_option_with_default_in_command(self):
         @Command(
