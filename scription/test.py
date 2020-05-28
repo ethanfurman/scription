@@ -1,6 +1,6 @@
 from __future__ import print_function
 from scription import *
-from scription import _usage, version, empty, pocket
+from scription import _usage, version, empty, pocket, ormclassmethod
 from textwrap import dedent
 from unittest import skip, skipUnless, SkipTest, TestCase as unittest_TestCase, main
 import datetime
@@ -2186,6 +2186,22 @@ class TestOrm(TestCase):
         self.assertNotEqual(one, three)
         self.assertNotEqual(two, three)
         self.assertEqual(one, two)
+
+    def test_ormclassmethod(self):
+        class Test(object):
+            name = None
+            @ormclassmethod
+            def huh(thing):
+                return "%s is huhified" % thing.name
+        t1 = Test()
+        t1.name = 't1'
+        self.assertRaises(AttributeError, getattr, t1, 'huh')
+        self.assertEqual(Test.huh(t1), "t1 is huhified")
+        t2 = Test()
+        t2.name = 't2'
+        t2.huh = 9
+        self.assertEqual(t2.huh, 9)
+        self.assertEqual(Test.huh(t2), "t2 is huhified")
 
 
 class TestResponse(TestCase):
