@@ -2004,6 +2004,17 @@ class Job(object):
             data = data.encode('utf-8')
         os.write(self.error_pipe, data)
 
+class ormclassmethod(object):
+
+    def __init__(self, func):
+        self.func = func
+
+    def __get__(self, instance, owner):
+        if instance:
+            return owner.__getattr__(instance, self.func.__name__)
+        return lambda *a, **kw: self.func(*a, **kw)
+
+
 class OrmSection(NameSpace):
 
     __slots__ = '_OrmSection__name_', '_OrmSection__order_', '_OrmSection__comment_'
@@ -2044,16 +2055,12 @@ class OrmSection(NameSpace):
     def __repr__(self):
         return '%r' % (tuple(self.__dict__.items()), )
 
-    
-class ormclassmethod(object):
-
-    def __init__(self, func):
-        self.func = func
-
-    def __get__(self, instance, owner):
-        if instance:
-            return owner.__getattr__(instance, self.func.__name__)
-        return lambda *a, **kw: self.func(*a, **kw)
+    @ormclassmethod
+    def get(section, name, default=None):
+        try:
+            return section.__dict__[name]
+        except KeyError:
+            return default
 
 
 class OrmFile(object):
