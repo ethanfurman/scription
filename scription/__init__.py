@@ -1242,6 +1242,8 @@ class Spec(object):
             type = _identity
         if not choices:
             choices = []
+        elif isinstance(choices, basestring):
+            choices = choices.split()
         arg_type_default = empty
         use_default = False
         if default is not empty and force_default == True:

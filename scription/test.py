@@ -301,6 +301,20 @@ class TestCommandlineProcessing(TestCase):
                 "tester --huh ours".split(),
                 )
 
+    def test_multi_with_bad_choices_as_string(self):
+        @Command(
+                huh=Spec('misc options', 'multi', choices='mine yours theirs'),
+                )
+        def tester(huh):
+            pass
+        self.assertRaisesRegex(
+                ScriptionError,
+                r"HUH: 'ours' not in \[ mine | yours | theirs \]",
+                _usage,
+                tester,
+                "tester --huh ours".split(),
+                )
+
     def test_multi(self):
         @Command(
                 huh=('misc options', 'multi'),

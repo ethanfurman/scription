@@ -6,6 +6,7 @@
 - do not show _commands to user (use an @Alias to expose command
   with a different name)
 - expand support for choices to MULTI and MULTIREQ
+- Spec: choices can be a space-delimited string
 
 
 0.84.01
