@@ -1,3 +1,9 @@
+0.84.03
+=======
+
+- print: fix "table" border so multiple internal lines print correctly
+
+
 0.84.02
 =======
 

@@ -3110,64 +3110,38 @@ def print(*values, **kwds):
                 if row is None:
                     lines.append(sep)
                 else:
-                    more_cells = []
-                    line = []
-                    for i, (value, width, align) in enumerate(zip(row, widths, types)):
-                        if value is None:
-                            # special case: emit dashes
-                            cell = width * '-'
-                        elif align == '':
-                            # left
-                            #
-                            # check for newlines
-                            values = value.split('\n')
-                            cell = []
-                            for value in values:
-                                cell.append('%-*s' % (width, value))
-                            if len(cell) == 1:
-                                [cell] = cell
-                        elif align == 'i':
-                            # right
-                            cell = '%*s' % (width, value)
-                        elif align == 'f':
-                            if isinstance(value, fixed):
-                                if isinstance(value, bool):
-                                    value = 'fT'[value]
-                                else:
-                                    value = str(value)
-                            elif isinstance(value, dates):
-                                value = value.strftime('%Y-%m-%d')
-                            elif isinstance(value, datetimes):
-                                value = value.strftime('%Y-%m-%d %H:%M:%S')
-                            elif isinstance(value, times):
-                                value = value.strftime('%H:%M:%S')
-                            t = len(value)
-                            # center/fixed
-                            l = (width-t) // 2
-                            r = width - t - l
-                            l = l * ' '
-                            r = r * ' '
-                            cell = '%s%s%s' % (l, value, r)
-                        if not isinstance(cell, list):
-                            line.append(cell)
-                        else:
-                            line.append(cell[0])
-                            for j, value in enumerate(cell[1:]):
-                                more_cells.append((j, i, value))
-                    lines.append(' | '.join(line))
-                    more_cells.sort()
-                    for next_row, cells in groupby(more_cells, lambda c: c[0]):
+                    for row in zip_values(row, widths, types):
                         line = []
-                        for _, index, cell in cells:
-                            position = 0
-                            while position < index:
-                                line.append(' ' * widths[position])
-                                position += 1
+                        for value, width, align in row:
+                            if value is None:
+                                # special case: emit spaces
+                                cell = width * ' '
+                            elif align == '':
+                                # left
+                                cell = '%-*s' % (width, value)
+                            elif align == 'i':
+                                # right
+                                cell = '%*s' % (width, value)
+                            elif align == 'f':
+                                if isinstance(value, fixed):
+                                    if isinstance(value, bool):
+                                        value = 'fT'[value]
+                                    else:
+                                        value = str(value)
+                                elif isinstance(value, dates):
+                                    value = value.strftime('%Y-%m-%d')
+                                elif isinstance(value, datetimes):
+                                    value = value.strftime('%Y-%m-%d %H:%M:%S')
+                                elif isinstance(value, times):
+                                    value = value.strftime('%H:%M:%S')
+                                t = len(value)
+                                # center/fixed
+                                l = (width-t) // 2
+                                r = width - t - l
+                                l = l * ' '
+                                r = r * ' '
+                                cell = '%s%s%s' % (l, value, r)
                             line.append(cell)
-                            position += 1
-                        while position < len(widths):
-                            line.append(' ' * widths[position])
-                            position += 1
                         lines.append(' | '.join(line))
             values = ('\n'.join(lines), )
             border = 'box'
@@ -3204,6 +3178,22 @@ def print(*values, **kwds):
             if exc.errno == errno.EPIPE:
                 sys.exit(Exit.IoError)
             raise
+
+def zip_values(row, widths, types):
+    """
+    each value of row may also be multiple values
+    """
+    expanded_row = []
+    for cell in row:
+        if isinstance(cell, basestring):
+            expanded_row.append(tuple(cell.split('\n')))
+        else:
+            expanded_row.append((cell, ))
+    for row in zip_longest(*expanded_row):
+        line = []
+        for c, w, t in zip(row, widths, types):
+            line.append((c, w, t))
+        yield line
 
 def log_exception(tb=None):
     if tb is None:

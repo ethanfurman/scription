@@ -1275,32 +1275,32 @@ class TestParamRemoval(TestCase):
 
     def test_required(self):
         test_file = self.write_script('REQUIRED')
-        result = Execute([sys.executable, test_file, 'haha!'], timeout=10)
+        result = Execute([sys.executable, test_file, 'haha!'], timeout=300)
         self.assertEqual(result.stdout, 'success!\n', result.stdout + '\n' + result.stderr)
 
     def test_option(self):
         test_file = self.write_script('OPTION')
-        result = Execute([sys.executable, test_file, '--test', 'haha!'], timeout=10)
+        result = Execute([sys.executable, test_file, '--test', 'haha!'], timeout=300)
         self.assertEqual(result.stdout, 'success!\n', result.stdout + '\n' + result.stderr)
 
     def test_flag(self):
         test_file = self.write_script('FLAG')
-        result = Execute([sys.executable, test_file, '--test'], timeout=10)
+        result = Execute([sys.executable, test_file, '--test'], timeout=300)
         self.assertEqual(result.stdout, 'success!\n', result.stdout + '\n' + result.stderr)
 
     def test_multi1(self):
         test_file = self.write_script('MULTI')
-        result = Execute([sys.executable, test_file, '--test', 'boo'], timeout=10)
+        result = Execute([sys.executable, test_file, '--test', 'boo'], timeout=300)
         self.assertEqual(result.stdout, 'success!\n', result.stdout + '\n' + result.stderr)
 
     def test_multi2(self):
         test_file = self.write_script('MULTI')
-        result = Execute([sys.executable, test_file, '--test', 'boo,hoo'], timeout=10)
+        result = Execute([sys.executable, test_file, '--test', 'boo,hoo'], timeout=300)
         self.assertEqual(result.stdout, 'success!\n', result.stdout + '\n' + result.stderr)
 
     def test_multi3(self):
         test_file = self.write_script('MULTI')
-        result = Execute([sys.executable, test_file, '--test', 'boo', '--test', 'hoo'], timeout=10)
+        result = Execute([sys.executable, test_file, '--test', 'boo', '--test', 'hoo'], timeout=300)
         self.assertEqual(result.stdout, 'success!\n', result.stdout + '\n' + result.stderr)
 
     @skip('not implemented')
@@ -1359,19 +1359,19 @@ class TestCommandNames(TestCase):
     def test_dash_in_name(self):
         for name in ('test_dash', 'test-dash'):
             cmdline = ' '.join([sys.executable, self.command_file, name])
-            result = Execute(cmdline, timeout=10)
+            result = Execute(cmdline, timeout=300)
             self.assertTrue(result.returncode == 0, '%s failed! [%r]\n%s\n%s' % (cmdline, result.returncode, result.stdout, result.stderr))
             self.assertEqual(result.stderr, '', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
             self.assertEqual(result.stdout, 'success!\n', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
 
     def test_capital_in_name(self):
         cmdline = ' '.join([sys.executable, self.command_file])
-        result = Execute(cmdline, timeout=10)
+        result = Execute(cmdline, timeout=300)
         self.assertTrue(result.returncode == 0, '%s failed! [%r]\n%s\n%s' % (cmdline, result.returncode, result.stdout, result.stderr))
         self.assertEqual(result.stderr, '', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
         self.assertEqual(result.stdout, 'aint that nice.\n', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
         cmdline = ' '.join([sys.executable, self.command_file, '--help'])
-        result = Execute(cmdline, timeout=10)
+        result = Execute(cmdline, timeout=300)
         self.assertTrue(result.returncode == 0, '%s failed! [%r]\n%s\n%s' % (cmdline, result.returncode, result.stdout, result.stderr))
         self.assertEqual(result.stderr, '', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
         self.assertEqual(
@@ -1425,9 +1425,9 @@ class TestHelp(TestCase):
                 "    THAT   that argument    \n"
                 )
         test_file = self.write_script(file_data)
-        result = Execute([sys.executable, test_file, '--help'], timeout=10)
+        result = Execute([sys.executable, test_file, '--help'], timeout=300)
         self.assertMultiLineEqual(result.stdout.strip(), target_result.strip())
-        result = Execute([sys.executable, test_file, '--help'], pty=True, timeout=10)
+        result = Execute([sys.executable, test_file, '--help'], pty=True, timeout=300)
         self.assertMultiLineEqual(result.stdout.strip(), target_result.strip())
 
     def test_alias_command(self):
@@ -1462,7 +1462,7 @@ class TestHelp(TestCase):
                 "   whatever       THIS THAT\n"
                 )
         test_file = self.write_script(file_data)
-        result = Execute([sys.executable, test_file, '--help'], timeout=10)
+        result = Execute([sys.executable, test_file, '--help'], timeout=300)
         self.assertMultiLineEqual(result.stdout.strip(), target_result.strip())
 
     # def test_alias_matches_script_name(self):
@@ -1496,7 +1496,7 @@ class TestHelp(TestCase):
     #             "   help_test  THIS THAT\n"
     #             )
     #     test_file = self.write_script(file_data)
-    #     result = Execute([sys.executable, test_file, '--help'], timeout=10)
+    #     result = Execute([sys.executable, test_file, '--help'], timeout=300)
     #     self.assertMultiLineEqual(result.stdout.strip(), target_result.strip())
 
     def test_multiple_commands(self):
@@ -1538,7 +1538,7 @@ class TestHelp(TestCase):
                 "   whatever       THIS THAT\n"
                 )
         test_file = self.write_script(file_data)
-        result = Execute([sys.executable, test_file, '--help'], timeout=10)
+        result = Execute([sys.executable, test_file, '--help'], timeout=300)
         self.assertMultiLineEqual(result.stdout.strip(), target_result.strip())
 
 
@@ -1684,17 +1684,17 @@ class TestExecution(TestCase):
 
     if not is_win:
         def test_pty(self):
-            command = Execute([sys.executable, self.good_file], pty=True, timeout=10)
+            command = Execute([sys.executable, self.good_file], pty=True, timeout=600)
             self.assertEqual(command.stdout, 'good output here!\n')
             self.assertEqual(command.stderr, '')
-            command = Execute([sys.executable, self.bad_file], pty=True, timeout=10)
+            command = Execute([sys.executable, self.bad_file], pty=True, timeout=600)
             self.assertEqual(command.stdout, '')
             self.assertTrue(command.stderr.endswith('ValueError: uh-oh -- bad value!\n'))
-            command = Execute([sys.executable, self.mixed_file], pty=True, timeout=10)
+            command = Execute([sys.executable, self.mixed_file], pty=True, timeout=600)
             self.assertEqual(command.stdout, 'good night\nsweetheart!\n')
             self.assertTrue(command.stderr.endswith("KeyError: 'the key is missing?'\n"),
                     'Failed (actual results):\n%s' % command.stderr)
-            command = Execute([sys.executable, self.pty_password_file], password='Salutations!', pty=True, timeout=10)
+            command = Execute([sys.executable, self.pty_password_file], password='Salutations!', pty=True, timeout=600)
             self.assertEqual(
                     command.stdout,
                     "super secret santa soda sizzle?\nmake sure no one is watching you type!: \n'Salutations!'?  Are you sure??\n",
@@ -1757,14 +1757,14 @@ class TestExecution(TestCase):
         "test setting environment"
         command = Execute(
                 [sys.executable, '-c', 'import os; print("I found: " + os.environ["HAPPYDAY"])'],
-                timeout=10,
+                timeout=300,
                 pty=False,
                 HAPPYDAY='fonzirelli',
                 )
         self.assertIn('fonzirelli', command.stdout)
         command = Execute(
                 [sys.executable, '-c', 'import os; print("I found: " + os.environ["HAPPYDAY"])'],
-                timeout=10,
+                timeout=300,
                 pty=True,
                 HAPPYDAY='fonzirelli',
                 )
@@ -1774,21 +1774,21 @@ class TestExecution(TestCase):
         command = Execute(
                 [sys.executable, self.good_file],
                 pty=False,
-                timeout=10,
+                timeout=300,
                 )
         self.assertEqual(command.stdout, 'good output here!\n')
         self.assertEqual(command.stderr, '')
         command = Execute(
                 [sys.executable, self.bad_file],
                 pty=False,
-                timeout=10,
+                timeout=300,
                 )
         self.assertEqual(command.stdout, '')
         self.assertTrue(command.stderr.endswith('ValueError: uh-oh -- bad value!\n'))
         command = Execute(
                 [sys.executable, self.mixed_file],
                 pty=False,
-                timeout=10,
+                timeout=300,
                 )
         self.assertEqual(command.stdout, 'good night\nsweetheart!\n')
         self.assertTrue(command.stderr.endswith("KeyError: 'the key is missing?'\n"),
@@ -1797,7 +1797,7 @@ class TestExecution(TestCase):
                 [sys.executable, self.subp_password_file],
                 pty=False,
                 password='Salutations!',
-                timeout=10,
+                timeout=300,
                 )
         self.assertEqual(
                 command.stdout,
@@ -1811,7 +1811,7 @@ class TestExecution(TestCase):
                 [sys.executable, self.subp_password_file],
                 pty=False,
                 password=unicode('Salutations!'),
-                timeout=10,
+                timeout=300,
                 )
         self.assertEqual(
                 command.stdout,
@@ -2363,7 +2363,7 @@ class TestExecutionThreads(TestCase):
     def test_interactive_process(self):
         thread_count = threading.active_count()
         test_file = self.write_script('print(raw_input("howdy! "))')
-        job = Execute([sys.executable, test_file], pty=False, timeout=10, input='Bye!\n')
+        job = Execute([sys.executable, test_file], pty=False, timeout=300, input='Bye!\n')
         self.assertEqual(thread_count, threading.active_count())
         self.assertEqual(job.stdout.strip(), 'howdy! Bye!', '\n out: %r\n err: %r' % (job.stdout, job.stderr))
         self.assertEqual(job.returncode, 0, '-- stdout --\n%s\n-- stderr --\n%s' % (job.stdout, job.stderr))
@@ -2374,7 +2374,7 @@ class TestExecutionThreads(TestCase):
                 '''from getpass import getpass\n'''
                 '''print(getpass('howdy!'))\n'''
                 )
-        job = Execute([sys.executable, test_file], pty=True, timeout=10, password='Bye!')
+        job = Execute([sys.executable, test_file], pty=True, timeout=600, password='Bye!')
         self.assertEqual(thread_count, threading.active_count())
         self.assertEqual(job.stdout.strip().replace('\n', ' '), 'howdy! Bye!', '\n out: %r\n err: %r' % (job.stdout, job.stderr))
         self.assertEqual(job.returncode, 0, '-- stdout --\n%s\n-- stderr --\n%s' % (job.stdout, job.stderr))
@@ -2408,7 +2408,11 @@ class TestExecutionThreads(TestCase):
                 timeout=3,
                 )
         self.assertEqual(thread_count, threading.active_count())
-        self.assertEqual(job.stderr.strip(), 'TIMEOUT: process failed to complete in 3 seconds', '\n out: %r\n err: %r' % (job.stdout, job.stderr))
+        self.assertEqual(
+                job.stderr.strip(),
+                'TIMEOUT: process failed to complete in 3 seconds',
+                '\n out: %r\n err: %r' % (job.stdout, job.stderr),
+                )
         self.assertNotEqual(job.returncode, 0, '-- stdout --\n%s\n-- stderr --\n%s' % (job.stdout, job.stderr))
 
     def test_died_process(self):
@@ -2427,10 +2431,10 @@ class TestExecutionThreads(TestCase):
         thread_count = threading.active_count()
         test_file = self.write_script(
                 '''import time\n'''
-                '''def hello(x\n'''
-                '''time.sleep(5)\n'''
+                '''time.sleep(600)\n'''
                 )
-        job = Execute([sys.executable, test_file], pty=True, timeout=5)
+        job = Job([sys.executable, test_file], pty=True)
+        self.assertRaises(TimeoutError, job.communicate, timeout=3)
         self.assertEqual(thread_count, threading.active_count())
         self.assertTrue('TIMEOUT: process failed to complete in 3 seconds' not in job.stdout)
         self.assertNotEqual(job.returncode, 0, '-- stdout --\n%s\n-- stderr --\n%s' % (job.stdout, job.stderr))
@@ -2579,7 +2583,7 @@ class TestBox(TestCase):
 
 class TestTable(TestCase):
 
-    def test_table_with_header_separation(self):
+    def test_header_separation(self):
         rows = (
             ('id', 'name', 'age', 'income', 'married'),
             None,
@@ -2602,6 +2606,71 @@ class TestTable(TestCase):
         echo(rows, border='table', file=buffer)
         self.assertEqual(buffer.getvalue(), should_be, '\n%s\n%s' % (buffer.getvalue(), should_be))
         
+    def test_multiple_internal_lines_in_last_row(self):
+        table = [
+                ('header1', 'header2', 'header3'),
+                None,
+                ('data 1', 'data 2', 'data 3\ndata 4'),
+                ('data 5', 'data 6', 'data 7'),
+                ]
+        buffer = StringIO()
+        echo(table, border='table', file=buffer)
+        self.assertEqual(
+                buffer.getvalue(),
+                dedent('''\
+                    -------------------------------
+                    | header1 | header2 | header3 |
+                    | ------- | ------- | ------- |
+                    | data 1  | data 2  | data 3  |
+                    |         |         | data 4  |
+                    | data 5  | data 6  | data 7  |
+                    -------------------------------
+                    '''),
+                )
+
+    def test_multiple_internal_lines_in_middle_row(self):
+        table = [
+                ('header1', 'header2', 'header3'),
+                None,
+                ('data 1', 'data 2\ndata 3', 'data 4'),
+                ('data 5', 'data 6', 'data 7'),
+                ]
+        buffer = StringIO()
+        echo(table, border='table', file=buffer)
+        self.assertEqual(
+                buffer.getvalue(),
+                dedent('''\
+                    -------------------------------
+                    | header1 | header2 | header3 |
+                    | ------- | ------- | ------- |
+                    | data 1  | data 2  | data 4  |
+                    |         | data 3  |         |
+                    | data 5  | data 6  | data 7  |
+                    -------------------------------
+                    '''),
+                )
+
+    def test_multiple_internal_lines_in_middle_and_last_row(self):
+        table = [
+                ('header1', 'header2', 'header3'),
+                None,
+                ('data 1', 'data 2\ndata 3', 'data 4\ndata 5'),
+                ('data 6', 'data 7', 'data 8'),
+                ]
+        buffer = StringIO()
+        echo(table, border='table', file=buffer)
+        self.assertEqual(
+                buffer.getvalue(),
+                dedent('''\
+                    -------------------------------
+                    | header1 | header2 | header3 |
+                    | ------- | ------- | ------- |
+                    | data 1  | data 2  | data 4  |
+                    |         | data 3  | data 5  |
+                    | data 6  | data 7  | data 8  |
+                    -------------------------------
+                    '''),
+                )
 
 if not is_win:
     @skipUnless(INCLUDE_SLOW, 'skipping slow tests')
