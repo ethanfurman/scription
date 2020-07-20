@@ -1,9 +1,3 @@
-0.84.03
-=======
-
-- print: fix "table" border so multiple internal lines print correctly
-
-
 0.84.02
 =======
 
@@ -13,6 +7,7 @@
   with a different name)
 - expand support for choices to MULTI and MULTIREQ
 - Spec: choices can be a space-delimited string
+- print: fix "table" border so multiple internal lines print correctly
 
 
 0.84.01
