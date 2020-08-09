@@ -2605,7 +2605,7 @@ class TestTable(TestCase):
         buffer = StringIO()
         echo(rows, border='table', file=buffer)
         self.assertEqual(buffer.getvalue(), should_be, '\n%s\n%s' % (buffer.getvalue(), should_be))
-        
+
     def test_multiple_internal_lines_in_last_row(self):
         table = [
                 ('header1', 'header2', 'header3'),
@@ -2671,6 +2671,187 @@ class TestTable(TestCase):
                     -------------------------------
                     '''),
                 )
+
+    def test_entire_joined_short_row(self):
+        table = [
+                ('header1', 'header2', 'header3'),
+                None,
+                ('data 1', 'data 2\ndata 3', 'data 4\ndata 5'),
+                'some text',
+                ('data 6', 'data 7', 'data 8'),
+                ]
+        buffer = StringIO()
+        echo(table, border='table', file=buffer)
+        self.assertEqual(
+                buffer.getvalue(),
+                dedent('''\
+                    -------------------------------
+                    | header1 | header2 | header3 |
+                    | ------- | ------- | ------- |
+                    | data 1  | data 2  | data 4  |
+                    |         | data 3  | data 5  |
+                    | some text                   |
+                    | data 6  | data 7  | data 8  |
+                    -------------------------------
+                    '''),
+                )
+
+    def test_entire_joined_fitting_row(self):
+        table = [
+                ('header1', 'header2', 'header3'),
+                None,
+                ('data 1', 'data 2\ndata 3', 'data 4\ndata 5'),
+                'a bunch of text, like a lot',
+                ('data 6', 'data 7', 'data 8'),
+                ]
+        buffer = StringIO()
+        echo(table, border='table', file=buffer)
+        self.assertEqual(
+                buffer.getvalue(),
+                dedent('''\
+                    -------------------------------
+                    | header1 | header2 | header3 |
+                    | ------- | ------- | ------- |
+                    | data 1  | data 2  | data 4  |
+                    |         | data 3  | data 5  |
+                    | a bunch of text, like a lot |
+                    | data 6  | data 7  | data 8  |
+                    -------------------------------
+                    '''),
+                )
+
+    def test_entire_joined_too_big_exact_row(self):
+        table = [
+                ('header1', 'header2', 'header3'),
+                None,
+                ('data 1', 'data 2\ndata 3', 'data 4\ndata 5'),
+                'a bunch of text, like a big bunch of real lot',
+                ('data 6', 'data 7', 'data 8'),
+                ]
+        buffer = StringIO()
+        echo(table, border='table', file=buffer)
+        self.assertEqual(
+                buffer.getvalue(),
+                dedent('''\
+                    -------------------------------
+                    | header1 | header2 | header3 |
+                    | ------- | ------- | ------- |
+                    | data 1  | data 2  | data 4  |
+                    |         | data 3  | data 5  |
+                    | a bunch of text, like a big |
+                    | bunch of real lot           |
+                    | data 6  | data 7  | data 8  |
+                    -------------------------------
+                    '''),
+                )
+
+    def test_entire_joined_too_big_row(self):
+        table = [
+                ('header1', 'header2', 'header3'),
+                None,
+                ('data 1', 'data 2\ndata 3', 'data 4\ndata 5'),
+                'a bunch of text, like a real lot',
+                ('data 6', 'data 7', 'data 8'),
+                ]
+        buffer = StringIO()
+        echo(table, border='table', file=buffer)
+        self.assertEqual(
+                buffer.getvalue(),
+                dedent('''\
+                    -------------------------------
+                    | header1 | header2 | header3 |
+                    | ------- | ------- | ------- |
+                    | data 1  | data 2  | data 4  |
+                    |         | data 3  | data 5  |
+                    | a bunch of text, like a     |
+                    | real lot                    |
+                    | data 6  | data 7  | data 8  |
+                    -------------------------------
+                    '''),
+                )
+
+    def test_entire_joined_row_top_line(self):
+        table = [
+                ('header1', 'header2', 'header3'),
+                None,
+                ('data 1', 'data 2\ndata 3', 'data 4\ndata 5'),
+                '=',
+                'a bunch of text, like a lot',
+                ('data 6', 'data 7', 'data 8'),
+                ]
+        buffer = StringIO()
+        echo(table, border='table', file=buffer)
+        self.assertEqual(
+                buffer.getvalue(),
+                dedent('''\
+                    -------------------------------
+                    | header1 | header2 | header3 |
+                    | ------- | ------- | ------- |
+                    | data 1  | data 2  | data 4  |
+                    |         | data 3  | data 5  |
+                    | =========================== |
+                    | a bunch of text, like a lot |
+                    | data 6  | data 7  | data 8  |
+                    -------------------------------
+                    '''),
+                )
+
+    def test_entire_joined_row_bottom_line(self):
+        table = [
+                ('header1', 'header2', 'header3'),
+                None,
+                ('data 1', 'data 2\ndata 3', 'data 4\ndata 5'),
+                ' ',
+                'a bunch of text, like a lot',
+                '-',
+                ('data 6', 'data 7', 'data 8'),
+                ]
+        buffer = StringIO()
+        echo(table, border='table', file=buffer)
+        self.assertEqual(
+                buffer.getvalue(),
+                dedent('''\
+                    -------------------------------
+                    | header1 | header2 | header3 |
+                    | ------- | ------- | ------- |
+                    | data 1  | data 2  | data 4  |
+                    |         | data 3  | data 5  |
+                    |                             |
+                    | a bunch of text, like a lot |
+                    | --------------------------- |
+                    | data 6  | data 7  | data 8  |
+                    -------------------------------
+                    '''),
+                )
+
+    def test_entire_joined_row_top_bottom_line(self):
+        table = [
+                ('header1', 'header2', 'header3'),
+                None,
+                ('data 1', 'data 2\ndata 3', 'data 4\ndata 5'),
+                '-',
+                'a bunch of text, like a lot',
+                '-',
+                ('data 6', 'data 7', 'data 8'),
+                ]
+        buffer = StringIO()
+        echo(table, border='table', file=buffer)
+        self.assertEqual(
+                buffer.getvalue(),
+                dedent('''\
+                    -------------------------------
+                    | header1 | header2 | header3 |
+                    | ------- | ------- | ------- |
+                    | data 1  | data 2  | data 4  |
+                    |         | data 3  | data 5  |
+                    | --------------------------- |
+                    | a bunch of text, like a lot |
+                    | --------------------------- |
+                    | data 6  | data 7  | data 8  |
+                    -------------------------------
+                    '''),
+                )
+
 
 if not is_win:
     @skipUnless(INCLUDE_SLOW, 'skipping slow tests')

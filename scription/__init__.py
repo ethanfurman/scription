@@ -33,7 +33,7 @@ intelligently parses command lines
 from __future__ import print_function
 
 # version
-version = 0, 84, 2
+version = 0, 84, 3, 1
 
 # imports
 import sys
@@ -2912,6 +2912,28 @@ def info(*args, **kwds):
         kwds['verbose'] = kwds.pop('verbose', 1)
         print(*args, **kwds)
 
+def split_text(text, max):
+    # return a list of strings where each string is <= max, and words are whole
+    # newlines are honorod
+    lines = []
+    text = text.split('\n')
+    for line in text:
+        while line:
+            if len(line) <= max:
+                lines.append(line.rstrip())
+                break
+            limit = max
+            while line[limit] not in (' \t'):
+                limit -= 1
+            if limit:
+                lines.append(line[:limit].rstrip())
+                line = line[limit:].lstrip()
+            else:
+                # no whitespace, just take a chunk
+                lines.append(line[:max].rstrip())
+                line = line[max:]
+    return lines
+
 def box(message, *style, **kwds):
     """ draws box around text using style -> ([border,] [char [, char [ ...]]])
 
@@ -3076,6 +3098,8 @@ def print(*values, **kwds):
             for row in values:
                 if row is None:
                     continue
+                if not isinstance(row, (tuple, list)):
+                    continue
                 for i, cell in enumerate(row):
                     if isinstance(cell, logical):
                         width = 1
@@ -3099,16 +3123,24 @@ def print(*values, **kwds):
                         elif isinstance(cell, number):
                             types[i] = 'i'
                 first_row = False
-            # template = []
-            # for w, t in zip(widths, types):
-            #     f = {'': '-', 'i':'', 'd':'^'}[t]
-                # template.append('%' + f + str(w) + s)
-            # template = ' | '.join(template)
+            # sum(widths) -> how much space is alloted to other data
+            # 3*len(widths) -> how much space used by margins of interior lines
+            # -3 -> one less interior line than column
+            single_cell_width = sum(widths) + 3*len(widths) - 3
             sep = ' | '.join(['-' * w for w in widths])
             lines = []
             for row in values:
                 if row is None:
                     lines.append(sep)
+                elif not isinstance(row, (tuple, list)):
+                    # handle a single, joined row
+                    if not isinstance(row, basestring):
+                        abort('joined row value must be a string, not %r [%r]' % (type(row), row))
+                    if len(row) == 1:
+                        # make a line using the row character
+                        row = row * single_cell_width
+                    for line in split_text(row, single_cell_width):
+                        lines.append('%-*s' % (single_cell_width, line))
                 else:
                     for row in zip_values(row, widths, types):
                         line = []
