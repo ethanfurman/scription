@@ -3,6 +3,7 @@
 
 - print() table format: a row that is a string instead of a tuple/list will
   fill the entire row without column breaks
+- print() no longer abort()s, but raises appropriate exceptions
 
 
 0.84.02

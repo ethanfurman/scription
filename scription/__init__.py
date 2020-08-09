@@ -3086,10 +3086,10 @@ def print(*values, **kwds):
                  or not isinstance(values[0], (list, tuple))
                  or not isinstance(values[0][0], (list, tuple))
                  ):
-                abort("only a list of lists is valid when border is 'table'")
+                ValueError("only a list of lists is valid when border is 'table'")
             values = values[0]
             if 'sep' in kwds or 'end' in kwds:
-                abort("keyword arguments 'sep' and 'end' are invalid when border is 'table'")
+                TypeError("keyword arguments 'sep' and 'end' are invalid when border is 'table'")
             header = kwds.pop('header', True)
             # assemble the table
             widths = [0] * len(values[0])
@@ -3135,7 +3135,7 @@ def print(*values, **kwds):
                 elif not isinstance(row, (tuple, list)):
                     # handle a single, joined row
                     if not isinstance(row, basestring):
-                        abort('joined row value must be a string, not %r [%r]' % (type(row), row))
+                        ValueError('joined row value must be a string, not %r [%r]' % (type(row), row))
                     if len(row) == 1:
                         # make a line using the row character
                         row = row * single_cell_width
