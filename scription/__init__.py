@@ -33,7 +33,7 @@ intelligently parses command lines
 from __future__ import print_function
 
 # version
-version = 0, 84, 3, 1
+version = 0, 84, 3
 
 # imports
 import sys
