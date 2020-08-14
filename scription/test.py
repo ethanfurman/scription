@@ -2852,6 +2852,150 @@ class TestTable(TestCase):
                     '''),
                 )
 
+    def test_none_in_row_default(self):
+        table = [
+                ('header1', 'header2', 'header3'),
+                None,
+                (None, 'data 2\ndata 3', 'data 4\ndata 5'),
+                '-',
+                'a bunch of text, like a lot',
+                '-',
+                ('data 6', 'data 7', 'data 8'),
+                ]
+        buffer = StringIO()
+        echo(table, border='table', display_none='x', file=buffer)
+        self.assertEqual(
+                buffer.getvalue(),
+                dedent('''\
+                    -------------------------------
+                    | header1 | header2 | header3 |
+                    | ------- | ------- | ------- |
+                    |   xxx   | data 2  | data 4  |
+                    |         | data 3  | data 5  |
+                    | --------------------------- |
+                    | a bunch of text, like a lot |
+                    | --------------------------- |
+                    | data 6  | data 7  | data 8  |
+                    -------------------------------
+                    '''),
+                )
+
+    def test_none_in_row_none(self):
+        table = [
+                ('header1', 'header2', 'header3'),
+                None,
+                (None, 'data 2\ndata 3', 'data 4\ndata 5'),
+                '-',
+                'a bunch of text, like a lot',
+                '-',
+                ('data 6', 'data 7', 'data 8'),
+                ]
+        buffer = StringIO()
+        echo(table, border='table', display_none='-none-', file=buffer)
+        self.assertEqual(
+                buffer.getvalue(),
+                dedent('''\
+                    -------------------------------
+                    | header1 | header2 | header3 |
+                    | ------- | ------- | ------- |
+                    |  -none- | data 2  | data 4  |
+                    |         | data 3  | data 5  |
+                    | --------------------------- |
+                    | a bunch of text, like a lot |
+                    | --------------------------- |
+                    | data 6  | data 7  | data 8  |
+                    -------------------------------
+                    '''),
+                )
+
+    def test_none_in_row_small_column(self):
+        table = [
+                ('h1', 'header2', 'header3'),
+                None,
+                (None, 'data 2\ndata 3', 'data 4\ndata 5'),
+                '-',
+                'a bunch of text, like a lot',
+                '-',
+                ('dat', 'data 7', 'data 8'),
+                ]
+        buffer = StringIO()
+        echo(table, border='table', display_none='!', file=buffer)
+        self.assertEqual(
+                buffer.getvalue(),
+                dedent('''\
+                    ---------------------------
+                    | h1  | header2 | header3 |
+                    | --- | ------- | ------- |
+                    |  !  | data 2  | data 4  |
+                    |     | data 3  | data 5  |
+                    | ----------------------- |
+                    | a bunch of text, like a |
+                    | lot                     |
+                    | ----------------------- |
+                    | dat | data 7  | data 8  |
+                    ---------------------------
+                    '''),
+                )
+
+    def test_none_in_row_smaller_column(self):
+        table = [
+                ('h1', 'header2', 'header3'),
+                None,
+                (None, 'data 2\ndata 3', 'data 4\ndata 5'),
+                '-',
+                'a bunch of text, like a lot',
+                '-',
+                ('da', 'data 7', 'data 8'),
+                ]
+        buffer = StringIO()
+        echo(table, border='table', display_none='!', file=buffer)
+        self.assertEqual(
+                buffer.getvalue(),
+                dedent('''\
+                    --------------------------
+                    | h1 | header2 | header3 |
+                    | -- | ------- | ------- |
+                    | !! | data 2  | data 4  |
+                    |    | data 3  | data 5  |
+                    | ---------------------- |
+                    | a bunch of text, like  |
+                    | a lot                  |
+                    | ---------------------- |
+                    | da | data 7  | data 8  |
+                    --------------------------
+                    '''),
+                )
+
+    def test_none_in_row_smallest_column(self):
+        table = [
+                ('h', 'header2', 'header3'),
+                None,
+                (None, 'data 2\ndata 3', 'data 4\ndata 5'),
+                '-',
+                'a bunch of text, like a lot',
+                '-',
+                ('d', 'data 7', 'data 8'),
+                ]
+        buffer = StringIO()
+        echo(table, border='table', display_none='!', file=buffer)
+        self.maxDiff = None
+        self.assertEqual(
+                buffer.getvalue(),
+                dedent('''\
+                    -------------------------
+                    | h | header2 | header3 |
+                    | - | ------- | ------- |
+                    | ! | data 2  | data 4  |
+                    |   | data 3  | data 5  |
+                    | --------------------- |
+                    | a bunch of text, like |
+                    | a lot                 |
+                    | --------------------- |
+                    | d | data 7  | data 8  |
+                    -------------------------
+                    '''),
+                )
+
 
 if not is_win:
     @skipUnless(INCLUDE_SLOW, 'skipping slow tests')

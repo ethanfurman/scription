@@ -33,7 +33,7 @@ intelligently parses command lines
 from __future__ import print_function
 
 # version
-version = 0, 84, 3
+version = 0, 84, 4, 1
 
 # imports
 import sys
@@ -3080,6 +3080,7 @@ def print(*values, **kwds):
         if verbose_level > script_module.get('script_verbosity', 1) and target is not stderr:
             return
         border = kwds.pop('border', None)
+        display_none = kwds.pop('display_none', None)
         if border == 'table':
             if (
                     len(values) != 1
@@ -3146,8 +3147,24 @@ def print(*values, **kwds):
                         line = []
                         for value, width, align in row:
                             if value is None:
-                                # special case: emit spaces
-                                cell = width * ' '
+                                # special case: use display_none
+                                if display_none is None:
+                                    cell = width * ' '
+                                elif len(display_none) == 1:
+                                    if width < 3:
+                                        cell = display_none * width
+                                    elif width <= 5:
+                                        cell = (display_none * (width-2)).center(width)
+                                        # cell = '%^*s' % (width, (display_none * (width-2)))
+                                    elif width % 2:
+                                        cell = (display_none * 3).center(width)
+                                        # cell = '%^*s' % (width, display_none * 3)
+                                    else:
+                                        cell = (display_none * 4).center(width)
+                                        # cell = '%^*s' % (width, display_none * 4)
+                                else:
+                                    cell = (display_none[:width]).center(width)
+                                    # cell = '%^*s' % (width, display_none[:width])
                             elif align == '':
                                 # left
                                 cell = '%-*s' % (width, value)
@@ -3221,7 +3238,7 @@ def zip_values(row, widths, types):
             expanded_row.append(tuple(cell.split('\n')))
         else:
             expanded_row.append((cell, ))
-    for row in zip_longest(*expanded_row):
+    for row in zip_longest(*expanded_row, fillvalue=empty):
         line = []
         for c, w, t in zip(row, widths, types):
             line.append((c, w, t))

@@ -1,3 +1,10 @@
+0.84.04
+=======
+
+- print() table format accepts `display_none` keyword to change what get
+  displayed when None is encountered as cell data
+
+
 0.84.03
 =======
 
