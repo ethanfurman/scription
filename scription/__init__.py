@@ -33,7 +33,7 @@ intelligently parses command lines
 from __future__ import print_function
 
 # version
-version = 0, 84, 4
+version = 0, 84, 5, 1
 
 # imports
 import sys
@@ -418,6 +418,9 @@ class empty(object):
     def __add__(self, other):
         # adding emptiness to something else is just something else
         return other
+    def __len__(self):
+        # emptiness has zero length
+        return 0
     def __nonzero__(self):
         return False
     __bool__ = __nonzero__
