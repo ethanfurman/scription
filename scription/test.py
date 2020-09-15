@@ -2582,6 +2582,7 @@ class TestBox(TestCase):
 
 
 class TestTable(TestCase):
+    maxDiff = None
 
     def test_header_separation(self):
         rows = (
@@ -2606,15 +2607,70 @@ class TestTable(TestCase):
         echo(rows, border='table', file=buffer)
         self.assertEqual(buffer.getvalue(), should_be, '\n%s\n%s' % (buffer.getvalue(), should_be))
 
+    def test_explicit_table_size(self):
+        rows = [
+                ('header1', 'header2', 'header3'),
+                None,
+                (None, 'data 2\ndata 3', 'data 4\ndata 5'),
+                '-',
+                'a bunch of text, like a lot',
+                '-',
+                ('data 6', 'data 7', 'data 8'),
+                ]
+        buffer = StringIO()
+        echo(rows, border='table', table_specs=(('','',''),(10, 7, 13)), table_display_none='x', file=buffer)
+        self.assertEqual(
+                buffer.getvalue(),
+                dedent('''\
+                    ----------------------------------------
+                    | header1    | header2 | header3       |
+                    | ---------- | ------- | ------------- |
+                    |    xxxx    | data 2  | data 4        |
+                    |            | data 3  | data 5        |
+                    | ------------------------------------ |
+                    | a bunch of text, like a lot          |
+                    | ------------------------------------ |
+                    | data 6     | data 7  | data 8        |
+                    ----------------------------------------
+                    '''),
+                )
+
+    def test_explicit_table_by_table(self):
+        rows = [
+                ('header1', 'header2', 'header3'),
+                None,
+                (None, 'data 2\ndata 3', 'data 4\ndata 5'),
+                '-',
+                'a bunch of text, like a lot',
+                '-',
+                ('data 6', 'data 7', 'data 8'),
+                ]
+        buffer = StringIO()
+        echo(table_display(rows , types=('','',''), widths=(10, 7, 13), display_none='x'), file=buffer)
+        actual = buffer.getvalue()
+        expected = dedent('''\
+                    ----------------------------------------
+                    | header1    | header2 | header3       |
+                    | ---------- | ------- | ------------- |
+                    |    xxxx    | data 2  | data 4        |
+                    |            | data 3  | data 5        |
+                    | ------------------------------------ |
+                    | a bunch of text, like a lot          |
+                    | ------------------------------------ |
+                    | data 6     | data 7  | data 8        |
+                    ----------------------------------------
+                    ''')
+        self.assertEqual(actual, expected, '%s\n%s' % (actual, expected))
+
     def test_multiple_internal_lines_in_last_row(self):
-        table = [
+        rows = [
                 ('header1', 'header2', 'header3'),
                 None,
                 ('data 1', 'data 2', 'data 3\ndata 4'),
                 ('data 5', 'data 6', 'data 7'),
                 ]
         buffer = StringIO()
-        echo(table, border='table', file=buffer)
+        echo(rows, border='table', file=buffer)
         self.assertEqual(
                 buffer.getvalue(),
                 dedent('''\
@@ -2629,14 +2685,14 @@ class TestTable(TestCase):
                 )
 
     def test_multiple_internal_lines_in_middle_row(self):
-        table = [
+        rows = [
                 ('header1', 'header2', 'header3'),
                 None,
                 ('data 1', 'data 2\ndata 3', 'data 4'),
                 ('data 5', 'data 6', 'data 7'),
                 ]
         buffer = StringIO()
-        echo(table, border='table', file=buffer)
+        echo(rows, border='table', file=buffer)
         self.assertEqual(
                 buffer.getvalue(),
                 dedent('''\
@@ -2651,14 +2707,14 @@ class TestTable(TestCase):
                 )
 
     def test_multiple_internal_lines_in_middle_and_last_row(self):
-        table = [
+        rows = [
                 ('header1', 'header2', 'header3'),
                 None,
                 ('data 1', 'data 2\ndata 3', 'data 4\ndata 5'),
                 ('data 6', 'data 7', 'data 8'),
                 ]
         buffer = StringIO()
-        echo(table, border='table', file=buffer)
+        echo(rows, border='table', file=buffer)
         self.assertEqual(
                 buffer.getvalue(),
                 dedent('''\
@@ -2673,7 +2729,7 @@ class TestTable(TestCase):
                 )
 
     def test_entire_joined_short_row(self):
-        table = [
+        rows = [
                 ('header1', 'header2', 'header3'),
                 None,
                 ('data 1', 'data 2\ndata 3', 'data 4\ndata 5'),
@@ -2681,7 +2737,7 @@ class TestTable(TestCase):
                 ('data 6', 'data 7', 'data 8'),
                 ]
         buffer = StringIO()
-        echo(table, border='table', file=buffer)
+        echo(rows, border='table', file=buffer)
         self.assertEqual(
                 buffer.getvalue(),
                 dedent('''\
@@ -2697,7 +2753,7 @@ class TestTable(TestCase):
                 )
 
     def test_entire_joined_fitting_row(self):
-        table = [
+        rows = [
                 ('header1', 'header2', 'header3'),
                 None,
                 ('data 1', 'data 2\ndata 3', 'data 4\ndata 5'),
@@ -2705,7 +2761,7 @@ class TestTable(TestCase):
                 ('data 6', 'data 7', 'data 8'),
                 ]
         buffer = StringIO()
-        echo(table, border='table', file=buffer)
+        echo(rows, border='table', file=buffer)
         self.assertEqual(
                 buffer.getvalue(),
                 dedent('''\
@@ -2721,7 +2777,7 @@ class TestTable(TestCase):
                 )
 
     def test_entire_joined_too_big_exact_row(self):
-        table = [
+        rows = [
                 ('header1', 'header2', 'header3'),
                 None,
                 ('data 1', 'data 2\ndata 3', 'data 4\ndata 5'),
@@ -2729,7 +2785,7 @@ class TestTable(TestCase):
                 ('data 6', 'data 7', 'data 8'),
                 ]
         buffer = StringIO()
-        echo(table, border='table', file=buffer)
+        echo(rows, border='table', file=buffer)
         self.assertEqual(
                 buffer.getvalue(),
                 dedent('''\
@@ -2746,7 +2802,7 @@ class TestTable(TestCase):
                 )
 
     def test_entire_joined_too_big_row(self):
-        table = [
+        rows = [
                 ('header1', 'header2', 'header3'),
                 None,
                 ('data 1', 'data 2\ndata 3', 'data 4\ndata 5'),
@@ -2754,7 +2810,7 @@ class TestTable(TestCase):
                 ('data 6', 'data 7', 'data 8'),
                 ]
         buffer = StringIO()
-        echo(table, border='table', file=buffer)
+        echo(rows, border='table', file=buffer)
         self.assertEqual(
                 buffer.getvalue(),
                 dedent('''\
@@ -2771,7 +2827,7 @@ class TestTable(TestCase):
                 )
 
     def test_entire_joined_row_top_line(self):
-        table = [
+        rows = [
                 ('header1', 'header2', 'header3'),
                 None,
                 ('data 1', 'data 2\ndata 3', 'data 4\ndata 5'),
@@ -2780,7 +2836,7 @@ class TestTable(TestCase):
                 ('data 6', 'data 7', 'data 8'),
                 ]
         buffer = StringIO()
-        echo(table, border='table', file=buffer)
+        echo(rows, border='table', file=buffer)
         self.assertEqual(
                 buffer.getvalue(),
                 dedent('''\
@@ -2797,7 +2853,7 @@ class TestTable(TestCase):
                 )
 
     def test_entire_joined_row_bottom_line(self):
-        table = [
+        rows = [
                 ('header1', 'header2', 'header3'),
                 None,
                 ('data 1', 'data 2\ndata 3', 'data 4\ndata 5'),
@@ -2807,7 +2863,7 @@ class TestTable(TestCase):
                 ('data 6', 'data 7', 'data 8'),
                 ]
         buffer = StringIO()
-        echo(table, border='table', file=buffer)
+        echo(rows, border='table', file=buffer)
         self.assertEqual(
                 buffer.getvalue(),
                 dedent('''\
@@ -2825,7 +2881,7 @@ class TestTable(TestCase):
                 )
 
     def test_entire_joined_row_top_bottom_line(self):
-        table = [
+        rows = [
                 ('header1', 'header2', 'header3'),
                 None,
                 ('data 1', 'data 2\ndata 3', 'data 4\ndata 5'),
@@ -2835,7 +2891,7 @@ class TestTable(TestCase):
                 ('data 6', 'data 7', 'data 8'),
                 ]
         buffer = StringIO()
-        echo(table, border='table', file=buffer)
+        echo(rows, border='table', file=buffer)
         self.assertEqual(
                 buffer.getvalue(),
                 dedent('''\
@@ -2853,7 +2909,7 @@ class TestTable(TestCase):
                 )
 
     def test_none_in_row_default(self):
-        table = [
+        rows = [
                 ('header1', 'header2', 'header3'),
                 None,
                 (None, 'data 2\ndata 3', 'data 4\ndata 5'),
@@ -2863,7 +2919,7 @@ class TestTable(TestCase):
                 ('data 6', 'data 7', 'data 8'),
                 ]
         buffer = StringIO()
-        echo(table, border='table', display_none='x', file=buffer)
+        echo(rows, border='table', table_display_none='x', file=buffer)
         self.assertEqual(
                 buffer.getvalue(),
                 dedent('''\
@@ -2881,7 +2937,7 @@ class TestTable(TestCase):
                 )
 
     def test_none_in_row_none(self):
-        table = [
+        rows = [
                 ('header1', 'header2', 'header3'),
                 None,
                 (None, 'data 2\ndata 3', 'data 4\ndata 5'),
@@ -2891,7 +2947,7 @@ class TestTable(TestCase):
                 ('data 6', 'data 7', 'data 8'),
                 ]
         buffer = StringIO()
-        echo(table, border='table', display_none='-none-', file=buffer)
+        echo(rows, border='table', table_display_none='-none-', file=buffer)
         self.assertEqual(
                 buffer.getvalue(),
                 dedent('''\
@@ -2909,7 +2965,7 @@ class TestTable(TestCase):
                 )
 
     def test_none_in_row_small_column(self):
-        table = [
+        rows = [
                 ('h1', 'header2', 'header3'),
                 None,
                 (None, 'data 2\ndata 3', 'data 4\ndata 5'),
@@ -2919,7 +2975,7 @@ class TestTable(TestCase):
                 ('dat', 'data 7', 'data 8'),
                 ]
         buffer = StringIO()
-        echo(table, border='table', display_none='!', file=buffer)
+        echo(rows, border='table', table_display_none='!', file=buffer)
         self.assertEqual(
                 buffer.getvalue(),
                 dedent('''\
@@ -2938,7 +2994,7 @@ class TestTable(TestCase):
                 )
 
     def test_none_in_row_smaller_column(self):
-        table = [
+        rows = [
                 ('h1', 'header2', 'header3'),
                 None,
                 (None, 'data 2\ndata 3', 'data 4\ndata 5'),
@@ -2948,7 +3004,7 @@ class TestTable(TestCase):
                 ('da', 'data 7', 'data 8'),
                 ]
         buffer = StringIO()
-        echo(table, border='table', display_none='!', file=buffer)
+        echo(rows, border='table', table_display_none='!', file=buffer)
         self.assertEqual(
                 buffer.getvalue(),
                 dedent('''\
@@ -2967,7 +3023,7 @@ class TestTable(TestCase):
                 )
 
     def test_none_in_row_smallest_column(self):
-        table = [
+        rows = [
                 ('h', 'header2', 'header3'),
                 None,
                 (None, 'data 2\ndata 3', 'data 4\ndata 5'),
@@ -2977,7 +3033,7 @@ class TestTable(TestCase):
                 ('d', 'data 7', 'data 8'),
                 ]
         buffer = StringIO()
-        echo(table, border='table', display_none='!', file=buffer)
+        echo(rows, border='table', table_display_none='!', file=buffer)
         self.maxDiff = None
         self.assertEqual(
                 buffer.getvalue(),

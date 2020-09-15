@@ -33,7 +33,7 @@ intelligently parses command lines
 from __future__ import print_function
 
 # version
-version = 0, 84, 5, 1
+version = 0, 85, 0, 1
 
 # imports
 import sys
@@ -79,6 +79,7 @@ from collections import OrderedDict
 from itertools import groupby
 from math import floor
 from sys import stdin, stdout, stderr
+from types import GeneratorType
 
 # locks, etc.
 print_lock = threading.RLock()
@@ -120,12 +121,13 @@ else:
             '''))
 
 # data
+# __all__ includes the common elements that might be used frequently in scripts
 __all__ = (
     'Alias', 'Command', 'Script', 'Main', 'Run', 'Spec',
     'Bool','InputFile', 'OutputFile', 'IniError', 'IniFile', 'OrmError', 'OrmFile', 'NameSpace', 'OrmSection',
     'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'MULTIREQ', 'REQUIRED', 'RADIO',
-    'ScriptionError', 'ExecuteError', 'FailedPassword', 'TimeoutError', 'Execute', 'Job', 'ProgressView',
-    'abort', 'echo', 'error', 'get_response', 'help', 'input', 'mail', 'user_ids', 'print', 'box',
+    'ScriptionError', 'ExecuteError', 'FailedPassword', 'TimeoutError', 'Execute', 'Job', 'ProgressView', 'ViewProgress',
+    'abort', 'echo', 'error', 'get_response', 'help', 'input', 'mail', 'user_ids', 'print', 'box', 'table_display',
     'stdout', 'stderr', 'wait_and_check', 'b', 'bytes', 'str', 'u', 'unicode', 'ColorTemplate', 'Color',
     'basestring', 'integer', 'number', 'raise_with_traceback',
     'Trivalent', 'Truthy', 'Unknown', 'Falsey', 'Exit', 'Var', 'Sentinel',
@@ -486,8 +488,6 @@ def _help(func):
     params = func.params = list(params)
     vararg = func.vararg = [vararg] if vararg else []
     keywordarg = func.keywordarg = [keywordarg] if keywordarg else []
-    # vararg_type = _identity
-    # keywordarg_type = _identity
     annotations = func.__scription__
     pos = None
     max_pos = 0
@@ -596,14 +596,6 @@ def _help(func):
                     for d in dflt:
                         new_dflt.append(annote.type(d))
                     annote._script_default = tuple(new_dflt)
-    # if vararg:
-    #     vararg_type = annotations[vararg[0]].type
-    # if keywordarg:
-    #     kywd_func = annotations[keywordarg[0]].type
-    #     if isinstance(kywd_func, tuple):
-    #         keywordarg_type = lambda k, v: (kywd_func[0](k), kywd_func[1](v))
-    #     else:
-    #         keywordarg_type = lambda k, v: (k, kywd_func(v))
     # also prepare help for global options
     global_params = [n for n in func.names if n not in func.all_params]
     print_params = []
@@ -796,7 +788,6 @@ def _usage(func, param_line_args):
     global VERBOSITY, SCRIPTION_DEBUG
     Script = script_module['script_main']
     scription_debug('_usage(%r, %r' % (func, param_line_args), verbose=2)
-    # Command = script_module['script_commands']
     program, param_line_args = param_line_args[0], _rewrite_args(param_line_args[1:])
     radio = set()
     pos = 0
@@ -1050,7 +1041,6 @@ def _usage(func, param_line_args):
                 if var_arg_spec is None:
                     raise ScriptionError("don't know what to do with %r" % item, use_help=True)
                 var_arg_spec._cli_value += (var_arg_spec.type(item), )
-    # exc = None
     if print_help:
         _print()
         if Script and Script.__usage__:
@@ -1192,7 +1182,6 @@ class Script(object):
             pass
         _add_annotations(dummy, settings, script=True)
         _help(dummy)
-        # self.names = dummy.names
         self.__usage__ = dummy.__usage__.strip()
         self.command = dummy
         self.all_params = dummy.all_params
@@ -2626,9 +2615,7 @@ class ViewProgress(object):
         self.f.flush()
 
     def progress(self, count, done=False):
-        # if done:
-        #     self.f.write('\n')
-        #     self.f.flush()
+        # placeholder for one of above *_progress functions
         pass
 
     def tick(self):
@@ -2926,7 +2913,7 @@ def split_text(text, max):
                 lines.append(line.rstrip())
                 break
             limit = max
-            while line[limit] not in (' \t'):
+            while line[limit] not in ' \t' and limit:
                 limit -= 1
             if limit:
                 lines.append(line[:limit].rstrip())
@@ -3027,6 +3014,199 @@ def box(message, *style, **kwds):
         box.append(bottom_line)
     return '\n'.join(box)
 
+def table_display(rows, widths=None, types=None, header=True, display_none=None):
+    # assemble the table
+    if widths:
+        types = types or [''] * len(rows[0])
+    else:
+        rows = list(rows)
+        if not rows:
+            return
+        widths = [0] * len(rows[0])
+        types = [''] * len(rows[0])
+        first_row = header
+        rows_copy = []
+        for row in rows:
+            rows_copy.append(row)
+            if row is None:
+                continue
+            if not isinstance(row, (tuple, list)):
+                continue
+            for i, cell in enumerate(row):
+                if isinstance(cell, logical):
+                    width = 1
+                elif isinstance(cell, dates):
+                    width = 10
+                elif isinstance(cell, datetimes):
+                    width = 19
+                elif isinstance(cell, times):
+                    width = 8
+                elif cell is None:
+                    width = 1
+                else:
+                    width = max([len(p) for p in str(cell).split('\n')])
+                widths[i] = max(widths[i], width)
+                if cell in [None, ''] or first_row:
+                    continue
+                if not types[i]:
+                    # check fixed first as bool is both number and fixed
+                    if isinstance(cell, fixed):
+                        types[i] = 'f'
+                    elif isinstance(cell, number):
+                        types[i] = 'n'
+            first_row = False
+        rows = rows_copy
+    # sum(widths) -> how much space is alloted to other data
+    # 3*len(widths) -> how much space used by margins of interior lines
+    # -3 -> one less interior line than column
+    single_cell_width = sum(widths) + 3*len(widths) - 3
+    edge = '-' * (single_cell_width + 4)
+    sep = ' | '.join(['-' * w for w in widths])
+    sides = '| %s |'
+    printed = False
+    for row in rows:
+        if not printed:
+            yield(edge)
+            printed = True
+        if row is None:
+            # lines.append(sep)
+            yield(sides % sep)
+        elif not isinstance(row, (tuple, list)):
+            # handle a single, joined row
+            if not isinstance(row, basestring):
+                raise ValueError('joined row value must be a string, not %r [%r]' % (type(row), row))
+            if len(row) == 1:
+                # make a line using the row character
+                row = row * single_cell_width
+            for line in split_text(row, single_cell_width):
+                yield(sides % ('%-*s' % (single_cell_width, line)))
+        else:
+            for row in zip_values(row, widths, types):
+                line = []
+                for value, width, align in row:
+                    if value is None:
+                        # special case: use display_none
+                        if display_none is None:
+                            cell = width * ' '
+                        elif len(display_none) == 1:
+                            if width < 3:
+                                cell = display_none * width
+                            elif width <= 5:
+                                cell = (display_none * (width-2)).center(width)
+                                # cell = '%^*s' % (width, (display_none * (width-2)))
+                            elif width % 2:
+                                cell = (display_none * 3).center(width)
+                                # cell = '%^*s' % (width, display_none * 3)
+                            else:
+                                cell = (display_none * 4).center(width)
+                                # cell = '%^*s' % (width, display_none * 4)
+                        else:
+                            cell = (display_none[:width]).center(width)
+                            # cell = '%^*s' % (width, display_none[:width])
+                    elif align == '':
+                        # left
+                        cell = '%-*s' % (width, value)
+                    elif align == 'n':
+                        # right
+                        cell = '%*s' % (width, value)
+                    elif align == 'f':
+                        if isinstance(value, fixed):
+                            if isinstance(value, bool):
+                                value = 'fT'[value]
+                            else:
+                                value = str(value)
+                        elif isinstance(value, dates):
+                            value = value.strftime('%Y-%m-%d')
+                        elif isinstance(value, datetimes):
+                            value = value.strftime('%Y-%m-%d %H:%M:%S')
+                        elif isinstance(value, times):
+                            value = value.strftime('%H:%M:%S')
+                        t = len(value)
+                        # center/fixed
+                        l = (width-t) // 2
+                        r = width - t - l
+                        l = l * ' '
+                        r = r * ' '
+                        cell = '%s%s%s' % (l, value, r)
+                    line.append(cell)
+                yield(sides % ' | '.join(line))
+    if printed:
+        yield(edge)
+
+def print(*values, **kwds):
+    # kwds can contain sep (' '), end ('\n'), file (sys.stdout), border (None),
+    # and verbose (1)
+    with print_lock:
+        verbose_level = kwds.pop('verbose', 1)
+        target = kwds.get('file') or stdout
+        if verbose_level > script_module.get('script_verbosity', 1) and target is not stderr:
+            return
+        border = kwds.pop('border', None)
+        if border == 'table':
+            if len(values) != 1 or not isinstance(values[0], (tuple, list)):
+                raise ValueError('invalid table value')
+            types, widths = kwds.pop('table_specs', (None, None))
+            values = (table_display(
+                    values[0],
+                    widths=widths,
+                    types=types,
+                    header=kwds.pop('table_header', True),
+                    display_none=kwds.pop('table_display_none', None),
+                    ),
+                    )
+            border = None
+        if border is not None and not isinstance(border, tuple):
+            border = (border, )
+        sep = kwds.get('sep', ' ')
+        if target in _is_atty:
+            is_tty = _is_atty[target]
+        else:
+            try:
+                is_tty = os.isatty(target.fileno())
+                _is_atty[target] = is_tty
+            except Exception:
+                _is_atty[target] = is_tty = False
+        gen = None
+        for v in values:
+            if isinstance(v, GeneratorType):
+                if gen is False:
+                    raise ValueError("cannot mix generators and non-generators in print() call")
+                gen = True
+            else:
+                if gen is True:
+                    raise ValueError("cannot mix generators and non-generators in print() call")
+                gen = False
+        if not gen and (not is_tty or border is not None):
+            old_values = []
+            new_values = []
+            for v in values:
+                v = str(v)
+                old_values.append(v)
+                v = re.sub('\x1b\[[\d;]*\w', '', v)
+                new_values.append(v)
+            if not is_tty:
+                values = new_values
+            else:
+                values = old_values
+            if border is not None:
+                values = (box(sep.join(values), *border), )
+        try:
+            if gen:
+                for v in values:
+                    for data in v:
+                        if not is_tty:
+                            data = re.sub('\x1b\[[\d;]*\w', '', data)
+                        _print(data, **kwds)
+                        target.flush()
+            else:
+                _print(*values, **kwds)
+                target.flush()
+        except IOError:
+            cls, exc, tb = sys.exc_info()
+            if exc.errno == errno.EPIPE:
+                sys.exit(Exit.IoError)
+            raise
+
 # get/set terminal writers
 _is_atty = {}
 try:
@@ -3074,171 +3254,14 @@ else:
 stderr = sys.stderr
 _is_atty[stderr] = stderr_is_atty
 
-def print(*values, **kwds):
-    # kwds can contain sep (' '), end ('\n'), file (sys.stdout), border (None),
-    # and verbose (1)
-    with print_lock:
-        verbose_level = kwds.pop('verbose', 1)
-        target = kwds.get('file') or stdout
-        if verbose_level > script_module.get('script_verbosity', 1) and target is not stderr:
-            return
-        border = kwds.pop('border', None)
-        display_none = kwds.pop('display_none', None)
-        if border == 'table':
-            if (
-                    len(values) != 1
-                 or not isinstance(values[0], (list, tuple))
-                 or not isinstance(values[0][0], (list, tuple))
-                 ):
-                ValueError("only a list of lists is valid when border is 'table'")
-            values = values[0]
-            if 'sep' in kwds or 'end' in kwds:
-                TypeError("keyword arguments 'sep' and 'end' are invalid when border is 'table'")
-            header = kwds.pop('header', True)
-            # assemble the table
-            widths = [0] * len(values[0])
-            types = [''] * len(values[0])
-            first_row = header
-            for row in values:
-                if row is None:
-                    continue
-                if not isinstance(row, (tuple, list)):
-                    continue
-                for i, cell in enumerate(row):
-                    if isinstance(cell, logical):
-                        width = 1
-                    elif isinstance(cell, dates):
-                        width = 10
-                    elif isinstance(cell, datetimes):
-                        width = 19
-                    elif isinstance(cell, times):
-                        width = 8
-                    elif cell is None:
-                        width = 1
-                    else:
-                        width = max([len(p) for p in str(cell).split('\n')])
-                    widths[i] = max(widths[i], width)
-                    if cell in [None, ''] or first_row:
-                        continue
-                    if not types[i]:
-                        # check fixed first as bool is both number and fixed
-                        if isinstance(cell, fixed):
-                            types[i] = 'f'
-                        elif isinstance(cell, number):
-                            types[i] = 'i'
-                first_row = False
-            # sum(widths) -> how much space is alloted to other data
-            # 3*len(widths) -> how much space used by margins of interior lines
-            # -3 -> one less interior line than column
-            single_cell_width = sum(widths) + 3*len(widths) - 3
-            sep = ' | '.join(['-' * w for w in widths])
-            lines = []
-            for row in values:
-                if row is None:
-                    lines.append(sep)
-                elif not isinstance(row, (tuple, list)):
-                    # handle a single, joined row
-                    if not isinstance(row, basestring):
-                        ValueError('joined row value must be a string, not %r [%r]' % (type(row), row))
-                    if len(row) == 1:
-                        # make a line using the row character
-                        row = row * single_cell_width
-                    for line in split_text(row, single_cell_width):
-                        lines.append('%-*s' % (single_cell_width, line))
-                else:
-                    for row in zip_values(row, widths, types):
-                        line = []
-                        for value, width, align in row:
-                            if value is None:
-                                # special case: use display_none
-                                if display_none is None:
-                                    cell = width * ' '
-                                elif len(display_none) == 1:
-                                    if width < 3:
-                                        cell = display_none * width
-                                    elif width <= 5:
-                                        cell = (display_none * (width-2)).center(width)
-                                        # cell = '%^*s' % (width, (display_none * (width-2)))
-                                    elif width % 2:
-                                        cell = (display_none * 3).center(width)
-                                        # cell = '%^*s' % (width, display_none * 3)
-                                    else:
-                                        cell = (display_none * 4).center(width)
-                                        # cell = '%^*s' % (width, display_none * 4)
-                                else:
-                                    cell = (display_none[:width]).center(width)
-                                    # cell = '%^*s' % (width, display_none[:width])
-                            elif align == '':
-                                # left
-                                cell = '%-*s' % (width, value)
-                            elif align == 'i':
-                                # right
-                                cell = '%*s' % (width, value)
-                            elif align == 'f':
-                                if isinstance(value, fixed):
-                                    if isinstance(value, bool):
-                                        value = 'fT'[value]
-                                    else:
-                                        value = str(value)
-                                elif isinstance(value, dates):
-                                    value = value.strftime('%Y-%m-%d')
-                                elif isinstance(value, datetimes):
-                                    value = value.strftime('%Y-%m-%d %H:%M:%S')
-                                elif isinstance(value, times):
-                                    value = value.strftime('%H:%M:%S')
-                                t = len(value)
-                                # center/fixed
-                                l = (width-t) // 2
-                                r = width - t - l
-                                l = l * ' '
-                                r = r * ' '
-                                cell = '%s%s%s' % (l, value, r)
-                            line.append(cell)
-                        lines.append(' | '.join(line))
-            values = ('\n'.join(lines), )
-            border = 'box'
-        if border is not None and not isinstance(border, tuple):
-            border = (border, )
-        sep = kwds.get('sep', ' ')
-        if target in _is_atty:
-            is_tty = _is_atty[target]
-        else:
-            try:
-                is_tty = os.isatty(target.fileno())
-                _is_atty[target] = is_tty
-            except Exception:
-                _is_atty[target] = is_tty = False
-        if not is_tty or border is not None:
-            old_values = []
-            new_values = []
-            for v in values:
-                v = str(v)
-                old_values.append(v)
-                v = re.sub('\x1b\[[\d;]*\w', '', v)
-                new_values.append(v)
-            if not is_tty:
-                values = new_values
-            else:
-                values = old_values
-            if border is not None:
-                values = (box(sep.join(values), *border), )
-        try:
-            _print(*values, **kwds)
-            target.flush()
-        except IOError:
-            cls, exc, tb = sys.exc_info()
-            if exc.errno == errno.EPIPE:
-                sys.exit(Exit.IoError)
-            raise
-
 def zip_values(row, widths, types):
     """
     each value of row may also be multiple values
     """
     expanded_row = []
-    for cell in row:
+    for i, cell in enumerate(row):
         if isinstance(cell, basestring):
-            expanded_row.append(tuple(cell.split('\n')))
+            expanded_row.append(tuple(split_text(cell, widths[i])))
         else:
             expanded_row.append((cell, ))
     for row in zip_longest(*expanded_row, fillvalue=empty):

@@ -1,8 +1,13 @@
-0.84.04
+0.85.00
 =======
+
+- table_display() added to handle table printing
 
 - print() table format accepts `display_none` keyword to change what get
   displayed when None is encountered as cell data
+
+backwards-incompatible change:
+- box() now accepts a `width` parameter before the `style` parameter
 
 
 0.84.03
