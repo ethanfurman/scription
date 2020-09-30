@@ -1,3 +1,9 @@
+0.85.01
+=======
+
+- fix bug with non-options following a force_default option
+
+
 0.85.00
 =======
 

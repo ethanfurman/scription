@@ -33,7 +33,7 @@ intelligently parses command lines
 from __future__ import print_function
 
 # version
-version = 0, 85, 0
+version = 0, 85, 1, 1
 
 # imports
 import sys
@@ -827,6 +827,7 @@ def _usage(func, param_line_args):
                         radio.add(annote._radio)
                 else:
                     raise ScriptionError('%s has no value' % last_item, use_help=True)
+                value = None
             else:
                 if annote.remove:
                     # only remove if not using the annotation default

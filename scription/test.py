@@ -856,6 +856,19 @@ class TestCommandlineProcessing(TestCase):
                 shlex.split('do_job hg commit -m "a message"'),
                 )
 
+    def test_varargs_after_forced_default_arg(self):
+        @Command(
+                source=Spec('source file', OPTION, force_default='the cloud'),
+                stuff=Spec('bunches', ),
+                )
+        def do_job(source, *stuff):
+            pass
+        tests = (
+                ('do_job --source -vv biscuit and gravy'.split(), (), {}, ('the cloud', 'biscuit', 'and' ,'gravy'), {}),
+                ('do_job biscuit and gravy'.split(), (), {}, ('the cloud', 'biscuit', 'and' ,'gravy'), {}),
+                )
+        test_func_parsing(self, do_job, tests)
+
     def test_kwds(self):
         @Command(
                 hirelings=('who to boss around', ),
