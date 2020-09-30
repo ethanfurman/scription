@@ -33,7 +33,7 @@ intelligently parses command lines
 from __future__ import print_function
 
 # version
-version = 0, 85, 1
+version = 0, 85, 2, 1
 
 # imports
 import sys
@@ -283,28 +283,32 @@ class Exit(IntEnum):
     _init_ = 'value __doc__'
     _ignore_ = 'v name text sig'
 
-    Success         =   0, 'ran successfully'
-    Unknown         =   1, 'unspecified error'
-    ScriptionError  =  63, 'fatal scription error'
-    Usage           =  64, 'command line usage error'
-    DataError       =  65, 'data format error'
-    NoInput         =  66, 'cannot open input'
-    NoUser          =  67, 'user unknown'
-    NoHost          =  68, 'host unknown'
-    Unavailable     =  69, 'service unavailable'
-    Software        =  70, 'internal error'
-    OsError         =  71, 'system error'
-    OsFile          =  72, 'critical OS file missing'
-    CantCreate      =  73, 'cannot create (user) output file'
-    IoError         =  74, 'input/output error'
-    TempFail        =  75, 'temp failure; user is invited to retry'
-    Protocol        =  76, 'remote error in protocol'
-    NoPermission    =  77, 'permission denied'
-    Config          =  78, 'configuration error'
-    CannotExecute   = 126, 'command invoked cannot execute'
-    ExitOutOfRange  = 255, 'exit code out of range'
-    InvalidExitCode = 127, 'invalid argument to exit'
-    UserCancelled   = 130, 'ctrl-c received'
+    Success                   =   0, 'ran successfully'
+    UnknownError   = Unknown  =   1, 'unspecified error'
+    ScriptionError            =  63, 'fatal scription error'
+    UsageError     = Usage    =  64, 'command line usage error'
+    DataError                 =  65, 'data format error'
+    NoInput                   =  66, 'cannot open input'
+    NoUser                    =  67, 'user unknown'
+    NoHost                    =  68, 'host unknown'
+    Unavailable               =  69, 'service unavailable'
+    SoftwareError  = Software =  70, 'internal error'
+    OsError                   =  71, 'system error'
+    OsFileError    = OsFile   =  72, 'critical OS file missing'
+    CantCreate                =  73, 'cannot create (user) output file'
+    IoError                   =  74, 'input/output error'
+    TempFail                  =  75, 'temp failure; user is invited to retry'
+    ProtocolError  = Protocol =  76, 'remote error in protocol'
+    NoPermission              =  77, 'permission denied'
+    ConfigError    = Config   =  78, 'configuration error'
+    CannotExecute             = 126, 'command invoked cannot execute'
+    ExitOutOfRange            = 255, 'exit code out of range'
+    InvalidExitCode           = 127, 'invalid argument to exit'
+    UserCancelled             = 130, 'ctrl-c received'
+    #
+    Unknown = UnknownError
+    Usage = UsageError
+
 
     # add signal exit codes
     v = vars()
