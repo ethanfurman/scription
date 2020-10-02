@@ -2,6 +2,7 @@
 =======
 
 - add "Error" to select Exit enum member names
+- fix spurious broken pipe error if child job already dead
 
 
 0.85.01

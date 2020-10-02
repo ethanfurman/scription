@@ -305,10 +305,6 @@ class Exit(IntEnum):
     ExitOutOfRange            = 255, 'exit code out of range'
     InvalidExitCode           = 127, 'invalid argument to exit'
     UserCancelled             = 130, 'ctrl-c received'
-    #
-    Unknown = UnknownError
-    Usage = UsageError
-
 
     # add signal exit codes
     v = vars()
@@ -1751,7 +1747,7 @@ class Job(object):
                                     raise e
                     else:
                         scription_debug('[echo: %s] password entry finished' % (self.get_echo(), ))
-                if input is not None:
+                if input is not None and self.is_alive():
                     scription_debug('writing input: %r' % input, verbose=2)
                     time.sleep(0.1)
                     for line in input:
@@ -1846,23 +1842,31 @@ class Job(object):
 
     def is_alive(self):
         'parent method'
+        scription_debug("checking for life")
         time.sleep(0.1)
         if self.terminated:
+            scription_debug("already terminated", verbose=2)
             return False
         try:
+            scription_debug("asking O/S", verbose=2)
             pid, status = os.waitpid(self.pid, os.WNOHANG)
         except Exception:
             _, exc, tb = sys.exc_info()
+            scription_debug('exc: %s' % (exc, ), verbose=2)
             if isinstance(exc, OSError) and exc.errno == errno.ECHILD:
+                scription_debug('child is dead', verbose=2)
                 return False
+            scription_debug('recording exception', verbose=2)
             raise self._set_exc(ExecuteError, str(exc), traceback=tb)
         if pid != 0:
+            scription_debug('child dead, status available', verbose=2)
             self.signal = status % 256
             if self.signal:
                 self.returncode = -self.signal
             else:
                 self.returncode = status >> 8
             self.terminated = True
+            scription_debug('returncode:', self.returncode)
             return False
         return True
 

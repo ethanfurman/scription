@@ -1,4 +1,7 @@
 from __future__ import print_function
+import sys
+sys.path.insert(0, '.')
+
 from scription import *
 from scription import _usage, version, empty, pocket, ormclassmethod
 from textwrap import dedent
@@ -11,7 +14,6 @@ import re
 import scription
 import shlex
 import shutil
-import sys
 import tempfile
 import threading
 import time
@@ -1647,12 +1649,21 @@ class TestExecution(TestCase):
             good_file.write("print('good output here!')")
         finally:
             good_file.close()
+        #
         self.bad_file = bad_file_path = os.path.join(tempdir, 'bad_output')
         bad_file = open(bad_file_path, 'w')
         try:
             bad_file.write("raise ValueError('uh-oh -- bad value!')")
         finally:
             bad_file.close()
+        #
+        self.dead_file = dead_file_path = os.path.join(tempdir, 'dead_file')
+        dead_file = open(dead_file_path, 'w')
+        try:
+            dead_file.write("print('usage message here')\n")
+        finally:
+            dead_file.close()
+        #
         self.mixed_file = mixed_file_name = os.path.join(tempdir, 'mixed_output')
         mixed_file = open(mixed_file_name, 'w')
         try:
@@ -1663,6 +1674,7 @@ class TestExecution(TestCase):
                     )
         finally:
             mixed_file.close()
+        #
         self.pty_password_file = password_file_name = os.path.join(tempdir, 'get_pty_pass')
         password_file = open(password_file_name, 'w')
         try:
@@ -1674,6 +1686,7 @@ class TestExecution(TestCase):
                     )
         finally:
             password_file.close()
+        #
         self.subp_password_file = password_file_name = os.path.join(tempdir, 'get_subp_pass')
         password_file = open(password_file_name, 'w')
         try:
@@ -1716,6 +1729,10 @@ class TestExecution(TestCase):
                     command.stderr,
                     '',
                     )
+
+        def test_pty_with_dead_file(self):
+            command = Execute([sys.executable, self.dead_file], pty=True, input='anybody there?', timeout=600)
+            self.assertEqual(command.stdout, 'usage message here\n')
 
     if is_win:
         if py_ver >= (3, 3):
