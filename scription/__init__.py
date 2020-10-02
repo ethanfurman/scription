@@ -1405,7 +1405,7 @@ def Run():
         script_module['script_verbosity'] = VERBOSITY
         if main_cmd:
             main_cmd(*main_args, **main_kwds)
-        sys.exit(subcommand())
+        sys.exit(subcommand() or Exit.Success)
     except Exception:
         exc = sys.exc_info()[1]
         scription_debug(exc)

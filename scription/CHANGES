@@ -1,8 +1,9 @@
 0.85.02
 =======
 
-- add "Error" to select Exit enum member names
+- add "Error" to appropriate Exit enum member names
 - fix spurious broken pipe error if child job already dead
+- return Exit.Success if subcommand returns None
 
 
 0.85.01
