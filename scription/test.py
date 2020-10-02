@@ -1,6 +1,7 @@
 from __future__ import print_function
+import os
 import sys
-sys.path.insert(0, '.')
+sys.path.insert(0, os.path.split(os.path.split(__file__)[0]))
 
 from scription import *
 from scription import _usage, version, empty, pocket, ormclassmethod
@@ -8,7 +9,6 @@ from textwrap import dedent
 from unittest import skip, skipUnless, SkipTest, TestCase as unittest_TestCase, main
 import datetime
 import functools
-import os
 import pty
 import re
 import scription
