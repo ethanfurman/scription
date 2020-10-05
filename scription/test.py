@@ -8,6 +8,7 @@ from scription import _usage, version, empty, pocket, ormclassmethod
 from textwrap import dedent
 from unittest import skip, skipUnless, SkipTest, TestCase as unittest_TestCase, main
 import datetime
+import errno
 import functools
 import pty
 import re
@@ -1731,8 +1732,16 @@ class TestExecution(TestCase):
                     )
 
         def test_pty_with_dead_file(self):
-            command = Execute([sys.executable, self.dead_file], pty=True, input='anybody there?', timeout=600)
-            self.assertEqual(command.stdout, 'usage message here\n')
+            with self.assertRaisesRegex(IOError, '\[Errno 32\] Broken pipe\.'):
+                Execute([sys.executable, self.dead_file], pty=True, input='anybody there?', timeout=60)
+            #
+            job = Job([sys.executable, self.dead_file], pty=True)
+            try:
+                job.communicate(input='anybody there?', timeout=60)
+            except IOError as exc:
+                if exc.errno != errno.EPIPE:
+                    raise
+                self.assertEqual(job.stdout, 'usage message here\n')
 
     if is_win:
         if py_ver >= (3, 3):

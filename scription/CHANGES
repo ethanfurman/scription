@@ -2,8 +2,8 @@
 =======
 
 - add "Error" to appropriate Exit enum member names
-- fix spurious broken pipe error if child job already dead
 - return Exit.Success if subcommand returns None
+- Execute: print stdout/stderr if broken pipe error encountered
 
 
 0.85.01

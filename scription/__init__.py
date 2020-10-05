@@ -1429,6 +1429,10 @@ def Execute(args, cwd=None, password=None, password_timeout=None, input=None, ti
         scription_debug('communicating')
         job.communicate(timeout=timeout, interactive=interactive, password=password, password_timeout=password_timeout, input=input)
     except BaseException as exc:
+        if interactive is None:
+            echo(job.stdout)
+            echo(job.stderr)
+            echo()
         scription_debug(exc)
         raise
     finally:
@@ -1666,7 +1670,7 @@ class Job(object):
                                 self._set_exc(Exception, 'unknown stream: %r' % stream)
                                 self.kill()
                     else:
-                        scription_debug('process_comm dying from self.abort')
+                        scription_debug('process_comm dying' + ('', ' from self.abort')[self.abort])
                 process_thread = self._process_thread = Thread(target=process_comm, name='process')
                 process_thread.start()
             passwords = []
@@ -1747,7 +1751,7 @@ class Job(object):
                                     raise e
                     else:
                         scription_debug('[echo: %s] password entry finished' % (self.get_echo(), ))
-                if input is not None and self.is_alive():
+                if input is not None:
                     scription_debug('writing input: %r' % input, verbose=2)
                     time.sleep(0.1)
                     for line in input:
