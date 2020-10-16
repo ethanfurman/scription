@@ -33,7 +33,7 @@ intelligently parses command lines
 from __future__ import print_function
 
 # version
-version = 0, 85, 2
+version = 0, 85, 3, 5
 
 # imports
 import sys
@@ -1422,12 +1422,12 @@ def Run():
         sys.exit(Exit.UserCancelled)
 
 ## optional
-def Execute(args, cwd=None, password=None, password_timeout=None, input=None, timeout=None, pty=None, interactive=None, env=None, **new_env_vars):
+def Execute(args, cwd=None, password=None, password_timeout=None, input=None, input_delay=2.5, timeout=None, pty=None, interactive=None, env=None, **new_env_vars):
     scription_debug('creating job:', args)
     job = Job(args, cwd=cwd, pty=pty, env=env, **new_env_vars)
     try:
         scription_debug('communicating')
-        job.communicate(timeout=timeout, interactive=interactive, password=password, password_timeout=password_timeout, input=input)
+        job.communicate(timeout=timeout, interactive=interactive, password=password, password_timeout=password_timeout, input=input, input_delay=input_delay)
     except BaseException as exc:
         if interactive is None:
             echo(job.stdout)
@@ -1576,6 +1576,7 @@ class Job(object):
                             break
                         scription_debug('stdin writing', repr(data))
                         write(data)
+                        scription_debug('   done writing', repr(data))
                         flush()
                 else:
                     scription_debug('write_comm dying from self.abort')
@@ -1611,7 +1612,7 @@ class Job(object):
             self.exceptions.append((exc, traceback))
         return exc
 
-    def communicate(self, input=None, password=None, timeout=None, interactive=None, encoding='utf-8', password_timeout=None):
+    def communicate(self, input=None, input_delay=2.5, password=None, timeout=None, interactive=None, encoding='utf-8', password_timeout=None):
         # password          -> single password or tuple of passwords (pty=True only)
         # password_timeout  -> time allowed for successful password transmission
         # timeout           -> time allowed for successful completion of job
@@ -1677,7 +1678,7 @@ class Job(object):
             if isinstance(input, unicode):
                 input = input.encode('utf-8')
             if isinstance(input, bytes):
-                add_newline = input[-1:] == ['\n']
+                add_newline = input[-1:] == [b'\n']
                 input = [i + b'\n' for i in input.split(b'\n')]
                 if not add_newline:
                     input[-1] = input[-1].strip(b'\n')
@@ -1693,7 +1694,7 @@ class Job(object):
                     passwords.append((pwd + '\n').encode('utf-8'))
                 else:
                     passwords.append(pwd + '\n'.encode('utf-8'))
-            if passwords or input:
+            if passwords:
                 while passwords:
                     if self.process:
                         # feed all passwords at once, after a short delay
@@ -1751,11 +1752,11 @@ class Job(object):
                                     raise e
                     else:
                         scription_debug('[echo: %s] password entry finished' % (self.get_echo(), ))
-                if input is not None:
-                    scription_debug('writing input: %r' % input, verbose=2)
-                    time.sleep(0.1)
-                    for line in input:
-                        self.write(line)
+            if input is not None:
+                scription_debug('writing input: %r' % input, verbose=2)
+                time.sleep(input_delay)
+                for line in input:
+                    self.write(line)
                     time.sleep(0.1)
             scription_debug('joining process thread...')
             while not self.abort:

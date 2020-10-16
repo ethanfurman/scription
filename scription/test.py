@@ -1661,7 +1661,7 @@ class TestExecution(TestCase):
         self.dead_file = dead_file_path = os.path.join(tempdir, 'dead_file')
         dead_file = open(dead_file_path, 'w')
         try:
-            dead_file.write("print('usage message here')\n")
+            dead_file.write("print('usage message here')\nraise SystemExit(1)")
         finally:
             dead_file.close()
         #
@@ -1699,6 +1699,28 @@ class TestExecution(TestCase):
                     )
         finally:
             password_file.close()
+        #
+        self.echo_off_file = echo_off_name = os.path.join(tempdir, 'echo_off')
+        echo_off = open(echo_off_name, 'w')
+        try:
+            echo_off.write(
+                    "import termios, sys\n"
+                    "try:\n"
+                    "    input = raw_input\n"
+                    "except NameError:\n"
+                    "    pass\n"
+                    "fd = sys.stdin.fileno()\n"
+                    "old = termios.tcgetattr(fd)\n"
+                    "new = termios.tcgetattr(fd)\n"
+                    "new[3] = new[3] & ~termios.ECHO          # lflags\n"
+                    "try:\n"
+                    "    termios.tcsetattr(fd, termios.TCSADRAIN, new)\n"
+                    "    passwd = input('gimme some!')\n"
+                    "finally:\n"
+                    "    termios.tcsetattr(fd, termios.TCSADRAIN, old)\n"
+                    )
+        finally:
+            echo_off.close()
 
     def test_bad_timeout(self):
         job = Job([sys.executable, self.pty_password_file], pty=True)
@@ -1732,16 +1754,16 @@ class TestExecution(TestCase):
                     )
 
         def test_pty_with_dead_file(self):
-            with self.assertRaisesRegex(IOError, '\[Errno 32\] Broken pipe\.'):
-                Execute([sys.executable, self.dead_file], pty=True, input='anybody there?', timeout=60)
-            #
             job = Job([sys.executable, self.dead_file], pty=True)
             try:
-                job.communicate(input='anybody there?', timeout=60)
+                job.communicate(input='anybody there?\n', timeout=60)
             except IOError as exc:
                 if exc.errno != errno.EPIPE:
                     raise
                 self.assertEqual(job.stdout, 'usage message here\n')
+            else:
+                self.assertEqual(job.stdout, 'anybody there?\nusage message here\n')
+            self.assertTrue(job.returncode)
 
     if is_win:
         if py_ver >= (3, 3):
@@ -1858,6 +1880,20 @@ class TestExecution(TestCase):
                 'Failed (actual results):\nstdout:\n%s\nstderr:\n%s' % (command.stdout, command.stderr),
                 )
         self.assertEqual(command.stderr, '')
+
+    def test_input_with_echo_off(self):
+        try:
+            command = Job(
+                    [sys.executable, self.echo_off_file],
+                    pty=True,
+                    )
+            command.communicate(
+                    input=unicode('Salutations!\n'),
+                    timeout=30,
+                    )
+        except IOError as exc:
+            raise Exception('%s occured;\n%s\n%s' % (exc, command.stdout, command.stderr))
+
 
 class TestOrm(TestCase):
 
