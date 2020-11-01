@@ -33,7 +33,7 @@ intelligently parses command lines
 from __future__ import print_function
 
 # version
-version = 0, 85, 3
+version = 0, 85, 4, 1
 
 # imports
 import sys
@@ -76,7 +76,6 @@ import time
 import traceback
 from aenum import Enum, IntEnum, Flag, AutoValue, AutoNumber, export
 from collections import OrderedDict
-from itertools import groupby
 from math import floor
 from sys import stdin, stdout, stderr
 from types import GeneratorType
@@ -1898,7 +1897,14 @@ class Job(object):
             # unable to kill job
             self.abort = True
             scription_debug('abort switch set')
-            e = self._set_exc(UnableToKillJob, '%s: %s' % (exc.__class__.__name__, exc), traceback=tb)
+            if exc is None:
+                try:
+                    raise UnableToKillJob('Signals %s failed' % ', '.join(self.kill_signals))
+                except Exception:
+                    cls, exc, tb = sys.exc_info()
+                    e = self._set_exc(UnableToKillJob, None, traceback=tb)
+            else:
+                e = self._set_exc(UnableToKillJob, '%s: %s' % (exc.__class__.__name__, exc), traceback=tb)
             if error == 'raise':
                 raise e
 
