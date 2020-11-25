@@ -1721,6 +1721,16 @@ class TestExecution(TestCase):
                     )
         finally:
             echo_off.close()
+        #
+        self.long_sleeper_file = sleeper = os.path.join(tempdir, 'bad_sleeper')
+        sleeper = open(sleeper, 'w')
+        try:
+            sleeper.write(
+                    "import time\n"
+                    "time.sleep(15)\n"
+                    )
+        finally:
+            sleeper.close()
 
     def test_bad_timeout(self):
         job = Job([sys.executable, self.pty_password_file], pty=True)
@@ -1893,6 +1903,13 @@ class TestExecution(TestCase):
                     )
         except IOError as exc:
             raise Exception('%s occured;\n%s\n%s' % (exc, command.stdout, command.stderr))
+
+    # def test_locked_pty(self):
+    #     """
+    #     simulate a locked job (real life example: trying to query a dropped mount)
+    #     """
+    #     raise NotImplementedError()
+
 
 
 class TestOrm(TestCase):

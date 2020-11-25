@@ -33,7 +33,7 @@ intelligently parses command lines
 from __future__ import print_function
 
 # version
-version = 0, 85, 4, 1
+version = 0, 86, 0, 1
 
 # imports
 import sys
@@ -329,10 +329,6 @@ class Exit(IntEnum):
             v[name] = sig, name
         else:
             v['SIGNKWN'] = 128, 'invalid signal'
-
-    def __bool__(self):
-        return self.value == 0
-    __nonzero__ = __bool__
 
 
 @export(globals())
@@ -3034,7 +3030,7 @@ def box(message, *style, **kwds):
         box.append(bottom_line)
     return '\n'.join(box)
 
-def table_display(rows, widths=None, types=None, header=True, display_none=None):
+def table_display(rows, widths=None, types=None, header=True, display_none=None, record='row'):
     # assemble the table
     if widths:
         types = types or [''] * len(rows[0])
@@ -3066,7 +3062,7 @@ def table_display(rows, widths=None, types=None, header=True, display_none=None)
                 else:
                     width = max([len(p) for p in str(cell).split('\n')])
                 widths[i] = max(widths[i], width)
-                if cell in [None, ''] or first_row:
+                if record == 'column' or cell in [None, ''] or first_row:
                     continue
                 if not types[i]:
                     # check fixed first as bool is both number and fixed
@@ -3074,6 +3070,8 @@ def table_display(rows, widths=None, types=None, header=True, display_none=None)
                         types[i] = 'f'
                     elif isinstance(cell, number):
                         types[i] = 'n'
+                    else:
+                        types[i] = 't'
             first_row = False
         rows = rows_copy
     # sum(widths) -> how much space is alloted to other data
@@ -3104,6 +3102,13 @@ def table_display(rows, widths=None, types=None, header=True, display_none=None)
             for row in zip_values(row, widths, types):
                 line = []
                 for value, width, align in row:
+                    if align == '':
+                        if isinstance(value, fixed):
+                            align = 'f'
+                        elif isinstance(value, number):
+                            align = 'n'
+                        else:
+                            align = 't'
                     if value is None:
                         # special case: use display_none
                         if display_none is None:
@@ -3123,7 +3128,7 @@ def table_display(rows, widths=None, types=None, header=True, display_none=None)
                         else:
                             cell = (display_none[:width]).center(width)
                             # cell = '%^*s' % (width, display_none[:width])
-                    elif align == '':
+                    elif align == 't':
                         # left
                         cell = '%-*s' % (width, value)
                     elif align == 'n':
@@ -3172,6 +3177,7 @@ def print(*values, **kwds):
                     types=types,
                     header=kwds.pop('table_header', True),
                     display_none=kwds.pop('table_display_none', None),
+                    record=kwds.pop('table_record', 'row')
                     ),
                     )
             border = None
