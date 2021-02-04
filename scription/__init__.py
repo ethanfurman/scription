@@ -33,7 +33,7 @@ intelligently parses command lines
 from __future__ import print_function
 
 # version
-version = 0, 86, 0
+version = 0, 86, 1, 1
 
 # imports
 import sys
@@ -97,7 +97,7 @@ if py_ver < (3, 0):
     number = int, long, float
     from itertools import izip_longest as zip_longest
     from __builtin__ import print as _print
-    from __builtin__ import raw_input as _input
+    from __builtin__ import raw_input as raw_input
     exec(textwrap.dedent('''\
         def raise_with_traceback(exc, tb):
             raise exc, None, tb
@@ -113,11 +113,16 @@ else:
     number = int, float
     from itertools import zip_longest
     from builtins import print as _print
-    from builtins import input as _input
+    from builtins import input as raw_input
     exec(textwrap.dedent('''\
         def raise_with_traceback(exc, tb):
             raise exc.with_traceback(tb)
             '''))
+
+def _input(*args, **kwds):
+    from warnings import warn
+    warn('`_input` is deprecated; use `raw_input` instead.', stacklevel=2)
+    return raw_input(*args, **kwds)
 
 # data
 # __all__ includes the common elements that might be used frequently in scripts
@@ -126,7 +131,7 @@ __all__ = (
     'Bool','InputFile', 'OutputFile', 'IniError', 'IniFile', 'OrmError', 'OrmFile', 'NameSpace', 'OrmSection',
     'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'MULTIREQ', 'REQUIRED', 'RADIO',
     'ScriptionError', 'ExecuteError', 'FailedPassword', 'TimeoutError', 'Execute', 'Job', 'ProgressView', 'ViewProgress',
-    'abort', 'echo', 'error', 'get_response', 'help', 'input', 'mail', 'user_ids', 'print', 'box', 'table_display',
+    'abort', 'echo', 'error', 'get_response', 'help', 'input', 'raw_input', 'mail', 'user_ids', 'print', 'box', 'table_display',
     'stdout', 'stderr', 'wait_and_check', 'b', 'bytes', 'str', 'u', 'unicode', 'ColorTemplate', 'Color',
     'basestring', 'integer', 'number', 'raise_with_traceback',
     'Trivalent', 'Truthy', 'Unknown', 'Falsey', 'Exit', 'Var', 'Sentinel',
