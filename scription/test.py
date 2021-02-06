@@ -1066,6 +1066,32 @@ class TestCommandlineProcessing(TestCase):
                 )
         test_func_parsing(self, type_tester, tests)
 
+    def test_option_with_int_choices(self):
+        @Command(
+                huh=Spec('misc options', 'option', choices=[1, 2, 3], type=int),
+                )
+        def tester(huh):
+            pass
+        tests = (
+                ( 'tester'.split(), (), {}, (None, ), {} ),
+                ( 'tester -h 1'.split(), (), {}, (1, ), {} ),
+                ( 'tester -h 3'.split(), (), {}, (3, ), {} ),
+                )
+        test_func_parsing(self, tester, tests)
+
+    def test_option_with_range_choices(self):
+        @Command(
+                huh=Spec('misc options', 'option', choices=range(4), type=int),
+                )
+        def tester(huh):
+            pass
+        tests = (
+                ( 'tester'.split(), (), {}, (None, ), {} ),
+                ( 'tester -h 1'.split(), (), {}, (1, ), {} ),
+                ( 'tester -h 3'.split(), (), {}, (3, ), {} ),
+                )
+        test_func_parsing(self, tester, tests)
+
     def test_option_with_bad_choices(self):
         @Command(
             parent=Spec('an option with choices', OPTION, choices=['mom', 'none', 'thing']),

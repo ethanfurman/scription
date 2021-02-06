@@ -1236,7 +1236,10 @@ class Spec(object):
         if not choices:
             choices = []
         elif isinstance(choices, basestring):
-            choices = choices.split()
+            choices = choices.replace(',',' ').split()
+        else:
+            # choices had better be some kind of iterator
+            choices = [str(c) for c in choices]
         arg_type_default = empty
         use_default = False
         if default is not empty and force_default == True:
