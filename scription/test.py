@@ -4,7 +4,7 @@ import sys
 sys.path.insert(0, os.path.split(os.path.split(__file__)[0]))
 
 from scription import *
-from scription import _usage, version, empty, pocket, ormclassmethod
+from scription import _usage, version, empty, pocket, ormclassmethod, aenum_version
 from textwrap import dedent
 from unittest import skip, skipUnless, SkipTest, TestCase as unittest_TestCase, main
 import datetime
@@ -45,7 +45,7 @@ del remove
 is_win = sys.platform.startswith('win')
 py_ver = sys.version_info[:2]
 gubed = False
-print('Scription %s.%s.%s -- Python %d.%d' % (version[:3] + py_ver), verbose=0)
+print('Scription %s.%s.%s, aenum %s.%s.%s -- Python %d.%d' % (version[:3] + aenum_version[:3] + py_ver), verbose=0)
 
 def test_func_parsing(obj, func, tests, test_type=False):
     global gubed, script_name, script_main, script_commands, script_command, script_commandname
@@ -2314,16 +2314,21 @@ class TestResponse(TestCase):
 
     class raw_input_cm(object):
         'context manager for mocking raw_input'
-        def __init__(self, reply):
+        def __init__(self, reply, allowed_attempts=1):
             self.reply = reply
+            self.allowed = allowed_attempts
+            self.attempted = 0
         def __call__(self, prompt):
+            self.attempted += 1
+            if self.attempted > self.allowed:
+                raise Exception('too many attempts to get correct reply')
             self.prompt = prompt
             return self.reply
         def __enter__(self):
-            scription._input = self
+            scription.raw_input = self
             return self
         def __exit__(self, *args):
-            scription._input = input
+            scription.raw_input = raw_input
             return
 
     def test_yesno(self):
@@ -2350,22 +2355,24 @@ class TestResponse(TestCase):
                 ans = get_response('copy files? [y]es/[n]o/[a]ll/[m]aybe')
                 self.assertEqual(ans, 'all')
         for reply in ('m', 'maybe', 'MayBe'):
-            with self.raw_input_cm(reply):
+            with self.raw_input_cm(reply) as ric:
                 ans = get_response('copy files? [y]es/[n]o/[a]ll/[m]aybe')
                 self.assertEqual(ans, 'maybe')
+                self.assertEqual(ric.prompt, 'copy files? [y]es/[n]o/[a]ll/[m]aybe ')
 
     def test_multiple_choice_in_one_block(self):
         for reply in ('y', 'yes', 'Yes'):
             with self.raw_input_cm(reply):
-                ans = get_response('copy files? [yes/no/all/maybe]')
+                ans = get_response('copy files? [Yes/no/all/maybe]')
                 self.assertEqual(ans, 'yes')
         for reply in ('n', 'no', 'No'):
-            with self.raw_input_cm(reply):
-                ans = get_response('copy files? [yes/no/all/maybe]')
+            with self.raw_input_cm(reply) as ric:
+                ans = get_response('copy files? [Yes/No/All/maYbe]')
                 self.assertEqual(ans, 'no')
+                self.assertEqual(ric.prompt, 'copy files? [Yes/No/All/maYbe] ')
         for reply in ('a', 'all', 'All'):
             with self.raw_input_cm(reply):
-                ans = get_response('copy files? [yes/no/all/maybe]')
+                ans = get_response('copy files? [yes/no/All/maybe]')
                 self.assertEqual(ans, 'all')
         for reply in ('m', 'maybe', 'MayBe'):
             with self.raw_input_cm(reply):
@@ -2541,11 +2548,12 @@ class TestColorEnum(TestCase):
         # error(white, type(white), repr(white.value), repr(white.code))
         # error(white.value | red.value)
         barber = red | white
-        self.assertEqual(barber, '\x1b[47;31m')
+        new_value = '\x1b[31;47m'
+        self.assertEqual(barber, new_value, "%r != %r" % (str(barber), new_value))
         self.assertEqual(barber.value, red.value | white.value)
-        self.assertEqual(barber.code, ';'.join([white.code, red.code]))
-        self.assertEqual(repr(barber), '<Color: BG_White|FG_Red>')
-        self.assertEqual(str(barber), '\x1b[47;31m')
+        self.assertEqual(barber.code, ';'.join([red.code, white.code]))
+        self.assertEqual(repr(barber), '<Color: FG_Red|BG_White>')
+        self.assertEqual(str(barber), new_value)
 
 
 class TestBox(TestCase):

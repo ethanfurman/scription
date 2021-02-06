@@ -74,7 +74,7 @@ import textwrap
 import threading
 import time
 import traceback
-from aenum import Enum, IntEnum, Flag, AutoValue, AutoNumber, export
+from aenum import Enum, IntEnum, Flag, AutoValue, AutoNumber, export, version as aenum_version
 from collections import OrderedDict
 from math import floor
 from sys import stdin, stdout, stderr
@@ -2484,10 +2484,10 @@ class Color(str, Flag):
     __str__ = str.__str__
 
     def __repr__(self):
-        if self._name_ is not None:
+        if len(self) == 1:
             return '<%s.%s>' % (self.__class__.__name__, self._name_)
         else:
-            return '<%s: %s>' % (self.__class__.__name__, '|'.join([m.name for m in Flag.__iter__(self)]))
+            return '<%s: %s>' % (self.__class__.__name__, self._name_)
 
     def __enter__(self):
         print(self.AllReset, end='', verbose=0)
@@ -3349,7 +3349,7 @@ def input(
         # two supported options:
         #   'some question [always/maybe/never]'
         # and
-        #   'some question:\n[a]ways\n[m]aybe\n[n]ever'
+        #   'some question:\n[a]lways\n[m]aybe\n[n]ever'
         # responses are embedded in question between '[]' and consist
         # of first letter if all lowercase, else first capital letter
         actual_question = []
@@ -3371,11 +3371,11 @@ def input(
                     if not word:
                         raise ScriptionError('empty choice')
                     uppers = ''.join([l for l in word if l == l.upper()])
-                    word = word.lower()
+                    lower_word = word.lower()
                     if not uppers:
-                        uppers = word[0]
-                    allowed_responses[word] = word
-                    allowed_responses[uppers] = word
+                        uppers = lower_word[0]
+                    allowed_responses[lower_word] = lower_word
+                    allowed_responses[uppers.lower()] = lower_word
                     if default in (word, uppers):
                         actual_question.append('-')
                         actual_question.extend([c for c in word])
@@ -3438,7 +3438,7 @@ def input(
         raise ScriptionError('supplied default is not valid')
     # setup is done, ask question and get answer
     while 'answer is unacceptable':
-        answer = _input(question)
+        answer = raw_input(question)
         if default and not answer:
             answer = default
         if validate(answer):
