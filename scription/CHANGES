@@ -1,3 +1,11 @@
+0.86.01
+=======
+
+convert private `_input` into public `raw_input`
+fix `input` to display capital letter choices if given
+enhance `Spec(... choices= ...) to handle integers
+
+
 0.86.00
 =======
 

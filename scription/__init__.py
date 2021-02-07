@@ -33,7 +33,7 @@ intelligently parses command lines
 from __future__ import print_function
 
 # version
-version = 0, 86, 1, 1
+version = 0, 86, 1, 2
 
 # imports
 import sys
@@ -256,12 +256,11 @@ class DocEnum(Enum):
     compares equal to all cased versions of its name
     accepts a docstring for each member
     """
-    _settings_ = AutoNumber
+    _init_ = 'value __doc__'
+    _settings_ = AutoValue
 
-    def __init__(self, value, doc=None):
-        # first, fix _value_
-        self._value_ = self._name_.lower()
-        self.__doc__ = doc
+    def _generate_next_value_(name, start, count, last_values, *args, **kwds):
+        return (name.lower(), ) + args
 
     def __eq__(self, other):
         if isinstance(other, basestring):
@@ -275,7 +274,12 @@ class DocEnum(Enum):
         return hash(self._value_)
 
     def __ne__(self, other):
-        return not self == other
+        if isinstance(other, basestring):
+            return self._value_ != other.lower()
+        elif isinstance(other, self.__class__):
+            return not self is other
+        else:
+            return NotImplemented
 
     def __repr__(self):
         return '<%s.%s>' % (self.__class__.__name__, self._name_)

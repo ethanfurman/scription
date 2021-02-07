@@ -2565,9 +2565,9 @@ class TestExecutionThreads(TestCase):
         self.assertNotEqual(job.returncode, 0, '-- stdout --\n%s\n-- stderr --\n%s' % (job.stdout, job.stderr))
 
 
-class TestColorEnum(TestCase):
+class TestEnums(TestCase):
 
-    def test_bitwise_or(self):
+    def test_color_bitwise_or(self):
         C = scription.Color
         red, white = C.FG_Red, C.BG_White
         # error(red, type(red), repr(red.value), repr(red.code))
@@ -2580,6 +2580,13 @@ class TestColorEnum(TestCase):
         self.assertEqual(barber.code, ';'.join([red.code, white.code]))
         self.assertEqual(repr(barber), '<Color: FG_Red|BG_White>')
         self.assertEqual(str(barber), new_value)
+
+    def test_docenum(self):
+        self.assertEqual(SpecKind.REQUIRED.value, 'required')
+        self.assertEqual(SpecKind.FLAG._name_, 'FLAG')
+        self.assertEqual(SpecKind.MULTI.__doc__, 'multiple values per name (list form, no whitespace)')
+        self.assertIs(SpecKind('radio'), SpecKind.RADIO)
+        self.assertis(SpecKind['KEYWORD'], SpecKind.KEYWORD)
 
 
 class TestBox(TestCase):
