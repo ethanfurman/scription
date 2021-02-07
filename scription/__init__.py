@@ -33,7 +33,7 @@ intelligently parses command lines
 from __future__ import print_function
 
 # version
-version = 0, 86, 1
+version = 0, 86, 2, 14
 
 # imports
 import sys
@@ -1246,8 +1246,9 @@ class Spec(object):
             choices = [str(c) for c in choices]
         arg_type_default = empty
         use_default = False
-        if default is not empty and force_default == True:
+        if default is not empty and (force_default == True or kind == 'required'):
             # support use of force_default as flag for default
+            # make defaults for required arguments forced
             use_default = True
         elif force_default is not empty:
             # otherwise force_default is the always used default itself
@@ -1372,10 +1373,14 @@ def Run():
             param_line = [prog_name] + SYS_ARGS[2:]
         else:
             func = Command.get(prog_name.lower(), None)
+            if func is None and prog_name.lower().endswith('.py'):
+                func = Command.get(prog_name.lower()[:-3], None)
             if func is not None and func_name != '--help':
                 param_line = [prog_name] + SYS_ARGS[1:]
             else:
                 prog_name_is_command = prog_name.lower() in Command
+                if not prog_name_is_command and prog_name.lower().endswith('.py'):
+                    prog_name_is_command = prog_name.lower()[:-3] in Command
                 if script_module['__doc__']:
                     _print(script_module['__doc__'].strip())
                 if len(Command) == 1:
@@ -1392,7 +1397,9 @@ def Run():
                         _print("\n   global options: %s\n" % Script.__usage__.split('\n')[0])
                 for name, func in sorted(Command.items()):
                     if _detail_help:
-                        if not (prog_name_is_command or name != prog_name) and len(Command) > 1:
+                        if prog_name_is_command and len(Command) == 1:
+                            name = prog_name
+                        elif not (prog_name_is_command or name != prog_name) and len(Command) > 1:
                             continue
                             name = '%s %s' % (prog_name, name)
                         _print("\n%s %s" % (name, func.__usage__))

@@ -1,3 +1,11 @@
+0.86.02
+=======
+
+improve support for script names ending with '.py'
+add Python3.9 compatibility tag
+fix help message for required elements with default values
+
+
 0.86.01
 =======
 
