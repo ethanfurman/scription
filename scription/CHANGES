@@ -1,3 +1,17 @@
+0.86.03
+=======
+
+`verbose` is now injected into the script, and is the same
+as `script_verbosity`
+
+Exit.Error is now the canonical name for exit code 1 (Unknown and
+UnknownError are now aliases)
+
+Script functions now support OPTION/MULTI correctly
+
+Script functions now support REQUIRED
+
+
 0.86.02
 =======
 

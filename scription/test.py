@@ -96,14 +96,14 @@ def test_func_parsing(obj, func, tests, test_type=False):
             for spec in set(func.__scription__.values()):
                 spec._cli_value = empty
     finally:
-        script_name = '<unknown>'
-        script_fullname = '<unknown>'
-        script_main = None
-        script_commands = {}
-        script_command = None
-        script_commandname = ''
-        script_exception_lines = ''
-        script_fullname, script_exception_lines
+        module = scription.script_module
+        script_module['script_name'] = '<unknown>'
+        script_module['script_fullname'] = '<unknown>'
+        script_module['script_main'] = None
+        script_module['script_commands'] = {}
+        script_module['script_command'] = None
+        script_module['script_commandname'] = ''
+        script_module['script_exception_lines'] = ''
 
 def test_func_docstrings(obj, func, docstring):
     try:
@@ -954,6 +954,52 @@ class TestCommandlineProcessing(TestCase):
                 ('type_tester 9 --value2 31.25 -z 71'.split(), (), {}, (9, 31.25, (3.0j, ), None, None, (), '71' ), {}),
                 )
         test_func_parsing(self, type_tester, tests)
+
+    def test_abbreviations_script_command_conflict(self):
+        try:
+            with self.assertRaisesRegex(ScriptionError, "abbreviation in use by 'main'"):
+                @Script(
+                        hello=Spec('hello', OPTION),
+                        )
+                def main(hello):
+                    pass
+                @Command(
+                        high=Spec('higher', OPTION),
+                        )
+                def sub(high):
+                    pass
+        finally:
+            module = scription.script_module
+            script_module['script_name'] = '<unknown>'
+            script_module['script_fullname'] = '<unknown>'
+            script_module['script_main'] = None
+            script_module['script_commands'] = {}
+            script_module['script_command'] = None
+            script_module['script_commandname'] = ''
+            script_module['script_exception_lines'] = ''
+
+    def test_abbreviations_command_script_conflict(self):
+        try:
+            with self.assertRaisesRegex(ScriptionError, "abbreviation conflicts with 'sub'"):
+                @Command(
+                        high=Spec('higher', OPTION),
+                        )
+                def sub(high):
+                    pass
+                @Script(
+                        hello=Spec('hello', OPTION),
+                        )
+                def main(hello):
+                    pass
+        finally:
+            module = scription.script_module
+            script_module['script_name'] = '<unknown>'
+            script_module['script_fullname'] = '<unknown>'
+            script_module['script_main'] = None
+            script_module['script_commands'] = {}
+            script_module['script_command'] = None
+            script_module['script_commandname'] = ''
+            script_module['script_exception_lines'] = ''
 
     def test_no_multi(self):
         @Command(
@@ -2582,11 +2628,12 @@ class TestEnums(TestCase):
         self.assertEqual(str(barber), new_value)
 
     def test_docenum(self):
+        from scription import SpecKind
         self.assertEqual(SpecKind.REQUIRED.value, 'required')
         self.assertEqual(SpecKind.FLAG._name_, 'FLAG')
         self.assertEqual(SpecKind.MULTI.__doc__, 'multiple values per name (list form, no whitespace)')
         self.assertIs(SpecKind('radio'), SpecKind.RADIO)
-        self.assertis(SpecKind['KEYWORD'], SpecKind.KEYWORD)
+        self.assertIs(SpecKind['KEYWORD'], SpecKind.KEYWORD)
 
 
 class TestBox(TestCase):

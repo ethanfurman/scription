@@ -33,7 +33,7 @@ intelligently parses command lines
 from __future__ import print_function
 
 # version
-version = 0, 86, 2
+version = 0, 86, 3, 2
 
 # imports
 import sys
@@ -144,6 +144,7 @@ __all__ = (
     'script_fullname',      # sys.argv[0]
     'script_name',          # above without path
     'script_verbosity',     # vebosity level from command line
+    'verbose',              # same as above
     'script_module',        # module that imported scription
     'module',               # same as above
     'script_abort_message', # copy of message sent to abort()
@@ -186,10 +187,11 @@ for arg in sys.argv:
         elif arg[17:] == '=5':
             SCRIPTION_DEBUG = 5
 
-module = script_main = script_commands = None
+module = verbose = script_main = None
 script_fullname = script_name = script_verbosity = script_command = script_command_name = None
 script_abort_message = script_exception_lines = None
 script_module = {}
+script_commands = {}
 
 registered = False
 run_once = False
@@ -291,28 +293,28 @@ class Exit(IntEnum):
     _init_ = 'value __doc__'
     _ignore_ = 'v name text sig'
 
-    Success                   =   0, 'ran successfully'
-    UnknownError   = Unknown  =   1, 'unspecified error'
-    ScriptionError            =  63, 'fatal scription error'
-    UsageError     = Usage    =  64, 'command line usage error'
-    DataError                 =  65, 'data format error'
-    NoInput                   =  66, 'cannot open input'
-    NoUser                    =  67, 'user unknown'
-    NoHost                    =  68, 'host unknown'
-    Unavailable               =  69, 'service unavailable'
-    SoftwareError  = Software =  70, 'internal error'
-    OsError                   =  71, 'system error'
-    OsFileError    = OsFile   =  72, 'critical OS file missing'
-    CantCreate                =  73, 'cannot create (user) output file'
-    IoError                   =  74, 'input/output error'
-    TempFail                  =  75, 'temp failure; user is invited to retry'
-    ProtocolError  = Protocol =  76, 'remote error in protocol'
-    NoPermission              =  77, 'permission denied'
-    ConfigError    = Config   =  78, 'configuration error'
-    CannotExecute             = 126, 'command invoked cannot execute'
-    ExitOutOfRange            = 255, 'exit code out of range'
-    InvalidExitCode           = 127, 'invalid argument to exit'
-    UserCancelled             = 130, 'ctrl-c received'
+    Success                         =   0, 'ran successfully'
+    Error = UnknownError = Unknown  =   1, 'unspecified error'
+    ScriptionError                  =  63, 'fatal scription error'
+    UsageError     = Usage          =  64, 'command line usage error'
+    DataError                       =  65, 'data format error'
+    NoInput                         =  66, 'cannot open input'
+    NoUser                          =  67, 'user unknown'
+    NoHost                          =  68, 'host unknown'
+    Unavailable                     =  69, 'service unavailable'
+    SoftwareError  = Software       =  70, 'internal error'
+    OsError                         =  71, 'system error'
+    OsFileError    = OsFile         =  72, 'critical OS file missing'
+    CantCreate                      =  73, 'cannot create (user) output file'
+    IoError                         =  74, 'input/output error'
+    TempFail                        =  75, 'temp failure; user is invited to retry'
+    ProtocolError  = Protocol       =  76, 'remote error in protocol'
+    NoPermission                    =  77, 'permission denied'
+    ConfigError    = Config         =  78, 'configuration error'
+    CannotExecute                   = 126, 'command invoked cannot execute'
+    ExitOutOfRange                  = 255, 'exit code out of range'
+    InvalidExitCode                 = 127, 'invalid argument to exit'
+    UserCancelled                   = 130, 'ctrl-c received'
 
     # add signal exit codes
     v = vars()
@@ -484,11 +486,13 @@ def _get_all_versions(from_module, _try_other=True):
     versions.append('python=%s' % '.'.join([str(i) for i in sys.version_info]))
     return versions
 
-def _help(func):
+def _help(func, script=False):
     '''
     create help from __scription__ annotations and header defaults
     '''
+    scription_debug('_help for', func.__name__, verbose=3)
     params, vararg, keywordarg, defaults = inspect.getargspec(func)
+    scription_debug('ARG SPEC', params, vararg, keywordarg, defaults, verbose=3)
     params = func.params = list(params)
     vararg = func.vararg = [vararg] if vararg else []
     keywordarg = func.keywordarg = [keywordarg] if keywordarg else []
@@ -541,7 +545,19 @@ def _help(func):
             raise ValueError('unknown kind: %r' % kind)
         for ab in abbrev or ():
             if ab in annotations:
-               raise ScriptionError('duplicate abbreviations: %r' % abbrev)
+                raise ScriptionError('duplicate abbreviations: %r' % abbrev)
+            if script:
+                # check against Command
+                for command in script_module['script_commands'].values():
+                    if ab in command.__scription__:
+                        raise ScriptionError('abbreviation conflicts with %r' % command.__name__)
+            else:
+                # check against Script
+                script_obj = script_module['script_main']
+                script_func = getattr(script_obj, 'command', None)
+                script_annotations = getattr(script_func, '__scription__', {})
+                if ab in script_annotations:
+                    raise ScriptionError('abbreviation in use by %r' % script_func.__name__)
         if usage_name is empty:
             usage_name = name.upper()
         if arg_type is _identity and default is not empty and default is not None:
@@ -559,9 +575,8 @@ def _help(func):
         if pos != max_pos:
             annotations[i] = spec
         annotations[name] = spec
-        if abbrev not in (None, empty):
-            for ab in abbrev:
-                annotations[ab] = spec
+        for ab in abbrev or ():
+            annotations[ab] = spec
     usage_max = 0
     help_max = 0
     for annote in annotations.values():
@@ -672,7 +687,8 @@ def _init_script_module(func):
     script_module['script_command'] = None
     script_module['script_command_name'] = ''
     script_module['script_fullname'] = ''
-    script_module['script_verbosity'] = 0
+    script_module['verbose'] = 0
+    script_module['script_verbosity'] = script_module['verbose']
     script_module['script_abort_message'] = ''
     script_module['script_exception_lines'] = []
 
@@ -799,11 +815,15 @@ def _usage(func, param_line_args):
     scription_debug('max_pos:', max_pos, verbose=2)
     print_help = print_version = print_all_versions = False
     value = None
-    annotations = func.__scription__
+    annotations = {}
     var_arg_spec = kwd_arg_spec = None
     if Script and Script.command:
         var_arg_spec = getattr(Script.command, '_var_arg', None)
         kwd_arg_spec = getattr(Script.command, '_kwd_arg', None)
+        scription_debug('kwd_arg_spec', kwd_arg_spec, verbose=3)
+        annotations.update(Script.command.__scription__)
+        max_pos += Script.command.max_pos
+    annotations.update(func.__scription__)
     if func._var_arg:
         var_arg_spec = func._var_arg
     if func._kwd_arg:
@@ -937,54 +957,7 @@ def _usage(func, param_line_args):
             if annote.remove:
                 scription_debug('removed setting', verbose=2)
                 to_be_removed.append(offset)
-            if annote.kind in ('multi', 'option'):
-                scription_debug('(multi)option' , verbose=2)
-                if value is True:
-                    scription_debug('value is True', verbose=2)
-                    last_item = item
-                elif value is False:
-                    scription_debug('value is False', verbose=2)
-                    annote._cli_value = annote._type_default
-                    value = None
-                else:
-                    scription_debug('value is %r' % (value, ), verbose=2)
-                    if annote.kind == 'option':
-                        scription_debug('processing as option', verbose=2)
-                        scription_debug('checking choice membership: %r in %r?' % (item, annote.choices), verbose=2)
-                        if annote.choices and value not in annote.choices:
-                            raise ScriptionError('%s: %r not in [ %s ]' % (annote.usage, value, ' | '.join(annote.choices)), use_help=True)
-                        annote._cli_value = annote.type(value)
-                        scription_debug('checking radio settings for option %s' % (item, ), verbose=2)
-                        if annote._radio:
-                            if annote._radio in radio:
-                                raise ScriptionError('only one of %s may be specified'
-                                        % _and_list(func.radio[annote._radio]))
-                            radio.add(annote._radio)
-                    else:
-                        scription_debug('processing as multi-option', verbose=2)
-                        # value could be a list of comma-separated values
-                        scription_debug('_usage:multi ->', annote.type, verbose=2)
-                        scription_debug('checking choice membership: %r in %r?' % (item, annote.choices), verbose=2)
-                        values = _split_on_comma(value)
-                        if annote.choices:
-                            for v in values:
-                                if v not in annote.choices:
-                                    raise ScriptionError(
-                                            '%s: %r not in [ %s ]'
-                                                % (annote.usage, v, ' | '.join(annote.choices)),
-                                            use_help=True,
-                                            )
-                        values = [annote.type(v) for v in values]
-                        annote._cli_value += tuple(values)
-                        scription_debug('_usage:multi ->', annote._cli_value, verbose=2)
-                        scription_debug('checking radio settings for multioption %s' % (item, ), verbose=2)
-                        if annote._radio:
-                            if annote._radio in radio:
-                                raise ScriptionError('only one of %s may be specified'
-                                        % _and_list(func.radio[annote._radio]))
-                            radio.add(annote._radio)
-                    value = None
-            elif annote.kind == 'flag':
+            if annote.kind == 'flag':
                 scription_debug('flag', verbose=2)
                 value = annote.type(value)
                 annote._cli_value = value
@@ -995,6 +968,48 @@ def _usage(func, param_line_args):
                         raise ScriptionError('only one of %s may be specified'
                                 % _and_list(func.radio[annote._radio]))
                     radio.add(annote._radio)
+                value = None
+            elif annote.kind in ('multi', 'option'):
+                scription_debug('(multi)option' , verbose=2)
+                # if value is True/False, it will trigger a value lookup on the next pass
+                if value in (True, False):
+                    continue
+                scription_debug('value is %r' % (value, ), verbose=2)
+                if annote.kind == 'option':
+                    scription_debug('processing as option', verbose=2)
+                    scription_debug('checking choice membership: %r in %r?' % (item, annote.choices), verbose=2)
+                    if annote.choices and value not in annote.choices:
+                        raise ScriptionError('%s: %r not in [ %s ]' % (annote.usage, value, ' | '.join(annote.choices)), use_help=True)
+                    annote._cli_value = annote.type(value)
+                    scription_debug('checking radio settings for option %s' % (item, ), verbose=2)
+                    if annote._radio:
+                        if annote._radio in radio:
+                            raise ScriptionError('only one of %s may be specified'
+                                    % _and_list(func.radio[annote._radio]))
+                        radio.add(annote._radio)
+                else:
+                    scription_debug('processing as multi-option', verbose=2)
+                    # value could be a list of comma-separated values
+                    scription_debug('_usage:multi ->', annote.type, verbose=2)
+                    scription_debug('checking choice membership: %r in %r?' % (item, annote.choices), verbose=2)
+                    values = _split_on_comma(value)
+                    if annote.choices:
+                        for v in values:
+                            if v not in annote.choices:
+                                raise ScriptionError(
+                                        '%s: %r not in [ %s ]'
+                                            % (annote.usage, v, ' | '.join(annote.choices)),
+                                        use_help=True,
+                                        )
+                    values = [annote.type(v) for v in values]
+                    annote._cli_value += tuple(values)
+                    scription_debug('_usage:multi ->', annote._cli_value, verbose=2)
+                    scription_debug('checking radio settings for multioption %s' % (item, ), verbose=2)
+                    if annote._radio:
+                        if annote._radio in radio:
+                            raise ScriptionError('only one of %s may be specified'
+                                    % _and_list(func.radio[annote._radio]))
+                        radio.add(annote._radio)
                 value = None
             else:
                 raise ScriptionError('%s argument %s should not be introduced with --' % (annote.kind, item), use_help=True)
@@ -1049,7 +1064,7 @@ def _usage(func, param_line_args):
     if print_help:
         _print()
         if Script and Script.__usage__:
-            _print('global options: ' + Script.__usage__ + '\n')
+            _print('global: ' + Script.__usage__ + '\n')
         _print('%s %s' % (program, func.__usage__))
         _print()
         sys.exit(Exit.Success)
@@ -1086,6 +1101,7 @@ def _usage(func, param_line_args):
                 else:
                     args.append(annote)
     args = [arg.value for arg in sorted(args, key=lambda a: a._order)]
+    scription_debug('args: %r\nvarargs: %r' % (args, varargs))
     if varargs is not None:
         main_args = tuple(args) + varargs
     else:
@@ -1130,7 +1146,7 @@ class Alias(object):
 
 
 class Command(object):
-    "adds __scription__ to decorated function, and adds func to Command.subcommands"
+    "adds __scription__ to decorated function, and adds func to script_commands"
     def __init__(self, **annotations):
         scription_debug('Command -> initializing', verbose=1)
         scription_debug(annotations, verbose=2)
@@ -1166,9 +1182,6 @@ class Script(object):
         for name, annotation in settings.items():
             if isinstance(annotation, (Spec, tuple)):
                 spec = Spec(annotation)
-                if spec.kind == 'required':
-                    # TODO:  allow this
-                    raise ScriptionError('REQUIRED not (yet) allowed for Script')
             else:
                 if isinstance(annotation, (bool, Trivalent)):
                     kind = 'flag'
@@ -1186,7 +1199,7 @@ class Script(object):
         def dummy():
             pass
         _add_annotations(dummy, settings, script=True)
-        _help(dummy)
+        _help(dummy, script=True)
         self.__usage__ = dummy.__usage__.strip()
         self.command = dummy
         self.all_params = dummy.all_params
@@ -1200,11 +1213,11 @@ class Script(object):
             _init_script_module(func)
         func_name = func.__name__.replace('_', '-')
         if func_name in script_module['script_commands']:
-            raise ScriptionError('%r cannot be both Command and Scription' % func_name)
+            raise ScriptionError('%r cannot be both Command and Script' % func_name)
         if func.__doc__ is not None:
             func.__doc__ = textwrap.dedent(func.__doc__).strip()
         _add_annotations(func, self.settings, script=True)
-        _help(func)
+        _help(func, script=True)
         self.all_params = func.all_params
         self.named_params = func.named_params
         self.settings = func.__scription__
@@ -1308,7 +1321,9 @@ class Spec(object):
             else:
                 value = self.type(value)
         elif self._script_default is not empty and self._use_default:
-            value = self._script_default
+            value = self.type(self._script_default)
+            if self._type_default == ():
+                value = (value, )
         elif self._type_default is not empty:
             value = self._type_default
         else:
@@ -1392,9 +1407,9 @@ def Run():
                     _print("Available commands/options in", script_module['script_name'])
                 if Script and Script.__usage__:
                     if _detail_help:
-                        _print("\nglobal options: %s" % Script.__usage__)
+                        _print("\nglobal: %s" % Script.__usage__)
                     else:
-                        _print("\n   global options: %s\n" % Script.__usage__.split('\n')[0])
+                        _print("\n   global: %s\n" % Script.__usage__.split('\n')[0])
                 for name, func in sorted(Command.items()):
                     if _detail_help:
                         if prog_name_is_command and len(Command) == 1:
@@ -1413,12 +1428,17 @@ def Run():
                     sys.exit(Exit.ScriptionError)
         main_args, main_kwds, sub_args, sub_kwds = _usage(func, param_line)
         main_cmd = Script and Script.command
+        scription_debug('main command: %r\n  %r\n  %r' % (main_cmd, main_args, main_kwds))
+        scription_debug('sub command', sub_args, sub_kwds)
         subcommand = _run_once(func, sub_args, sub_kwds)
         script_module['script_command'] = subcommand
         script_module['script_command_name'] = func.__name__
+        script_module['verbose'] = VERBOSITY
         script_module['script_verbosity'] = VERBOSITY
         if main_cmd:
+            scription_debug('running Script')
             main_cmd(*main_args, **main_kwds)
+            scription_debug('done with Script')
         sys.exit(subcommand() or Exit.Success)
     except Exception:
         exc = sys.exc_info()[1]
@@ -2882,7 +2902,7 @@ def OutputFile(arg):
 ## utilities
 
 ### quiting
-def abort(msg=None, returncode=Exit.Unknown):
+def abort(msg=None, returncode=Exit.Error):
     "prints msg to stderr, calls sys.exit() with returncode"
     with print_lock:
         if msg:
@@ -2892,7 +2912,7 @@ def abort(msg=None, returncode=Exit.Unknown):
                 progname = script_module['script_name']
             result = '%s: %s' % (progname, msg)
             script_module['script_abort_message'] = result
-            print(result, file=stderr)
+            print(result, file=stderr, verbose=0)
         sys.exit(returncode)
 
 def help(msg, returncode=Exit.ScriptionError):
@@ -2915,26 +2935,26 @@ def scription_debug(*values, **kwds):
 
 def debug(*args, **kwds):
     with print_lock:
-        kwds['verbose'] = kwds.pop('verbose', 2)
+        kwds.setdefault('verbose', 4)
         print(*args, **kwds)
 
 def echo(*args, **kwds):
     with print_lock:
-        kwds['verbose'] = kwds.pop('verbose', 0)
+        kwds.setdefault('verbose', 0)
         print(*args, **kwds)
 
 def error(*args, **kwds):
     with print_lock:
         returncode = kwds.pop('returncode', None)
         kwds['file'] = stderr
-        kwds.pop('verbose', 0)
+        kwds.setdefault('verbose', 0)
         print(*args, **kwds)
         if returncode:
             abort(returncode=returncode)
 
 def info(*args, **kwds):
     with print_lock:
-        kwds['verbose'] = kwds.pop('verbose', 1)
+        kwds.setdefault('verbose', 1)
         print(*args, **kwds)
 
 def split_text(text, max):
@@ -3183,7 +3203,7 @@ def print(*values, **kwds):
     with print_lock:
         verbose_level = kwds.pop('verbose', 1)
         target = kwds.get('file') or stdout
-        if verbose_level > script_module.get('script_verbosity', 1) and target is not stderr:
+        if verbose_level > script_module.get('script_verbosity', 1):
             return
         border = kwds.pop('border', None)
         if border == 'table':
