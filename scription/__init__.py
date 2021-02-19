@@ -499,7 +499,11 @@ def _help(func, script=False):
     annotations = func.__scription__
     pos = None
     max_pos = 0
-    for i, name in enumerate(params + vararg + keywordarg):
+    if not script:
+        script_obj = script_module['script_main']
+        script_func = getattr(script_obj, 'command', None)
+        max_pos = getattr(script_func, 'max_pos', max_pos)
+    for i, name in enumerate(params + vararg + keywordarg, start=max_pos):
         if name[0] == '_':
             # ignore private params
             continue
@@ -546,11 +550,8 @@ def _help(func, script=False):
         for ab in abbrev or ():
             if ab in annotations:
                 raise ScriptionError('duplicate abbreviations: %r' % abbrev)
-            if script:
-                # check against Command
-                for command in script_module['script_commands'].values():
-                    if ab in command.__scription__:
-                        raise ScriptionError('abbreviation conflicts with %r' % command.__name__)
+            if script and script_module['script_commands']:
+                raise ScriptionError('Script must be defined before any Command')
             else:
                 # check against Script
                 script_obj = script_module['script_main']
@@ -571,7 +572,6 @@ def _help(func, script=False):
         spec.abbrev = abbrev
         spec.type = arg_type
         spec.usage = usage_name
-        spec._script_default = default
         if pos != max_pos:
             annotations[i] = spec
         annotations[name] = spec
@@ -822,7 +822,6 @@ def _usage(func, param_line_args):
         kwd_arg_spec = getattr(Script.command, '_kwd_arg', None)
         scription_debug('kwd_arg_spec', kwd_arg_spec, verbose=3)
         annotations.update(Script.command.__scription__)
-        max_pos += Script.command.max_pos
     annotations.update(func.__scription__)
     if func._var_arg:
         var_arg_spec = func._var_arg
@@ -926,7 +925,7 @@ def _usage(func, param_line_args):
             item = item.lstrip('-')
             value = True
             if item.lower().startswith('no-') and '=' not in item:
-                scription_debug('no- flag', verbose=2)
+                scription_debug('no- (disabling)', verbose=2)
                 value = False
                 item = item[3:]
             elif '=' in item:
@@ -971,8 +970,13 @@ def _usage(func, param_line_args):
                 value = None
             elif annote.kind in ('multi', 'option'):
                 scription_debug('(multi)option' , verbose=2)
-                # if value is True/False, it will trigger a value lookup on the next pass
-                if value in (True, False):
+                if value is True:
+                    # if value is True, it will trigger a value lookup on the next pass
+                    continue
+                if value is False:
+                    # if value is False, the name was disable with a leading --no-
+                    annote._cli_value = annote._type_default
+                    value = None
                     continue
                 scription_debug('value is %r' % (value, ), verbose=2)
                 if annote.kind == 'option':
@@ -1064,7 +1068,7 @@ def _usage(func, param_line_args):
     if print_help:
         _print()
         if Script and Script.__usage__:
-            _print('global: ' + Script.__usage__ + '\n')
+            _print('global settings: ' + Script.__usage__ + '\n')
         _print('%s %s' % (program, func.__usage__))
         _print()
         sys.exit(Exit.Success)
@@ -1211,6 +1215,8 @@ class Script(object):
         THREAD_STORAGE.script_main = None
         if not script_module:
             _init_script_module(func)
+        if script_module['script_commands']:
+            raise ScriptionError('Script must be defined before any Command')
         func_name = func.__name__.replace('_', '-')
         if func_name in script_module['script_commands']:
             raise ScriptionError('%r cannot be both Command and Script' % func_name)
@@ -1321,8 +1327,9 @@ class Spec(object):
             else:
                 value = self.type(value)
         elif self._script_default is not empty and self._use_default:
-            value = self.type(self._script_default)
-            if self._type_default == ():
+            value = self._script_default
+            if value is not None and self._type_default == () and not isinstance(value, tuple):
+                value = self.type(self._script_default)
                 value = (value, )
         elif self._type_default is not empty:
             value = self._type_default
@@ -1407,9 +1414,9 @@ def Run():
                     _print("Available commands/options in", script_module['script_name'])
                 if Script and Script.__usage__:
                     if _detail_help:
-                        _print("\nglobal: %s" % Script.__usage__)
+                        _print("\nglobal settings: %s" % Script.__usage__)
                     else:
-                        _print("\n   global: %s\n" % Script.__usage__.split('\n')[0])
+                        _print("\n   global settings: %s\n" % Script.__usage__.split('\n')[0])
                 for name, func in sorted(Command.items()):
                     if _detail_help:
                         if prog_name_is_command and len(Command) == 1:

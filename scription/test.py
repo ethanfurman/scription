@@ -78,7 +78,7 @@ def test_func_parsing(obj, func, tests, test_type=False):
                     "[sub kwds] expected: %r, got: %r  (iteration %d)" % (sub_kwds, res_sub_kwds, i),
                     )
             if have_gubed:
-                obj.assertTrue(gubed)
+                obj.assertTrue(script_module['gubed'], "gubed is not True (iteration %d)" % i)
             if verbose:
                 obj.assertEqual(scription.VERBOSITY, verbose)
             if test_type:
@@ -205,6 +205,16 @@ class TestExports(TestCase):
 
 
 class TestCommandlineProcessing(TestCase):
+
+    def setUp(self):
+        module = scription.script_module
+        script_module['script_name'] = '<unknown>'
+        script_module['script_fullname'] = '<unknown>'
+        script_module['script_main'] = None
+        script_module['script_commands'] = {}
+        script_module['script_command'] = None
+        script_module['script_commandname'] = ''
+        script_module['script_exception_lines'] = ''
 
     def test_envvar(self):
         @Command(
@@ -956,50 +966,30 @@ class TestCommandlineProcessing(TestCase):
         test_func_parsing(self, type_tester, tests)
 
     def test_abbreviations_script_command_conflict(self):
-        try:
-            with self.assertRaisesRegex(ScriptionError, "abbreviation in use by 'main'"):
-                @Script(
-                        hello=Spec('hello', OPTION),
-                        )
-                def main(hello):
-                    pass
-                @Command(
-                        high=Spec('higher', OPTION),
-                        )
-                def sub(high):
-                    pass
-        finally:
-            module = scription.script_module
-            script_module['script_name'] = '<unknown>'
-            script_module['script_fullname'] = '<unknown>'
-            script_module['script_main'] = None
-            script_module['script_commands'] = {}
-            script_module['script_command'] = None
-            script_module['script_commandname'] = ''
-            script_module['script_exception_lines'] = ''
+        with self.assertRaisesRegex(ScriptionError, "abbreviation in use by 'main'"):
+            @Script(
+                    hello=Spec('hello', OPTION),
+                    )
+            def main(hello):
+                pass
+            @Command(
+                    high=Spec('higher', OPTION),
+                    )
+            def sub(high):
+                pass
 
-    def test_abbreviations_command_script_conflict(self):
-        try:
-            with self.assertRaisesRegex(ScriptionError, "abbreviation conflicts with 'sub'"):
-                @Command(
-                        high=Spec('higher', OPTION),
-                        )
-                def sub(high):
-                    pass
-                @Script(
-                        hello=Spec('hello', OPTION),
-                        )
-                def main(hello):
-                    pass
-        finally:
-            module = scription.script_module
-            script_module['script_name'] = '<unknown>'
-            script_module['script_fullname'] = '<unknown>'
-            script_module['script_main'] = None
-            script_module['script_commands'] = {}
-            script_module['script_command'] = None
-            script_module['script_commandname'] = ''
-            script_module['script_exception_lines'] = ''
+    def test_command_before_script_fails(self):
+        with self.assertRaisesRegex(ScriptionError, "Script must be defined before any Command"):
+            @Command(
+                    high=Spec('higher', OPTION),
+                    )
+            def sub(high):
+                pass
+            @Script(
+                    hello=Spec('hello', OPTION),
+                    )
+            def main(hello):
+                pass
 
     def test_no_multi(self):
         @Command(
@@ -1503,7 +1493,7 @@ class TestHelp(TestCase):
                 "Main()\n"
                 )
         target_result = (
-                "global options: --conf CONF\n"
+                "global settings: --conf CONF\n"
                 "\n"
                 "    CONF   configuration file\n"
                 "\n"
@@ -1544,7 +1534,7 @@ class TestHelp(TestCase):
         target_result = (
                 "Available commands/options in help_test\n"
                 "\n"
-                "   global options: --conf CONF\n"
+                "   global settings: --conf CONF\n"
                 "\n"
                 "   another-thing  THIS THAT\n"
                 "   whatever       THIS THAT\n"
@@ -1619,7 +1609,7 @@ class TestHelp(TestCase):
         target_result = (
                 "Available commands/options in help_test\n"
                 "\n"
-                "   global options: --conf CONF\n"
+                "   global settings: --conf CONF\n"
                 "\n"
                 "   another-thing  THIS THAT\n"
                 "   that-thing     OTHER\n"
@@ -1631,6 +1621,16 @@ class TestHelp(TestCase):
 
 
 class TestDocStrings(TestCase):
+
+    def setUp(self):
+        module = scription.script_module
+        script_module['script_name'] = '<unknown>'
+        script_module['script_fullname'] = '<unknown>'
+        script_module['script_main'] = None
+        script_module['script_commands'] = {}
+        script_module['script_command'] = None
+        script_module['script_commandname'] = ''
+        script_module['script_exception_lines'] = ''
 
     def test_single_line(self):
         @Script()
