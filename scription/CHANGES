@@ -1,3 +1,9 @@
+0.86.04
+=======
+
+fix duplicate member creation under Windows
+
+
 0.86.03
 =======
 

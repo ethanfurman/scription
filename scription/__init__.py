@@ -33,7 +33,7 @@ intelligently parses command lines
 from __future__ import print_function
 
 # version
-version = 0, 86, 3
+version = 0, 86, 4, 1
 
 # imports
 import sys
@@ -338,8 +338,8 @@ class Exit(IntEnum):
         sig = getattr(signal, name, None)
         if sig is not None:
             v[name] = sig, name
-        else:
-            v['SIGNKWN'] = 128, 'invalid signal'
+    # and add a catch-all unknown signal
+    v['SIGNKWN'] = 128, 'invalid signal'
 
 
 @export(globals())
