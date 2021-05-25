@@ -33,7 +33,7 @@ intelligently parses command lines
 from __future__ import print_function
 
 # version
-version = 0, 86, 4
+version = 0, 86, 5, 1
 
 # imports
 import sys
@@ -74,7 +74,7 @@ import textwrap
 import threading
 import time
 import traceback
-from aenum import Enum, IntEnum, Flag, AutoValue, AutoNumber, export, version as aenum_version
+from aenum import Enum, IntEnum, Flag, export, version as aenum_version
 from collections import OrderedDict
 from math import floor
 from sys import stdin, stdout, stderr
@@ -259,7 +259,6 @@ class DocEnum(Enum):
     accepts a docstring for each member
     """
     _init_ = 'value __doc__'
-    _settings_ = AutoValue
 
     def _generate_next_value_(name, start, count, last_values, *args, **kwds):
         return (name.lower(), ) + args
@@ -492,7 +491,6 @@ def _help(func, script=False):
     '''
     scription_debug('_help for', func.__name__, verbose=3)
     params, vararg, keywordarg, defaults = inspect.getargspec(func)
-    scription_debug('ARG SPEC', params, vararg, keywordarg, defaults, verbose=3)
     params = func.params = list(params)
     vararg = func.vararg = [vararg] if vararg else []
     keywordarg = func.keywordarg = [keywordarg] if keywordarg else []
@@ -2481,7 +2479,6 @@ class ColorTemplate(object):
 
 
 class Color(str, Flag):
-    _settings_ = AutoValue
 
     def __new__(cls, value, code):
         str_value = '\x1b[%sm' % code
@@ -3363,6 +3360,7 @@ def input(
         type=None,
         retry='bad response, please try again',
         default=undefined,
+        encoding='utf8',
         ):
     # True/False: no square brackets, ends with '?'
     #   'Do you like green eggs and ham?'
@@ -3480,6 +3478,8 @@ def input(
     # setup is done, ask question and get answer
     while 'answer is unacceptable':
         answer = raw_input(question)
+        if isinstance(answer, bytes):
+            answer = str(answer, encoding=encoding)
         if default and not answer:
             answer = default
         if validate(answer):

@@ -99,12 +99,12 @@ make = []
 
 data = dict(
         name='scription',
-        version='0.86.4',
+        version='0.86.5a1',
         license='BSD License',
         description='simple script parameter parser',
         long_description=description,
         url='https://github.com/ethanfurman/scription.git',
-        install_requires=['aenum >= 2.0.10'],
+        install_requires=['aenum >= 3.1.0'],
         packages=['scription'],
         package_data={
              'scription': [
