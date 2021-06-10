@@ -1,3 +1,10 @@
+0.86.06
+=======
+
+commandline parameter names now recognize usage override names
+MULTIREQ parameter now shows in correct position in help
+
+
 0.86.05
 =======
 
