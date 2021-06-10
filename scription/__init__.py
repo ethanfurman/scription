@@ -575,10 +575,8 @@ def _help(func, script=False):
         for ab in abbrev or ():
             annotations[ab] = spec
     usage_max = 0
-    help_max = 0
     for annote in annotations.values():
         usage_max = max(usage_max, len(annote.usage))
-        help_max = max(help_max, len(annote.help))
     func._var_arg = func._kwd_arg = None
     if vararg:
         func._var_arg = annotations[vararg[0]]
@@ -669,7 +667,7 @@ def _help(func, script=False):
     for name in name_order:
         annote = annotations[name]
         choices = ''
-        if annote._script_default in (empty, None) or '[default: ' in annote.help:
+        if annote._script_default in (empty, None) or '[default: ' in annote.help or annote.kind == 'flag':
             posi = ''
         elif not annote._use_default:
             posi = '[option default: ' + repr(annote._script_default) + ']'
@@ -678,13 +676,12 @@ def _help(func, script=False):
         if annote.choices:
             choices = '[ %s ]' % ' | '.join(annote.choices)
         if annote._script_default is True and annote._use_default:
-            annote_usage = 'no-%s' % annote.usage.lower()
+            annote_usage = 'NO-%s' % annote.usage.upper()
         else:
-            annote_usage = '%s' % annote.usage.lower()
-        usage.append('    %-*s   %-*s   %s %s' % (
+            annote_usage = '%s' % annote.usage.upper()
+        usage.append('    %-*s   %s   %s %s' % (
             usage_max,
             annote_usage,
-            help_max,
             annote.help,
             posi,
             choices,
