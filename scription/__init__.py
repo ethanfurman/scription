@@ -33,7 +33,7 @@ intelligently parses command lines
 from __future__ import print_function
 
 # version
-version = 0, 86, 5
+version = 0, 86, 6, 6
 
 # imports
 import sys
@@ -556,9 +556,8 @@ def _help(func, script=False):
                 script_func = getattr(script_obj, 'command', None)
                 script_annotations = getattr(script_func, '__scription__', {})
                 if ab in script_annotations:
-                    raise ScriptionError('abbreviation in use by %r' % script_func.__name__)
-        if usage_name is empty:
-            usage_name = name.upper()
+                    raise ScriptionError('abbreviation %r is duplicate of %r in Script command %r' % (ab, script_annotations[ab].__name__, script_func.__name__))
+        usage_name = (usage_name or name).upper()
         if arg_type is _identity and default is not empty and default is not None:
             if kind in ('multi', 'multireq'):
                 if default:
@@ -616,25 +615,30 @@ def _help(func, script=False):
     # also prepare help for global options
     global_params = [n for n in func.names if n not in func.all_params]
     print_params = []
+    in_required = True
     for param in global_params + params:
         if param[0] == '_':
             # ignore private params
             continue
         annote = annotations[param]
+        if annote.kind != 'required' and in_required:
+            in_required = False
+            if vararg and func._var_arg.kind == 'multireq':
+                print_params.append('%s [, %s [...]]' % (func._var_arg.usage, func._var_arg.usage))
         example = annote.usage
         if annote.kind == 'flag':
             if annote._script_default is True and annote._use_default:
-                print_params.append('--no-%s' % param)
+                print_params.append('--no-%s' % example.lower())
             else:
-                print_params.append('--%s' % param)
+                print_params.append('--%s' % example.lower())
         elif annote.kind == 'option':
-            print_params.append('--%s %s' % (param, example))
+            print_params.append('--%s %s' % (example.lower(), example))
         elif annote.kind == 'multi':
-            print_params.append('--%s %s [--%s ...]' % (param, example, param))
+            print_params.append('--%s %s [--%s ...]' % (example.lower(), example, example.lower()))
         else:
             print_params.append(example)
     usage = print_params
-    if vararg:
+    if vararg and func._var_arg.kind != 'multireq':
         usage.append("[%s [%s [...]]]" % (func._var_arg.usage, func._var_arg.usage))
     if keywordarg:
         usage.append("[name1=value1 [name2=value2 [...]]]")
@@ -643,10 +647,26 @@ def _help(func, script=False):
         for line in func.__doc__.split('\n'):
             usage.append('    ' + line)
         usage.append('')
-    for name in global_params + params + vararg + keywordarg:
+    name_order = []
+    in_params = False
+    for name in global_params + ['start'] + params:
         if name[0] == '_':
             # ignore private params
             continue
+        if name == 'start':
+            in_params = True
+            continue
+        annote = annotations[name]
+        if in_params and annote.kind != 'required':
+            in_params = False
+            if vararg and func._var_arg.kind == 'multireq':
+                name_order.append(vararg[0])
+        name_order.append(name)
+    if vararg and vararg[0] not in name_order:
+        name_order.append(vararg[0])
+    if keywordarg:
+        name_order.append(keywordarg[0])
+    for name in name_order:
         annote = annotations[name]
         choices = ''
         if annote._script_default in (empty, None) or '[default: ' in annote.help:
@@ -657,9 +677,13 @@ def _help(func, script=False):
             posi = '[default: ' + repr(annote._script_default) + ']'
         if annote.choices:
             choices = '[ %s ]' % ' | '.join(annote.choices)
+        if annote._script_default is True and annote._use_default:
+            annote_usage = 'no-%s' % annote.usage.lower()
+        else:
+            annote_usage = '%s' % annote.usage.lower()
         usage.append('    %-*s   %-*s   %s %s' % (
             usage_max,
-            annote.usage,
+            annote_usage,
             help_max,
             annote.help,
             posi,
@@ -1154,6 +1178,7 @@ class Command(object):
         scription_debug(annotations, verbose=2)
         for name, annotation in annotations.items():
             spec = Spec(annotation)
+            spec.__name__ = name
             annotations[name] = spec
         self.annotations = annotations
     def __call__(self, func):
@@ -1190,6 +1215,7 @@ class Script(object):
                 else:
                     kind = 'option'
                 spec = Spec('', kind, None, type(annotation), default=annotation)
+            spec.__name__ = name
             if spec.usage is empty:
                 spec.usage = name.upper()
             settings[name] = spec
@@ -1236,6 +1262,8 @@ class Spec(object):
 
     help, kind, abbrev, type, choices, usage_name, remove, default, envvar, force_default, radio
     """
+
+    __name__ = None
 
     def __init__(self,
             help=empty, kind=empty, abbrev=empty, type=empty,
@@ -1288,6 +1316,11 @@ class Spec(object):
             arg_type_default = type(default)
         if abbrev not in(empty, None) and not isinstance(abbrev, tuple):
             abbrev = (abbrev, )
+        if usage is not empty:
+            if isinstance(abbrev, tuple):
+                abbrev = abbrev + (usage.lower(), )
+            else:
+                abbrev = (usage.lower(), )
         self.help = help
         self.kind = kind
         self.abbrev = abbrev

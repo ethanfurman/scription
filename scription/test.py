@@ -966,7 +966,7 @@ class TestCommandlineProcessing(TestCase):
         test_func_parsing(self, type_tester, tests)
 
     def test_abbreviations_script_command_conflict(self):
-        with self.assertRaisesRegex(ScriptionError, "abbreviation in use by 'main'"):
+        with self.assertRaisesRegex(ScriptionError, "abbreviation 'h' is duplicate of 'hello' in Script command 'main'"):
             @Script(
                     hello=Spec('hello', OPTION),
                     )
