@@ -3,6 +3,7 @@ import os
 import sys
 sys.path.insert(0, os.path.split(os.path.split(__file__)[0]))
 
+from antipathy import Path
 from scription import *
 from scription import _usage, version, empty, pocket, ormclassmethod, aenum_version
 from textwrap import dedent
@@ -45,6 +46,17 @@ del remove
 is_win = sys.platform.startswith('win')
 py_ver = sys.version_info[:2]
 gubed = False
+
+class UTC(datetime.tzinfo):
+    """UTC"""
+    def utcoffset(self, dt):
+        return datetime.timedelta(0)
+    def tzname(self, dt):
+        return "UTC"
+    def dst(self, dt):
+        return datetime.timedelta(0)
+UTC = UTC()
+
 print('Scription %s.%s.%s, aenum %s.%s.%s -- Python %d.%d' % (version[:3] + aenum_version[:3] + py_ver), verbose=0)
 
 def test_func_parsing(obj, func, tests, test_type=False):
@@ -1311,6 +1323,21 @@ class TestCommandlineProcessing(TestCase):
                 ScriptionError,
                 'only one of DARN and GOSH may be specified',
                 _usage, tester, 'tester -o google --darn=ack -g ick'.split(),
+                )
+
+    def test_target(self):
+        @Command(
+                config=Spec('use the specified Markdoc configuration', OPTION, type=Path),
+                log_level=Spec('how verbose to be in the log file', OPTION, choices=['DEBUG','INFO','WARN','ERROR'], force_default='INFO'),
+                quiet=Spec('alias for --log-level=ERROR', FLAG, None, default='ERROR', target='log_level'),
+                verbose=Spec('alias for --log-level=DEBUG', FLAG, None, default='DEBUG', target='log_level'),
+                )
+        def tester(config, log_level):
+            pass
+        tests = (
+                ( 'tester'.split(), (), {}, (Path(), 'INFO'), {}),
+                ( 'tester -o /here/stuff.text --log-level WARN'.split(), (), {}, (Path('/here/stuff.text'), 'WARN'), {}),
+                ( 'tester --quiet'.split(), (), {}, (Path(), 'ERROR'), {}),
                 )
 
 
@@ -3229,6 +3256,150 @@ class TestTable(TestCase):
                     | --------------------- |
                     | d | data 7  | data 8  |
                     -------------------------
+                    '''),
+                )
+
+    def test_number_in_column(self):
+        rows = [
+                ('first', 'second', 'third'),
+                None,
+                (1, 2.0, 3.14285714),
+                (0.68421062631, 777, 3.14),
+                ]
+        buffer = StringIO()
+        echo(rows, border='table', file=buffer)
+        self.maxDiff = None
+        self.assertEqual(
+                buffer.getvalue(),
+                dedent('''\
+                    ---------------------------------------
+                    |         first | second |      third |
+                    | ------------- | ------ | ---------- |
+                    |             1 |    2.0 | 3.14285714 |
+                    | 0.68421062631 |    777 |       3.14 |
+                    ---------------------------------------
+                    '''),
+                )
+
+    def test_naive_datetime_in_column(self):
+        from dbf import DateTime
+        rows = [
+                ('name', 'date', 'passed', 'score'),
+                None,
+                ('Ethianski', datetime.datetime(1970, 5, 20, 7, 47, 32), True, 93),
+                ('Alexis', datetime.datetime(2001, 7, 4, 13, 39, 1), False, 26),
+                ('Vinni', datetime.datetime(2012, 1, 31, 3, 45, 59), False, 47),
+                ]
+        buffer = StringIO()
+        echo(rows, border='table', file=buffer)
+        self.maxDiff = None
+        self.assertEqual(
+                buffer.getvalue(),
+                dedent('''\
+                    ----------------------------------------------------
+                    | name      |        date         | passed | score |
+                    | --------- | ------------------- | ------ | ----- |
+                    | Ethianski | 1970-05-20 07:47:32 |   T    |    93 |
+                    | Alexis    | 2001-07-04 13:39:01 |   f    |    26 |
+                    | Vinni     | 2012-01-31 03:45:59 |   f    |    47 |
+                    ----------------------------------------------------
+                    '''),
+                )
+
+    def test_aware_datetime_in_column(self):
+        rows = [
+                ('name', 'date', 'passed', 'score'),
+                None,
+                ('Ethianski', datetime.datetime(1970, 5, 20, 7, 47, 32, tzinfo=UTC), True, 93),
+                ('Alexis', datetime.datetime(2001, 7, 4, 13, 39, 1, tzinfo=UTC), False, 26),
+                ('Vinni', datetime.datetime(2012, 1, 31, 3, 45, 59), False, 47),
+                ]
+        buffer = StringIO()
+        echo(rows, border='table', file=buffer, table_display_tz=True)
+        self.maxDiff = None
+        self.assertEqual(
+                buffer.getvalue(),
+                dedent('''\
+                    ----------------------------------------------------------
+                    | name      |           date            | passed | score |
+                    | --------- | ------------------------- | ------ | ----- |
+                    | Ethianski | 1970-05-20 07:47:32 +0000 |   T    |    93 |
+                    | Alexis    | 2001-07-04 13:39:01 +0000 |   f    |    26 |
+                    | Vinni     | 2012-01-31 03:45:59 <unk> |   f    |    47 |
+                    ----------------------------------------------------------
+                    '''),
+                )
+
+    def test_naive_time_in_column(self):
+        from dbf import DateTime
+        rows = [
+                ('name', 'time', 'passed', 'score'),
+                None,
+                ('Ethianski', datetime.time(7, 47, 32), True, 93),
+                ('Alexis', datetime.time(13, 39, 1), False, 26),
+                ('Vinni', datetime.time(3, 45, 59), False, 47),
+                ]
+        buffer = StringIO()
+        echo(rows, border='table', file=buffer)
+        self.maxDiff = None
+        self.assertEqual(
+                buffer.getvalue(),
+                dedent('''\
+                    -----------------------------------------
+                    | name      |   time   | passed | score |
+                    | --------- | -------- | ------ | ----- |
+                    | Ethianski | 07:47:32 |   T    |    93 |
+                    | Alexis    | 13:39:01 |   f    |    26 |
+                    | Vinni     | 03:45:59 |   f    |    47 |
+                    -----------------------------------------
+                    '''),
+                )
+
+    def test_aware_time_in_column(self):
+        rows = [
+                ('name', 'time', 'passed', 'score'),
+                None,
+                ('Ethianski', datetime.time(7, 47, 32, tzinfo=UTC), True, 93),
+                ('Alexis', datetime.time(13, 39, 1, tzinfo=UTC), False, 26),
+                ('Vinni', datetime.time(3, 45, 59), False, 47),
+                ]
+        buffer = StringIO()
+        echo(rows, border='table', file=buffer, table_display_tz=True)
+        self.maxDiff = None
+        self.assertEqual(
+                buffer.getvalue(),
+                dedent('''\
+                    -----------------------------------------------
+                    | name      |      time      | passed | score |
+                    | --------- | -------------- | ------ | ----- |
+                    | Ethianski | 07:47:32 +0000 |   T    |    93 |
+                    | Alexis    | 13:39:01 +0000 |   f    |    26 |
+                    | Vinni     | 03:45:59 <unk> |   f    |    47 |
+                    -----------------------------------------------
+                    '''),
+                )
+
+    def test_date_in_column(self):
+        rows = [
+                ('name', 'date', 'passed', 'score'),
+                None,
+                ('Ethianski', datetime.date(2009, 11, 24), True, 93),
+                ('Alexis', datetime.date(2015, 3, 15), False, 26),
+                ('Vinni', datetime.date(2021, 7, 31), False, 47),
+                ]
+        buffer = StringIO()
+        echo(rows, border='table', file=buffer, table_display_tz=True)
+        self.maxDiff = None
+        self.assertEqual(
+                buffer.getvalue(),
+                dedent('''\
+                    -------------------------------------------
+                    | name      |    date    | passed | score |
+                    | --------- | ---------- | ------ | ----- |
+                    | Ethianski | 2009-11-24 |   T    |    93 |
+                    | Alexis    | 2015-03-15 |   f    |    26 |
+                    | Vinni     | 2021-07-31 |   f    |    47 |
+                    -------------------------------------------
                     '''),
                 )
 

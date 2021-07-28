@@ -198,6 +198,7 @@ run_once = False
 
 # for use with table printing
 try:
+    raise ImportError
     from dbf import Date, DateTime, Time, Logical, Quantum
     dates = datetime.date, Date
     datetimes = datetime.datetime, DateTime
@@ -390,6 +391,7 @@ def _add_annotations(func, annotations, script=False):
     '''
     add annotations as __scription__ to func
     '''
+    scription_debug('adding annotations to %r' % (func.__name__, ))
     params, varargs, keywords, defaults = inspect.getargspec(func)
     radio = {}
     if varargs:
@@ -397,17 +399,37 @@ def _add_annotations(func, annotations, script=False):
     if keywords:
         params.append(keywords)
     errors = []
+    default_order = 128
+    # add global, order, and radio attributes
     for name, spec in annotations.items():
-        if name not in params:
-            if not script:
-                errors.append(name)
-            annotations[name]._global = True
+        scription_debug('  processing %r with %r' % (name, spec), verbose=2)
+        annote = annotations[name]
+        if name in params:
+            annote._global = False
+            annote._order = params.index(name)
+        elif spec._target in params:
+            # sort it out in the next loop
+            pass
+        elif not script:
+            errors.append(name)
         else:
-            annotations[name]._global = False
+            annote._global = True
+            annote._order = default_order
+            default_order += 1
         if spec._radio:
             radio.setdefault(spec._radio, []).append(name)
     if errors:
         raise ScriptionError("name(s) %r not in %s's signature" % (errors, func.__name__))
+    # assign correct targets
+    for name, spec in annotations.items():
+        if spec._target is not empty:
+            target = annotations.get(spec._target)
+            if target is None:
+                errors.append(target)
+            spec._order = target._order
+            spec._global = target._global
+    if errors:
+        raise ScriptionError("target name(s) %r not in %s's annotations" % (errors, func.__name__))
     func.__scription__ = annotations
     func.names = sorted(annotations.keys())
     func.radio = radio
@@ -491,6 +513,7 @@ def _help(func, script=False):
     '''
     scription_debug('_help for', func.__name__, verbose=3)
     params, vararg, keywordarg, defaults = inspect.getargspec(func)
+    scription_debug('  PARAMS', params, vararg, keywordarg, defaults, verbose=3)
     params = func.params = list(params)
     vararg = func.vararg = [vararg] if vararg else []
     keywordarg = func.keywordarg = [keywordarg] if keywordarg else []
@@ -502,6 +525,7 @@ def _help(func, script=False):
         script_func = getattr(script_obj, 'command', None)
         max_pos = getattr(script_func, 'max_pos', max_pos)
     for i, name in enumerate(params + vararg + keywordarg, start=max_pos):
+        scription_debug('processing', name, verbose=3)
         if name[0] == '_':
             # ignore private params
             continue
@@ -509,7 +533,7 @@ def _help(func, script=False):
         pos = None
         if spec is None:
             raise ScriptionError('%s not annotated' % name)
-        help, kind, abbrev, arg_type, choices, usage_name, remove, default, envvar = spec
+        help, kind, abbrev, arg_type, choices, usage_name, remove, default, envvar, target = spec
         if name in vararg:
             spec._type_default = tuple()
             if kind is empty:
@@ -564,7 +588,6 @@ def _help(func, script=False):
                     arg_type = type(default[0])
             else:
                 arg_type = type(default)
-        spec._order = i
         spec.kind = kind
         spec.abbrev = abbrev
         spec.type = arg_type
@@ -977,8 +1000,14 @@ def _usage(func, param_line_args):
                 to_be_removed.append(offset)
             if annote.kind == 'flag':
                 scription_debug('flag', verbose=2)
-                value = annote.type(value)
-                annote._cli_value = value
+                if annote._target:
+                    scription_debug('  for', annote._target, verbose=2)
+                    target_annote = annotations[annote._target]
+                    target_annote._cli_value = value = target_annote.type(annote._script_default)
+                    scription_debug('  value', value)
+                else:
+                    value = annote.type(value)
+                    annote._cli_value = value
                 # check for other radio set
                 scription_debug('checking radio settings for flag %s' % (item, ), verbose=2)
                 if value and annote._radio:
@@ -1123,7 +1152,7 @@ def _usage(func, param_line_args):
                     main_kwds = value
                 else:
                     args.append(annote)
-    args = [arg.value for arg in sorted(args, key=lambda a: a._order)]
+    args = [arg.value for arg in sorted(args, key=lambda a: a._order) if arg._target is empty]
     scription_debug('args: %r\nvarargs: %r' % (args, varargs))
     if varargs is not None:
         main_args = tuple(args) + varargs
@@ -1143,7 +1172,7 @@ def _usage(func, param_line_args):
             sub_kwds = value
         else:
             args.append(annote)
-    args = [arg.value for arg in sorted(args, key=lambda a: a._order)]
+    args = [arg.value for arg in sorted(args, key=lambda a: a._order) if arg._target is empty]
     if varargs is not None:
         sub_args = tuple(args) + varargs
     else:
@@ -1176,6 +1205,8 @@ class Command(object):
         for name, annotation in annotations.items():
             spec = Spec(annotation)
             spec.__name__ = name
+            if spec.usage is empty:
+                spec.usage = name.upper()
             annotations[name] = spec
         self.annotations = annotations
     def __call__(self, func):
@@ -1218,9 +1249,6 @@ class Script(object):
             settings[name] = spec
         self.settings = settings
         self.names = sorted(settings.keys())
-        num_keys = len(self.names)
-        for i, name in enumerate(self.names):
-            settings[name]._order = i + num_keys
         def dummy():
             pass
         _add_annotations(dummy, settings, script=True)
@@ -1257,7 +1285,7 @@ class Script(object):
 class Spec(object):
     """tuple with named attributes for representing a command-line paramter
 
-    help, kind, abbrev, type, choices, usage_name, remove, default, envvar, force_default, radio
+    help, kind, abbrev, type, choices, usage_name, remove, default, envvar, force_default, radio, target
     """
 
     __name__ = None
@@ -1265,7 +1293,7 @@ class Spec(object):
     def __init__(self,
             help=empty, kind=empty, abbrev=empty, type=empty,
             choices=empty, usage=empty, remove=False, default=empty,
-            envvar=empty, force_default=empty, radio=empty,
+            envvar=empty, force_default=empty, radio=empty, target=empty
             ):
         if isinstance(help, Spec):
             self.__dict__.update(help.__dict__)
@@ -1336,13 +1364,17 @@ class Spec(object):
         if not isinstance(radio, basestring):
             raise ScriptionError('radio setting must be a name')
         self._radio = radio or empty
+        if target is not empty:
+            if kind != 'flag':
+                raise ScriptionError('target is only valid for FLAGs')
+        self._target = target
 
     def __iter__(self):
-        return iter((self.help, self.kind, self.abbrev, self.type, self.choices, self.usage, self.remove, self._script_default, self._envvar))
+        return iter((self.help, self.kind, self.abbrev, self.type, self.choices, self.usage, self.remove, self._script_default, self._envvar, self._target))
 
     def __repr__(self):
-        return "Spec(help=%r, kind=%r, abbrev=%r, type=%r, choices=%r, usage=%r, remove=%r, default=%r, envvar=%r)" % (
-                self.help, self.kind, self.abbrev, self.type, self.choices, self.usage, self.remove, self._script_default, self._envvar)
+        return "Spec(help=%r, kind=%r, abbrev=%r, type=%r, choices=%r, usage=%r, remove=%r, default=%r, envvar=%r, target=%r)" % (
+                self.help, self.kind, self.abbrev, self.type, self.choices, self.usage, self.remove, self._script_default, self._envvar, self._target)
 
     @property
     def value(self):
@@ -3103,7 +3135,7 @@ def box(message, *style, **kwds):
         box.append(bottom_line)
     return '\n'.join(box)
 
-def table_display(rows, widths=None, types=None, header=True, display_none=None, record='row'):
+def table_display(rows, widths=None, types=None, header=True, display_none=None, record='row', display_tz=False):
     # assemble the table
     if widths:
         types = types or [''] * len(rows[0])
@@ -3124,12 +3156,16 @@ def table_display(rows, widths=None, types=None, header=True, display_none=None,
             for i, cell in enumerate(row):
                 if isinstance(cell, logical):
                     width = 1
-                elif isinstance(cell, dates):
-                    width = 10
+                elif isinstance(cell, datetimes) and display_tz:
+                    width = 25
                 elif isinstance(cell, datetimes):
                     width = 19
+                elif isinstance(cell, times) and display_tz:
+                    width = 14
                 elif isinstance(cell, times):
                     width = 8
+                elif isinstance(cell, dates):
+                    width = 10
                 elif cell is None:
                     width = 1
                 else:
@@ -3208,17 +3244,26 @@ def table_display(rows, widths=None, types=None, header=True, display_none=None,
                         # right
                         cell = '%*s' % (width, value)
                     elif align == 'f':
-                        if isinstance(value, fixed):
-                            if isinstance(value, bool):
-                                value = 'fT'[value]
+                        if isinstance(value, bool):
+                            value = 'fT'[value]
+                        elif isinstance(value, datetimes) and display_tz:
+                            if value.tzinfo:
+                                value = value.strftime('%Y-%m-%d %H:%M:%S %z')
                             else:
-                                value = str(value)
-                        elif isinstance(value, dates):
-                            value = value.strftime('%Y-%m-%d')
+                                value = value.strftime('%Y-%m-%d %H:%M:%S <unk>')
                         elif isinstance(value, datetimes):
                             value = value.strftime('%Y-%m-%d %H:%M:%S')
+                        elif isinstance(value, times) and display_tz:
+                            if value.tzinfo:
+                                value = value.strftime('%H:%M:%S %z')
+                            else:
+                                value = value.strftime('%H:%M:%S <unk>')
                         elif isinstance(value, times):
                             value = value.strftime('%H:%M:%S')
+                        elif isinstance(value, dates):
+                            value = value.strftime('%Y-%m-%d')
+                        else:
+                            value = str(value)
                         t = len(value)
                         # center/fixed
                         l = (width-t) // 2
@@ -3250,6 +3295,7 @@ def print(*values, **kwds):
                     types=types,
                     header=kwds.pop('table_header', True),
                     display_none=kwds.pop('table_display_none', None),
+                    display_tz=kwds.pop('table_display_tz', False),
                     record=kwds.pop('table_record', 'row')
                     ),
                     )

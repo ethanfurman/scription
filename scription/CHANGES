@@ -1,3 +1,12 @@
+0.86.07
+=======
+
+target option added so commandline options/flags can update a different
+function parameter
+
+fix date/time handling in tables
+
+
 0.86.06
 =======
 
