@@ -2400,7 +2400,7 @@ class TestOrm(TestCase):
                 return "%s is huhified" % thing.name
         t1 = Test()
         t1.name = 't1'
-        self.assertRaises(AttributeError, getattr, t1, 'huh')
+        self.assertRaisesRegex(AttributeError, "'Test' instance has no attribute 'huh'")
         self.assertEqual(Test.huh(t1), "t1 is huhified")
         t2 = Test()
         t2.name = 't2'

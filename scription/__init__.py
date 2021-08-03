@@ -33,7 +33,7 @@ intelligently parses command lines
 from __future__ import print_function
 
 # version
-version = 0, 86, 7
+version = 0, 86, 8, 1
 
 # imports
 import sys
@@ -2127,8 +2127,8 @@ class ormclassmethod(object):
 
     def __get__(self, instance, owner):
         if instance:
-            return owner.__getattr__(instance, self.func.__name__)
-        return lambda *a, **kw: self.func(*a, **kw)
+            raise AttributeError('%r instance has no attribute %r' % (owner.__name__, self.func.__name__))
+        return self.func
 
 
 class OrmSection(NameSpace):
