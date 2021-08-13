@@ -33,7 +33,7 @@ intelligently parses command lines
 from __future__ import print_function
 
 # version
-version = 0, 86, 8
+version = 0, 86, 9, 1
 
 # imports
 import sys
@@ -1817,7 +1817,15 @@ class Job(object):
                                 scription_debug('[echo: %s] waiting for echo off (%s remaining)' % (self.get_echo(), remaining_timeout))
                                 remaining_timeout -= 0.1
                                 time.sleep(0.1)
-                            if self.get_echo():
+                            if not self.is_alive():
+                                # job died
+                                try:
+                                    raise ExecuteError('job died', process=self)
+                                except ExecuteError:
+                                    cls, exc, tb = sys.exc_info()
+                                    self._set_exc(exc, traceback=tb)
+                                    raise exc
+                            elif self.get_echo():
                                 # too long
                                 try:
                                     raise TimeoutError('Password prompt not seen.')
