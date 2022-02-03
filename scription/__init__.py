@@ -33,11 +33,20 @@ intelligently parses command lines
 from __future__ import print_function
 
 # version
-version = 0, 86, 9, 1
+version = 0, 86, 9, 12
 
 # imports
 import sys
-py_ver = sys.version_info[:2]
+pyver = sys.version_info[:2]
+PY2 = pyver < (3, )
+PY3 = pyver >= (3, )
+PY25 = (2, 5)
+PY26 = (2, 6)
+PY33 = (3, 3)
+PY34 = (3, 4)
+PY35 = (3, 5)
+PY36 = (3, 6)
+
 is_win = sys.platform.startswith('win')
 if is_win:
     import signal
@@ -51,11 +60,20 @@ else:
     import signal
     KILL_SIGNALS = [getattr(signal, sig) for sig in ('SIGTERM', 'SIGQUIT', 'SIGKILL') if hasattr(signal, sig)]
     from subprocess import Popen, PIPE
+
 from threading import Thread
 try:
     from Queue import Queue, Empty
 except ImportError:
     from queue import Queue, Empty
+
+if PY3:
+    from inspect import getfullargspec
+    def getargspec(method):
+        args, varargs, keywords, defaults, _, _, _ = getfullargspec(method)
+        return args, varargs, keywords, defaults
+else:
+    from inspect import getargspec
 
 import ast
 import codecs
@@ -86,7 +104,7 @@ io_lock = threading.Lock()
 
 # py 2/3 compatibility shims
 raise_with_traceback = None
-if py_ver < (3, 0):
+if PY2:
     b = str
     u = unicode
     bytes = b
@@ -392,7 +410,7 @@ def _add_annotations(func, annotations, script=False):
     add annotations as __scription__ to func
     '''
     scription_debug('adding annotations to %r' % (func.__name__, ))
-    params, varargs, keywords, defaults = inspect.getargspec(func)
+    params, varargs, keywords, defaults = getargspec(func)
     radio = {}
     if varargs:
         params.append(varargs)
@@ -463,7 +481,7 @@ def _func_globals(func):
     '''
     return the function's globals
     '''
-    if py_ver < (3, 0):
+    if PY2:
         return func.func_globals
     else:
         return func.__globals__
@@ -512,7 +530,7 @@ def _help(func, script=False):
     create help from __scription__ annotations and header defaults
     '''
     scription_debug('_help for', func.__name__, verbose=3)
-    params, vararg, keywordarg, defaults = inspect.getargspec(func)
+    params, vararg, keywordarg, defaults = getargspec(func)
     scription_debug('  PARAMS', params, vararg, keywordarg, defaults, verbose=3)
     params = func.params = list(params)
     vararg = func.vararg = [vararg] if vararg else []
@@ -1419,7 +1437,7 @@ def Run():
         scription_debug('Run already called once, returning')
         return
     globals()['HAS_BEEN_RUN'] = True
-    if py_ver < (3, 0):
+    if PY2:
         SYS_ARGS = [arg.decode(LOCALE_ENCODING) for arg in sys.argv]
     else:
         SYS_ARGS = sys.argv[:]
@@ -2234,14 +2252,14 @@ class OrmFile(object):
         settings = self._settings = OrmSection(name=filename)
         if not os.path.exists(filename):
             open(filename, 'w').close()
-        if py_ver < (3, 0):
+        if PY2:
             fh = open(filename)
         else:
             fh = open(filename, encoding=encoding)
         try:
             section = None
             for line in fh:
-                if py_ver < (3, 0):
+                if PY2:
                     line = line.decode(encoding)
                 line = line.strip()
                 if not line or line.startswith(('#',';')):

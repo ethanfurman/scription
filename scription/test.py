@@ -6,6 +6,7 @@ sys.path.insert(0, os.path.split(os.path.split(__file__)[0]))
 from antipathy import Path
 from scription import *
 from scription import _usage, version, empty, pocket, ormclassmethod, aenum_version
+from scription import pyver, PY2, PY25, PY33
 from textwrap import dedent
 from unittest import skip, skipUnless, SkipTest, TestCase as unittest_TestCase, main
 import datetime
@@ -44,7 +45,6 @@ for i in remove[::-1]:
 del remove
 
 is_win = sys.platform.startswith('win')
-py_ver = sys.version_info[:2]
 gubed = False
 
 class UTC(datetime.tzinfo):
@@ -57,7 +57,7 @@ class UTC(datetime.tzinfo):
         return datetime.timedelta(0)
 UTC = UTC()
 
-print('Scription %s.%s.%s, aenum %s.%s.%s -- Python %d.%d' % (version[:3] + aenum_version[:3] + py_ver), verbose=0)
+print('Scription %s.%s.%s, aenum %s.%s.%s -- Python %d.%d' % (version[:3] + aenum_version[:3] + pyver), verbose=0)
 
 def test_func_parsing(obj, func, tests, test_type=False):
     global gubed, script_name, script_main, script_commands, script_command, script_commandname
@@ -1794,7 +1794,7 @@ class TestExecution(TestCase):
                     "print('super secret santa soda sizzle?')\n"
                     "password = %sinput('make sure no one is watching you type!: ')\n"
                     "print('%%r?  Are you sure??' %% password)"
-                    % ('', 'raw_')[py_ver < (3, 0)]
+                    % ('', 'raw_')[PY2]
                     )
         finally:
             password_file.close()
@@ -1875,7 +1875,7 @@ class TestExecution(TestCase):
             self.assertTrue(job.returncode)
 
     if is_win:
-        if py_ver >= (3, 3):
+        if pyver >= PY33:
             def test_timeout(self):
                 "test timeout with subprocess alone"
                 command = Execute([sys.executable, '-c', 'import time; time.sleep(30)'], timeout=3, pty=False)
@@ -3496,7 +3496,7 @@ class TestTrivalent(TestCase):
             self.assertEqual(huh != False, True)
             self.assertEqual(huh == None, False)
             self.assertEqual(huh != None, True)
-            if py_ver >= (2, 5):
+            if pyver >= PY25:
                 self.assertEqual((0, 1, -1)[huh], 1)
         self.assertTrue(bool(true))
 
@@ -3510,7 +3510,7 @@ class TestTrivalent(TestCase):
             self.assertEqual(huh == True, False)
             self.assertEqual(huh != None, True)
             self.assertEqual(huh == None, False)
-            if py_ver >= (2, 5):
+            if pyver >= PY25:
                 self.assertEqual((0, 1, -1)[huh], -1)
         self.assertFalse(bool(false))
 
