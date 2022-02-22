@@ -1605,6 +1605,8 @@ class Job(object):
             except OSError as exc:
                 scription_debug('subprocess cwd:', cwd)
                 scription_debug('subprocess env:', env)
+                if exc.errno == 2:
+                    abort('cannot find %r' % (args[0], ))
                 raise
             self.pid = process.pid
             self.child_fd_out = process.stdout
