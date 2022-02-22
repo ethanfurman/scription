@@ -1548,6 +1548,8 @@ def Execute(args, cwd=None, password=None, password_timeout=None, input=None, in
         scription_debug('communicating')
         job.communicate(timeout=timeout, interactive=interactive, password=password, password_timeout=password_timeout, input=input, input_delay=input_delay)
     except BaseException as exc:
+        if getattr(exc, 'process', None) is None:
+            exc.process = job
         if interactive is None:
             echo(job.stdout)
             echo(job.stderr)
