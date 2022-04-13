@@ -1922,9 +1922,12 @@ class Job(object):
                 self._all_input.put(None)
                 # close handles and pipes
                 if self.process is not None:
-                    self.child_fd_in.close()
-                    self.child_fd_out.close()
-                    self.child_fd_err.close()
+                    if not isinstance(self.child_fd_in, int):
+                        self.child_fd_in.close()
+                    if not isinstance(self.child_fd_out, int):
+                        self.child_fd_out.close()
+                    if not isinstance(self.child_fd_err, int):
+                        self.child_fd_err.close()
                 else:
                     for fd in (self.child_fd, self.child_fd_err):
                         try:
