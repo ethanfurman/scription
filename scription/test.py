@@ -207,6 +207,13 @@ class TestVar(TestCase):
         else:
             self.assertTrue(False, 'var returned %r (should be (11, 49))' % (var(), ))
 
+    def test_data_attributes(self):
+        match = Var(re.match)
+        if match(r"it.*(worked)!", "it   worked!"):
+            self.assertEqual(match.groups(), ('worked', ))
+        else:
+            self.assertTrue(False, 'match returned %r' % match())
+
 
 class TestExports(TestCase):
 

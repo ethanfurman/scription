@@ -3733,27 +3733,33 @@ class Var(object):
     := for Python's less than 3.8
     '''
     def __init__(self, func=None):
-        self.data = _Var_Sentinel
-        self.func = func
+        self._data = _Var_Sentinel
+        self._func = func
     #
-    def __call__(self, *args):
-        if not args and self.data is _Var_Sentinel:
-            raise ValueError('nothing saved in var')
-        elif not args:
-            return self.data
-        elif self.func is not None:
+    def __call__(self, *args, **kwds):
+        if not args:
+            if self._data is _Var_Sentinel:
+                raise ValueError('nothing saved in var')
+            else:
+                return self._data
+        # we have args, what shall we do with them?
+        if self._func is not None:
             # run user-supplied function
-            self.data = self.func(*args)
-            return self.data
-        elif len(args) == 0:
-            # reset
-            self.data = _Var_Sentinel
+            self._data = self._func(*args, **kwds)
+            return self._data
+        elif kwds:
+            raise ValueError('keywords not supported unless function is specified')
         elif len(args) == 1:
-            self.data = args[0]
-            return self.data
+            self._data = args[0]
+            return self._data
         else:
-            self.data = args
-            return self.data
+            self._data = args
+            return self._data
+    #
+    def __getattr__(self, name):
+        if self._data is _Var_Sentinel:
+            raise ValueError('nothing saved in var')
+        return getattr(self._data, name)
 
 
 class user_ids(object):
