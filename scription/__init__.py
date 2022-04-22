@@ -3762,7 +3762,11 @@ class Var(object):
     def __getattr__(self, name):
         if self._data is _Var_Sentinel:
             raise ValueError('nothing saved in var')
-        return getattr(self._data, name)
+        try:
+            return getattr(self._data, name)
+        except AttributeError:
+            raise AttributeError('%r has no %r' % (self._data, name))
+
 
 
 class user_ids(object):
