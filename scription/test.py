@@ -1873,8 +1873,8 @@ class TestExecution(TestCase):
             job = Job([sys.executable, self.dead_file], pty=True)
             try:
                 job.communicate(input='anybody there?\n', timeout=60)
-            except IOError as exc:
-                if exc.errno != errno.EPIPE:
+            except OSError as exc:
+                if exc.errno != errno.ECHILD:
                     raise
                 self.assertEqual(job.stdout, 'usage message here\n')
             else:

@@ -33,7 +33,7 @@ intelligently parses command lines
 from __future__ import print_function
 
 # version
-version = 0, 86, 9
+version = 0, 86, 10, 4
 
 # imports
 import sys
@@ -105,6 +105,7 @@ io_lock = threading.Lock()
 # py 2/3 compatibility shims
 raise_with_traceback = None
 if PY2:
+    import __builtin__ as builtins
     b = str
     u = unicode
     bytes = b
@@ -121,6 +122,7 @@ if PY2:
             raise exc, None, tb
             '''))
 else:
+    import builtins
     b = bytes
     u = str
     bytes = b
@@ -1608,7 +1610,15 @@ class Job(object):
                 scription_debug('subprocess cwd:', cwd)
                 scription_debug('subprocess env:', env)
                 if exc.errno == 2:
-                    abort('cannot find %r' % (args[0], ))
+                    self.pid = -1
+                    self.closed = True
+                    self.terminated = True
+                    try:
+                        raise ExecutionError('%s --> %r' % (args[0], exc), process=self)
+                    except ExecutionError:
+                        _, exc, tb = sys.exc_info()
+                        self._set_exc(exc, traceback=tb)
+                        return
                 raise
             self.pid = process.pid
             self.child_fd_out = process.stdout
@@ -1642,8 +1652,8 @@ class Job(object):
                         os.execvp(args[0], args)
                 except Exception:
                     exc = sys.exc_info()[1]
-                    self.write_error("%s:  %s" % (exc.__class__.__name__, ' - '.join([str(a) for a in exc.args])))
-                    os._exit(-1)
+                    self.write_error("EXCEPTION: %s --> %s(%s)" % (args[0], exc.__class__.__name__, ', '.join([repr(a) for a in exc.args])))
+                    os._exit(Exit.UnknownError)
             # parent process
             os.close(error_write)
             self.child_fd_out = self.child_fd
@@ -1680,7 +1690,7 @@ class Job(object):
                 with io_lock:
                     q.put((name, None))
                     scription_debug('dying %s (from exception %s)' % (name, exc))
-                    if not isinstance(exc, OSError) or exc.errno not in (errno.EBADF, errno.EIO):
+                    if not isinstance(exc, OSError) or exc.errno not in (errno.EBADF, errno.EIO, errno.EPIPE):
                         raise self._set_exc(exc, traceback=tb)
         def write_comm(channel, q):
             try:
@@ -1705,7 +1715,10 @@ class Job(object):
                     scription_debug('write_comm dying from self.abort')
             except Exception:
                 _, exc, tb = sys.exc_info()
-                raise self._set_exc(exc, traceback=tb)
+                if isinstance(exc, (IOError, OSError)) and exc.errno == errno.EPIPE:
+                    pass
+                else:
+                    raise self._set_exc(exc, traceback=tb)
         t = Thread(target=read_comm, name='stdout', args=('stdout', self.child_fd_out, self._all_output))
         t.daemon = True
         t.start()
@@ -1740,6 +1753,7 @@ class Job(object):
         # password_timeout  -> time allowed for successful password transmission
         # timeout           -> time allowed for successful completion of job
         # interactive       -> False = record only, 'echo' = echo output as we get it
+        self.raise_if_exceptions()
         try:
             deadman_switch = None
             scription_debug('timeout: %r, password_timeout: %r' % (timeout, password_timeout))
@@ -2053,6 +2067,11 @@ class Job(object):
     def raise_if_exceptions(self):
         "raise if any stored exceptions"
         scription_debug('saved exceptions: %r' % (self.exceptions, ))
+        scription_debug('stderr: %r' % (self.stderr, ))
+        if self.stderr and len(self.stderr.split('\n')) == 1 and self.stderr.startswith('EXCEPTION: '):
+            # report the exception raised when trying to start the child
+            msg = self.stderr[11:]
+            raise ExecuteError(msg, process=self)
         if not self.exceptions:
             return
         if len(self.exceptions) == 1:
@@ -2135,7 +2154,7 @@ class Job(object):
         scription_debug('writing %r' % data, verbose=2)
         if not self.is_alive():
             try:
-                raise IOError(errno.EPIPE, 'Broken pipe.')
+                raise OSError(errno.ECHILD, "No child processes")
             except Exception:
                 _, exc, tb = sys.exc_info()
                 raise self._set_exc(exc, traceback=tb)
