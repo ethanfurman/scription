@@ -33,7 +33,7 @@ intelligently parses command lines
 from __future__ import print_function
 
 # version
-version = 0, 86, 10
+version = 0, 86, 11, 2
 
 # imports
 import sys
@@ -117,6 +117,7 @@ if PY2:
     from itertools import izip_longest as zip_longest
     from __builtin__ import print as _print
     from __builtin__ import raw_input as raw_input
+    from __builtin__ import type as type_of
     exec(textwrap.dedent('''\
         def raise_with_traceback(exc, tb):
             raise exc, None, tb
@@ -134,6 +135,7 @@ else:
     from itertools import zip_longest
     from builtins import print as _print
     from builtins import input as raw_input
+    from builtins import type as type_of
     exec(textwrap.dedent('''\
         def raise_with_traceback(exc, tb):
             raise exc.with_traceback(tb)
@@ -605,9 +607,9 @@ def _help(func, script=False):
         if arg_type is _identity and default is not empty and default is not None:
             if kind in ('multi', 'multireq'):
                 if default:
-                    arg_type = type(default[0])
+                    arg_type = type_of(default[0])
             else:
-                arg_type = type(default)
+                arg_type = type_of(default)
         spec.kind = kind
         spec.abbrev = abbrev
         spec.type = arg_type
@@ -639,7 +641,7 @@ def _help(func, script=False):
             annote._use_default = True
             if annote.kind not in ('multi', 'multireq'):
                 if annote.type is _identity and dflt is not None:
-                    annote.type = type(dflt)
+                    annote.type = type_of(dflt)
                 annote._script_default = annote.type(dflt)
             else:
                 if dflt is None:
@@ -648,7 +650,7 @@ def _help(func, script=False):
                     if not isinstance(dflt, tuple):
                         dflt = (dflt, )
                     if annote.type is _identity and dflt:
-                        annote.type = type(dflt[0])
+                        annote.type = type_of(dflt[0])
                     new_dflt = []
                     for d in dflt:
                         new_dflt.append(annote.type(d))
@@ -1173,7 +1175,8 @@ def _usage(func, param_line_args):
                 else:
                     args.append(annote)
     args = [arg.value for arg in sorted(args, key=lambda a: a._order) if arg._target is empty]
-    scription_debug('args: %r\nvarargs: %r' % (args, varargs))
+    scription_debug('args:    %r' % (args, ))
+    scription_debug('varargs: %r' % (varargs, ))
     if varargs is not None:
         main_args = tuple(args) + varargs
     else:
@@ -1262,7 +1265,7 @@ class Script(object):
                     kind = 'flag'
                 else:
                     kind = 'option'
-                spec = Spec('', kind, None, type(annotation), default=annotation)
+                spec = Spec('', kind, None, type_of(annotation), default=annotation)
             spec.__name__ = name
             if spec.usage is empty:
                 spec.usage = name.upper()
@@ -1358,7 +1361,7 @@ class Spec(object):
         elif kind in ('multi', 'multireq'):
             arg_type_default = tuple()
         elif default is not empty:
-            arg_type_default = type(default)
+            arg_type_default = type_of(default)
         if abbrev not in(empty, None) and not isinstance(abbrev, tuple):
             abbrev = (abbrev, )
         if usage is not empty:
@@ -1398,21 +1401,35 @@ class Spec(object):
 
     @property
     def value(self):
+        scription_debug('getting value for %r' % self.__name__)
         if self._cli_value is not empty:
             value = self._cli_value
+            scription_debug('   cli --> %r' % (value, ), verbose=2)
         elif self._envvar is not empty and pocket(value=os.environ.get(self._envvar)):
             value = pocket.value
             if self.kind == 'multi':
                 value = tuple([self.type(v) for v in _split_on_comma(value)])
             else:
                 value = self.type(value)
+            scription_debug('   env --> %r' % (value, ), verbose=2)
         elif self._script_default is not empty and self._use_default:
             value = self._script_default
-            if value is not None and self._type_default == () and not isinstance(value, tuple):
-                value = self.type(self._script_default)
-                value = (value, )
+            scription_debug('   default --> %r' % (value, ), verbose=2)
+            scription_debug('   type of --> %r' % (self.type, ), verbose=2)
+            if PY2 and isinstance(value, bytes):
+                value = value.decode(LOCALE_ENCODING)
+            if value is not None:
+                if self._type_default == ():
+                    if isinstance(value, tuple):
+                        value = tuple(self.type(v) for v in value)
+                    else:
+                        value = (self.type(value), )
+                else:
+                    value = self.type(value)
+            scription_debug('     final --> %r' % (value, ), verbose=2)
         elif self._type_default is not empty:
             value = self._type_default
+            scription_debug('   type default --> %r' % (value, ), verbose=2)
         else:
             raise ScriptionError('no value specified for %s' % self.usage)
         return value
@@ -1568,7 +1585,8 @@ class Job(object):
     if pty is True runs command in a forked process, otherwise runs in a subprocess
     """
 
-    # subprocess is used record the process
+    name = None
+    # if subprocess is used record the process
     process = None
     returncode = None
     # if killed by a signal, record it
@@ -1601,6 +1619,7 @@ class Job(object):
             args = shlex.split(args)
         else:
             args = list(args)
+        self.name = args[0]
         if not pty:
             # use subprocess
             scription_debug('subprocess args:', args)
@@ -3009,6 +3028,8 @@ Falsey = Trivalent.false
 def Bool(arg):
     if arg in (True, False):
         return arg
+    if isinstance(arg, Trivalent):
+        return arg
     return arg.lower() in "true t yes y 1 on".split()
 
 def InputFile(arg):
@@ -3253,7 +3274,7 @@ def table_display(rows, widths=None, types=None, header=True, display_none=None,
         elif not isinstance(row, (tuple, list)):
             # handle a single, joined row
             if not isinstance(row, basestring):
-                raise ValueError('joined row value must be a string, not %r [%r]' % (type(row), row))
+                raise ValueError('joined row value must be a string, not %r [%r]' % (type_of(row), row))
             if len(row) == 1:
                 # make a line using the row character
                 row = row * single_cell_width
