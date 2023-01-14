@@ -33,7 +33,7 @@ intelligently parses command lines
 from __future__ import print_function
 
 # version
-version = 0, 86, 12
+version = 0, 86, 13, 1
 
 # imports
 import sys
@@ -495,7 +495,7 @@ def _func_globals(func):
 def _get_version(from_module, _try_other=True):
     for ver in _version_strings:
         if from_module.get(ver):
-            version = getattr(from_module, ver)
+            version = from_module.get(ver)
             if not isinstance(version, basestring):
                 version = '.'.join([str(x) for x in version])
             break
@@ -507,17 +507,20 @@ def _get_version(from_module, _try_other=True):
             version = 'unknown'
         else:
             if package in sys.modules and any(hasattr(sys.modules[package], v) for v in _version_strings):
-                version = sys.modules[package].version
+                for ver in _version_strings:
+                    version = getattr(sys.modules[package], ver, '')
+                    if version:
+                        break
                 if not isinstance(version, basestring):
                     version = '.'.join([str(x) for x in version])
             elif _try_other:
                 version = ' / '.join(_get_all_versions(from_module, _try_other=False))
             if not version.strip():
                 version = 'unknown'
-    return version + ' running on Python %s' % '.'.join([str(i) for i in sys.version_info])
+    return version
 
 def _get_all_versions(from_module, _try_other=True):
-    versions = []
+    versions = ['%s=%s' % (from_module['module']['script_name'], _get_version(from_module, _try_other=False))]
     for name, module in sys.modules.items():
         fm_obj = from_module.get(name)
         if fm_obj is module:
@@ -767,7 +770,7 @@ class NameSpace(object):
 
     def __repr__(self):
         return '%s(%r)' % (self.__class__.__name__, self.__dict__)
-    
+
     def __eq__(self, other):
         if not isinstance(other, self.__class__):
             return NotImplemented
@@ -780,20 +783,20 @@ class NameSpace(object):
 
     def __contains__(self, name):
         return name in self.__dict__
-    
+
     def __iter__(self):
         for key, value in sorted(self.__dict__.items()):
             yield key, value
-    
+
     def __getitem__(self, name):
         try:
             return self.__dict__[name]
         except KeyError:
             raise ScriptionError("namespace object has nothing named %r" % name)
-    
+
     def __setitem__(self, name, value):
         self.__dict__[name] = value
-    
+
     def get(self, key, default=None):
         # deprecated, will be removed by 1.0
         try:
@@ -2045,7 +2048,7 @@ class Job(object):
         return True
 
     def kill(self, error='raise'):
-        '''kills child job, or raises UnableToKillJob                              
+        '''kills child job, or raises UnableToKillJob
 
         parent method'''
         exc = None
@@ -2162,7 +2165,7 @@ class Job(object):
     def terminate(self):
         '''
         Send SIGTERM to child.
-        
+
         parent method'''
         scription_debug('terminating')
         if self.is_alive() and self.kill_signals:
