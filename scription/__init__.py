@@ -161,6 +161,7 @@ __all__ = (
     # added here as well for pylakes' benefit
     'script_main',          # Script decorator instance if used
     'script_commands',      # defined commands
+    'script_aliases',       # alternate command names
     'script_command',       # callback to run chosen command function
     'script_command_name',  # name of above
     'script_fullname',      # sys.argv[0]
@@ -214,6 +215,7 @@ script_fullname = script_name = script_verbosity = script_command = script_comma
 script_abort_message = script_exception_lines = None
 script_module = {}
 script_commands = {}
+script_aliases = {}
 
 registered = False
 run_once = False
@@ -753,6 +755,7 @@ def _init_script_module(func):
     script_module['script_name'] = '<unknown>'
     script_module['script_main'] = THREAD_STORAGE.script_main
     script_module['script_commands'] = {}
+    script_module['script_aliases'] = {}
     script_module['script_command'] = None
     script_module['script_command_name'] = ''
     script_module['script_fullname'] = ''
@@ -1212,16 +1215,32 @@ def _usage(func, param_line_args):
 ## required
 class Alias(object):
     "adds aliases for the function"
-    def __init__(self, *aliases):
+    def __init__(self, *aliases, **canonical):
         scription_debug('recording aliases', aliases, verbose=2)
+        if len(canonical) > 1:
+            raise TypeError('invalid keywords: %s' % ', '.join(repr(k) for k in canonical))
+        elif canonical and 'canonical' not in canonical:
+            raise ScriptionError('invalid keyword: %s' % ', '.join(repr(k) for k in canonical))
         self.aliases = aliases
+        self.canonical = canonical.get('canonical', False)
     def __call__(self, func):
         scription_debug('applying aliases to', func.__name__, verbose=2)
         if not script_module:
             _init_script_module(func)
+        canonical = self.canonical
+        if canonical:
+            func_name = func.__name__.replace('_', '-')
+            try:
+                del script_module['script_commands'][func_name]
+            except KeyError:
+                raise ScriptionError('canonical Alias %r must run after (be placed before) its Command' % self.aliases[0])
         for alias in self.aliases:
             alias_name = alias.replace('_', '-')
-            script_module['script_commands'][alias_name] = func
+            if canonical:
+                script_module['script_commands'][alias_name] = func
+                canonical = False
+            else:
+                script_module['script_aliases'][alias_name] = func
         return func
 
 
@@ -1467,6 +1486,8 @@ def Run():
         SYS_ARGS = sys.argv[:]
     Script = script_module['script_main']
     Command = script_module['script_commands']
+    Alias = script_module['script_aliases']
+    Alias.update(Command)
     try:
         prog_path, prog_name = os.path.split(SYS_ARGS[0])
         if prog_name == '__main__.py':
@@ -1491,27 +1512,27 @@ def Run():
                 sys.exit(Exit.Success)
             else:
                 func_name = func_name.replace('_', '-')
-        func = Command.get(func_name)
+        func = Alias.get(func_name)
         if func is not None:
             prog_name = SYS_ARGS[1].lower()
             param_line = [prog_name] + SYS_ARGS[2:]
         else:
-            func = Command.get(prog_name.lower(), None)
+            func = Alias.get(prog_name.lower())
             if func is None and prog_name.lower().endswith('.py'):
-                func = Command.get(prog_name.lower()[:-3], None)
+                func = Alias.get(prog_name.lower()[:-3])
             if func is not None and func_name != '--help':
                 param_line = [prog_name] + SYS_ARGS[1:]
             else:
-                prog_name_is_command = prog_name.lower() in Command
+                prog_name_is_command = prog_name.lower() in Alias
                 if not prog_name_is_command and prog_name.lower().endswith('.py'):
-                    prog_name_is_command = prog_name.lower()[:-3] in Command
+                    prog_name_is_command = prog_name.lower()[:-3] in Alias
                 if script_module['__doc__']:
                     _print(script_module['__doc__'].strip())
                 if len(Command) == 1:
                     _detail_help = True
                 else:
                     _detail_help = False
-                    _name_length = max([len(name) for name in Command])
+                    _name_length = max([len(name) for name in Alias])
                 if not (_detail_help or script_module['__doc__']):
                     _print("Available commands/options in", script_module['script_name'])
                 if Script and Script.__usage__:

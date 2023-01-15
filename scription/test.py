@@ -1566,50 +1566,92 @@ class TestHelp(TestCase):
                 "Main()\n"
                 )
         target_result = (
-                "Available commands/options in help_test\n"
+                "global settings: --conf CONF\n"
                 "\n"
-                "   global settings: --conf CONF\n"
+                "    CONF   configuration file\n"
                 "\n"
-                "   another-thing  THIS THAT\n"
-                "   whatever       THIS THAT\n"
+                "whatever THIS THAT\n"
+                "\n"
+                "    THIS   this argument    \n"
+                "    THAT   that argument    \n"
                 )
         test_file = self.write_script(file_data)
         result = Execute([sys.executable, test_file, '--help'], timeout=300)
         self.assertMultiLineEqual(result.stdout.strip(), target_result.strip())
 
-    # def test_alias_matches_script_name(self):
-    #     file_data = (
-    #             "import sys\n"
-    #             "sys.path.insert(0, %r)\n"
-    #             "from scription import *\n"
-    #             "\n"
-    #             "@Script(\n"
-    #             "        conf=('configuration file', OPTION),\n"
-    #             "        )\n"
-    #             "def main():\n"
-    #             "    pass\n"
-    #             "\n"
-    #             "@Command(\n"
-    #             "        this=('this argument',),\n"
-    #             "        that=('that argument',),\n"
-    #             "        )\n"
-    #             "@Alias('help-test')\n"
-    #             "def whatever(this, that):\n"
-    #             "    pass\n"
-    #             "\n"
-    #             "\n"
-    #             "Main()\n"
-    #             )
-    #     target_result = (
-    #             "Available commands/options in help_test\n"
-    #             "\n"
-    #             "   global options: --conf CONF\n"
-    #             "\n"
-    #             "   help_test  THIS THAT\n"
-    #             )
-    #     test_file = self.write_script(file_data)
-    #     result = Execute([sys.executable, test_file, '--help'], timeout=300)
-    #     self.assertMultiLineEqual(result.stdout.strip(), target_result.strip())
+    def test_alias_command_canonical(self):
+        file_data = (
+                "import sys\n"
+                "sys.path.insert(0, %r)\n"
+                "from scription import *\n"
+                "\n"
+                "@Script(\n"
+                "        conf=('configuration file', OPTION),\n"
+                "        )\n"
+                "def main():\n"
+                "    pass\n"
+                "\n"
+                "@Alias('another-thing', canonical=True)\n"
+                "@Command(\n"
+                "        this=('this argument',),\n"
+                "        that=('that argument',),\n"
+                "        )\n"
+                "def whatever(this, that):\n"
+                "    pass\n"
+                "\n"
+                "\n"
+                "Main()\n"
+                )
+        target_result = (
+                "global settings: --conf CONF\n"
+                "\n"
+                "    CONF   configuration file\n"
+                "\n"
+                "another-thing THIS THAT\n"
+                "\n"
+                "    THIS   this argument    \n"
+                "    THAT   that argument    \n"
+                )
+        test_file = self.write_script(file_data)
+        result = Execute([sys.executable, test_file, '--help'], timeout=300)
+        self.assertMultiLineEqual(result.stdout.strip(), target_result.strip(), result.stderr)
+
+    def test_alias_matches_script_name(self):
+        file_data = (
+                "import sys\n"
+                "sys.path.insert(0, %r)\n"
+                "from scription import *\n"
+                "\n"
+                "@Script(\n"
+                "        conf=('configuration file', OPTION),\n"
+                "        )\n"
+                "def main():\n"
+                "    pass\n"
+                "\n"
+                "@Command(\n"
+                "        this=('this argument',),\n"
+                "        that=('that argument',),\n"
+                "        )\n"
+                "@Alias('help-test')\n"
+                "def whatever(this, that):\n"
+                "    pass\n"
+                "\n"
+                "\n"
+                "Main()\n"
+                )
+        target_result = (
+                "global settings: --conf CONF\n"
+                "\n"
+                "    CONF   configuration file\n"
+                "\n"
+                "help-test THIS THAT\n"
+                "\n"
+                "    THIS   this argument    \n"
+                "    THAT   that argument    \n"
+                )
+        test_file = self.write_script(file_data)
+        result = Execute([sys.executable, test_file, '--help'], timeout=300)
+        self.assertMultiLineEqual(result.stdout.strip(), target_result.strip())
 
     def test_multiple_commands(self):
         file_data = (
@@ -1645,7 +1687,6 @@ class TestHelp(TestCase):
                 "\n"
                 "   global settings: --conf CONF\n"
                 "\n"
-                "   another-thing  THIS THAT\n"
                 "   that-thing     OTHER\n"
                 "   whatever       THIS THAT\n"
                 )
