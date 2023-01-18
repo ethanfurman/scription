@@ -233,6 +233,7 @@ class TestCommandlineProcessing(TestCase):
         script_module['script_commands'] = {}
         script_module['script_command'] = None
         script_module['script_commandname'] = ''
+        script_module['script_aliases'] = ''
         script_module['script_exception_lines'] = ''
 
     def test_envvar(self):
@@ -1456,6 +1457,14 @@ class TestCommandNames(TestCase):
                 "    'testing dashes in name'\n"
                 "    print('success!', verbose=0)\n"
                 "\n"
+                "@Command(\n"
+                "        hah=('misc options', 'flag'),\n"
+                "        wow=('oh yeah', 'option'),\n"
+                "        )\n"
+                "def test_Capital(hah, wow):\n"
+                "    'testing capital in name'\n"
+                "    print('it worked!!', verbose=0)\n"
+                "\n"
                 "@Command()\n"
                 "def some_script():\n"
                 "    'testing caps in name'\n"
@@ -1467,29 +1476,36 @@ class TestCommandNames(TestCase):
         finally:
             command_file.close()
 
-
     def test_dash_in_name(self):
         for name in ('test_dash', 'test-dash'):
             cmdline = ' '.join([sys.executable, self.command_file, name])
-            result = Execute(cmdline, timeout=300)
-            self.assertTrue(result.returncode == 0, '%s failed! [%r]\n%s\n%s' % (cmdline, result.returncode, result.stdout, result.stderr))
-            self.assertEqual(result.stderr, '', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
-            self.assertEqual(result.stdout, 'success!\n', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
+            result = Execute(cmdline, timeout=10)
+            self.assertTrue(result.returncode == 0, '%r failed! [%r]\n%r\n%r' % (cmdline, result.returncode, result.stdout, result.stderr))
+            self.assertEqual(result.stderr, '', '%r failed!\n%r\n%r' % (cmdline, result.stdout, result.stderr))
+            self.assertEqual(result.stdout, 'success!\n', '%r failed!\n%r\n%r' % (cmdline, result.stdout, result.stderr))
 
-    def test_capital_in_name(self):
+    def test_capital_in_command_name(self):
+        for name in ('test_capital', 'Test-CAPITAL'):
+            cmdline = ' '.join([sys.executable, self.command_file, name])
+            result = Execute(cmdline, timeout=10)
+            self.assertTrue(result.returncode == 0, '%r failed! [%r]\n%r\n%r' % (cmdline, result.returncode, result.stdout, result.stderr))
+            self.assertEqual(result.stderr, '', '%r failed!\n%r\n%r' % (cmdline, result.stdout, result.stderr))
+            self.assertEqual(result.stdout, 'it worked!!\n', '%r failed!\n%r\n%r' % (cmdline, result.stdout, result.stderr))
+
+    def test_capital_in_command_line(self):
         cmdline = ' '.join([sys.executable, self.command_file])
-        result = Execute(cmdline, timeout=300)
-        self.assertTrue(result.returncode == 0, '%s failed! [%r]\n%s\n%s' % (cmdline, result.returncode, result.stdout, result.stderr))
-        self.assertEqual(result.stderr, '', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
-        self.assertEqual(result.stdout, 'aint that nice.\n', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
+        result = Execute(cmdline, timeout=10)
+        self.assertTrue(result.returncode == 0, '%r failed! [%r]\n%r\n%r' % (cmdline, result.returncode, result.stdout, result.stderr))
+        self.assertEqual(result.stderr, '', '%r failed!\n%r\n%r' % (cmdline, result.stdout, result.stderr))
+        self.assertEqual(result.stdout, 'aint that nice.\n', '%r failed!\n%r\n%r' % (cmdline, result.stdout, result.stderr))
         cmdline = ' '.join([sys.executable, self.command_file, '--help'])
-        result = Execute(cmdline, timeout=300)
-        self.assertTrue(result.returncode == 0, '%s failed! [%r]\n%s\n%s' % (cmdline, result.returncode, result.stdout, result.stderr))
-        self.assertEqual(result.stderr, '', '%s failed!\n%s\n%s' % (cmdline, result.stdout, result.stderr))
+        result = Execute(cmdline, timeout=10)
+        self.assertTrue(result.returncode == 0, '%r failed! [%r]\n%r\n%r' % (cmdline, result.returncode, result.stdout, result.stderr))
+        self.assertEqual(result.stderr, '', '%r failed!\n%r\n%r' % (cmdline, result.stdout, result.stderr))
         self.assertEqual(
                 result.stdout,
-                'just a test doc\n   some-script  testing caps in name\n   test-dash    testing dashes in name\n',
-                '%s failed!\nstdout: %r\nstderr: %r' % (cmdline, result.stdout, result.stderr),
+                'just a test doc\n   some-script   testing caps in name\n   test-capital  testing capital in name\n   test-dash     testing dashes in name\n',
+                '%r failed!\nstdout: %r\nstderr: %r' % (cmdline, result.stdout, result.stderr),
                 )
 
 class TestHelp(TestCase):

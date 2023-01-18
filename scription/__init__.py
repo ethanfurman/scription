@@ -160,10 +160,11 @@ __all__ = (
     # the following are actually injected directly into the calling module, but are
     # added here as well for pylakes' benefit
     'script_main',          # Script decorator instance if used
-    'script_commands',      # defined commands
     'script_aliases',       # alternate command names
+    'script_commands',      # defined commands
     'script_command',       # callback to run chosen command function
     'script_command_name',  # name of above
+    'script_command_line',  # original command line
     'script_fullname',      # sys.argv[0]
     'script_name',          # above without path
     'script_verbosity',     # vebosity level from command line
@@ -211,7 +212,7 @@ for arg in sys.argv:
             SCRIPTION_DEBUG = 5
 
 module = verbose = script_main = None
-script_fullname = script_name = script_verbosity = script_command = script_command_name = None
+script_fullname = script_name = script_verbosity = script_command = script_command_name = script_command_line = None
 script_abort_message = script_exception_lines = None
 script_module = {}
 script_commands = {}
@@ -1229,13 +1230,15 @@ class Alias(object):
             _init_script_module(func)
         canonical = self.canonical
         if canonical:
-            func_name = func.__name__.replace('_', '-')
+            func_name = func.__name__.replace('_', '-').lower()
             try:
                 del script_module['script_commands'][func_name]
             except KeyError:
                 raise ScriptionError('canonical Alias %r must run after (be placed before) its Command' % self.aliases[0])
         for alias in self.aliases:
-            alias_name = alias.replace('_', '-')
+            alias_name = alias.replace('_', '-').lower()
+            if alias_name in script_module['script_commands']:
+                raise ScriptionError('alias %r already in use as command %r' % (alias_name, alias_name))
             if canonical:
                 script_module['script_commands'][alias_name] = func
                 canonical = False
@@ -1263,12 +1266,16 @@ class Command(object):
         if func.__doc__ is not None:
             func.__doc__ = textwrap.dedent(func.__doc__).strip()
         _add_annotations(func, self.annotations)
-        func_name = func.__name__.replace('_', '-')
+        func_name = func.__name__.replace('_', '-').lower()
         if func_name.startswith('-'):
             # internal name, possibly shadowing a keyword or data type -- an alias will be needed
             # to access this command
             pass
         else:
+            if func_name in script_module['script_commands']:
+                raise ScriptionError('command name %r already defined' % (func_name, ))
+            elif func_name in script_module['script_aliases']:
+                raise ScriptionError('command name %r already defined as an alias' % (func_name, ))
             script_module['script_commands'][func_name] = func
         _help(func)
         return func
@@ -1313,7 +1320,7 @@ class Script(object):
             _init_script_module(func)
         if script_module['script_commands']:
             raise ScriptionError('Script must be defined before any Command')
-        func_name = func.__name__.replace('_', '-')
+        func_name = func.__name__.replace('_', '-').lower()
         if func_name in script_module['script_commands']:
             raise ScriptionError('%r cannot be both Command and Script' % func_name)
         if func.__doc__ is not None:
