@@ -1493,6 +1493,7 @@ def Run():
         SYS_ARGS = [arg.decode(LOCALE_ENCODING) for arg in sys.argv]
     else:
         SYS_ARGS = sys.argv[:]
+    script_module['script_command_line'] = SYS_ARGS
     Script = script_module['script_main']
     Command = script_module['script_commands']
     Alias = script_module['script_aliases']
