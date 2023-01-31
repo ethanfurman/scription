@@ -33,7 +33,7 @@ intelligently parses command lines
 from __future__ import print_function
 
 # version
-version = 0, 86, 14
+version = 0, 86, 15, 1
 
 # imports
 import sys
@@ -80,7 +80,6 @@ import codecs
 import datetime
 import email
 import errno
-import inspect
 import locale
 import logging
 import os
@@ -92,7 +91,7 @@ import textwrap
 import threading
 import time
 import traceback
-from aenum import Enum, IntEnum, Flag, export, version as aenum_version
+from aenum import Enum, IntEnum, Flag, export
 from collections import OrderedDict
 from math import floor
 from sys import stdin, stdout, stderr
@@ -140,6 +139,9 @@ else:
         def raise_with_traceback(exc, tb):
             raise exc.with_traceback(tb)
             '''))
+
+    # keep pyflakes happy
+builtins
 
 def _input(*args, **kwds):
     from warnings import warn
