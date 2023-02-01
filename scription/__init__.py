@@ -1234,6 +1234,7 @@ class Alias(object):
         if canonical:
             func_name = func.__name__.replace('_', '-').lower()
             try:
+                script_module['script_aliases'][func_name] = func
                 del script_module['script_commands'][func_name]
             except KeyError:
                 raise ScriptionError('canonical Alias %r must run after (be placed before) its Command' % self.aliases[0])

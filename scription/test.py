@@ -3,9 +3,10 @@ import os
 import sys
 sys.path.insert(0, os.path.split(os.path.split(__file__)[0]))
 
+from aenum import version as aenum_version
 from antipathy import Path
 from scription import *
-from scription import _usage, version, empty, pocket, ormclassmethod, aenum_version
+from scription import _usage, version, empty, pocket, ormclassmethod
 from scription import pyver, PY2, PY25, PY33
 from textwrap import dedent
 from unittest import skip, skipUnless, SkipTest, TestCase as unittest_TestCase, main
