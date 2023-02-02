@@ -153,7 +153,7 @@ def _input(*args, **kwds):
 __all__ = (
     'Alias', 'Command', 'Script', 'Main', 'Run', 'Spec',
     'Bool','InputFile', 'OutputFile', 'IniError', 'IniFile', 'OrmError', 'OrmFile', 'NameSpace', 'OrmSection',
-    'FLAG', 'KEYWORD', 'OPTION', 'MULTI', 'MULTIREQ', 'REQUIRED', 'RADIO',
+    'FLAG', 'OPTION', 'MULTI', 'MULTIREQ', 'REQUIRED',
     'ScriptionError', 'ExecuteError', 'FailedPassword', 'TimeoutError', 'Execute', 'Job', 'ProgressView', 'ViewProgress',
     'abort', 'echo', 'error', 'get_response', 'help', 'input', 'raw_input', 'mail', 'user_ids', 'print', 'box', 'table_display',
     'stdout', 'stderr', 'wait_and_check', 'b', 'bytes', 'str', 'u', 'unicode', 'ColorTemplate', 'Color',
@@ -378,8 +378,6 @@ class SpecKind(DocEnum):
     MULTI = "multiple values per name (list form, no whitespace)"
     MULTIREQ = "multiple values per name (list form, no whitespace, required)"
     FLAG = "boolean/trivalent value per name"
-    KEYWORD = "unknown options"
-    RADIO = "mutually exclusive flags/options"
 
 
 # exceptions
