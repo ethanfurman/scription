@@ -1334,7 +1334,7 @@ class TestCommandlineProcessing(TestCase):
                 _usage, tester, 'tester -o google --darn=ack -g ick'.split(),
                 )
 
-    def test_target(self):
+    def test_target_1(self):
         @Command(
                 config=Spec('use the specified Markdoc configuration', OPTION, type=Path),
                 log_level=Spec('how verbose to be in the log file', OPTION, choices=['DEBUG','INFO','WARN','ERROR'], force_default='INFO', radio='log'),
@@ -1354,6 +1354,27 @@ class TestCommandlineProcessing(TestCase):
                 ScriptionError,
                 'only one of LOG_LEVEL, QUIET, and VERBOSE may be specified',
                 _usage, tester, 'tester --quiet --verbose'.split(),
+                )
+
+    def test_target_2(self):
+        from dbf import Date
+        @Command(
+                date=Spec('date to examine', OPTION, type=Date, radio='date'),
+                email=Spec('send email to these addresses', MULTI),
+                yesterday=Spec('examine yesterday', FLAG, target='date', radio='date', default=Date.today().replace(delta_day=-1)),
+                )
+        def tester(date, email):
+            pass
+        tests = (
+                ( 'tester'.split(), (), {}, (None, ()), {}),
+                ( 'tester -d 2023-01-17'.split(), (), {}, (Date(2023, 1, 17), ()), {}),
+                ( 'tester --yesterday'.split(), (), {}, (Date.today().replace(delta_day=-1), ()), {}),
+                )
+        test_func_parsing(self, tester, tests)
+        self.assertRaisesRegex(
+                ScriptionError,
+                'only one of DATE and YESTERDAY may be specified',
+                _usage, tester, 'tester --date=2023-01-17 --yesterday'.split(),
                 )
 
 

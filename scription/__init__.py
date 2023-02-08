@@ -896,6 +896,7 @@ def _usage(func, param_line_args):
         scription_debug('kwd_arg_spec', kwd_arg_spec, verbose=3)
         annotations.update(Script.command.__scription__)
     annotations.update(func.__scription__)
+    scription_debug('annotations: %r' % annotations, verbose=2)
     if func._var_arg:
         var_arg_spec = func._var_arg
     if func._kwd_arg:
@@ -1040,12 +1041,14 @@ def _usage(func, param_line_args):
                     value = annote.type(value)
                     annote._cli_value = value
                 # check for other radio set
-                scription_debug('checking radio settings for flag %s' % (item, ), verbose=2)
-                if value and annote._radio:
+                scription_debug('checking radio setting %r for flag %s in %r' % (annote._radio, item, radio), verbose=2)
+                scription_debug('value: %r' % (value, ), verbose=2)
+                if annote._radio:
                     if annote._radio in radio:
                         raise ScriptionError('only one of %s may be specified'
                                 % _and_list(func.radio[annote._radio]))
                     radio.add(annote._radio)
+                    scription_debug('radio settings: %r' % radio, verbose=2)
                 value = None
             elif annote.kind in ('multi', 'option'):
                 scription_debug('(multi)option' , verbose=2)
@@ -1064,12 +1067,14 @@ def _usage(func, param_line_args):
                     if annote.choices and value not in annote.choices:
                         raise ScriptionError('%s: %r not in [ %s ]' % (annote.usage, value, ' | '.join(annote.choices)), use_help=True)
                     annote._cli_value = annote.type(value)
-                    scription_debug('checking radio settings for option %s' % (item, ), verbose=2)
+                    scription_debug('checking radio setting %r for option %s in %r' % (annote._radio, item, radio), verbose=2)
+                    scription_debug('value: %r' % (value, ), verbose=2)
                     if annote._radio:
                         if annote._radio in radio:
                             raise ScriptionError('only one of %s may be specified'
                                     % _and_list(func.radio[annote._radio]))
                         radio.add(annote._radio)
+                        scription_debug('radio settings: %r' % radio, verbose=2)
                 else:
                     scription_debug('processing as multi-option', verbose=2)
                     # value could be a list of comma-separated values
