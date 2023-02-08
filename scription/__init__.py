@@ -1005,7 +1005,7 @@ def _usage(func, param_line_args):
                 scription_debug('name & value', verbose=2)
                 item, value = item.split('=', 1)
             item = item.replace('-','_')
-            if item.lower() == 'verbose':
+            if item.lower() == 'verbose' and 'verbose' not in annotations:
                 scription_debug('verbosity option', verbose=2)
                 try:
                     VERBOSITY = int(value)

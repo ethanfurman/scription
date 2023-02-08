@@ -110,13 +110,13 @@ def test_func_parsing(obj, func, tests, test_type=False):
                 spec._cli_value = empty
     finally:
         module = scription.script_module
-        script_module['script_name'] = '<unknown>'
-        script_module['script_fullname'] = '<unknown>'
-        script_module['script_main'] = None
-        script_module['script_commands'] = {}
-        script_module['script_command'] = None
-        script_module['script_commandname'] = ''
-        script_module['script_exception_lines'] = ''
+        module['script_name'] = '<unknown>'
+        module['script_fullname'] = '<unknown>'
+        module['script_main'] = None
+        module['script_commands'] = {}
+        module['script_command'] = None
+        module['script_commandname'] = ''
+        module['script_exception_lines'] = ''
 
 def test_func_docstrings(obj, func, docstring):
     try:
@@ -228,14 +228,14 @@ class TestCommandlineProcessing(TestCase):
 
     def setUp(self):
         module = scription.script_module
-        script_module['script_name'] = '<unknown>'
-        script_module['script_fullname'] = '<unknown>'
-        script_module['script_main'] = None
-        script_module['script_commands'] = {}
-        script_module['script_command'] = None
-        script_module['script_commandname'] = ''
-        script_module['script_aliases'] = ''
-        script_module['script_exception_lines'] = ''
+        module['script_name'] = '<unknown>'
+        module['script_fullname'] = '<unknown>'
+        module['script_main'] = None
+        module['script_commands'] = {}
+        module['script_command'] = None
+        module['script_commandname'] = ''
+        module['script_aliases'] = ''
+        module['script_exception_lines'] = ''
 
     def test_envvar(self):
         @Command(
@@ -1337,16 +1337,23 @@ class TestCommandlineProcessing(TestCase):
     def test_target(self):
         @Command(
                 config=Spec('use the specified Markdoc configuration', OPTION, type=Path),
-                log_level=Spec('how verbose to be in the log file', OPTION, choices=['DEBUG','INFO','WARN','ERROR'], force_default='INFO'),
-                quiet=Spec('alias for --log-level=ERROR', FLAG, None, default='ERROR', target='log_level'),
-                verbose=Spec('alias for --log-level=DEBUG', FLAG, None, default='DEBUG', target='log_level'),
+                log_level=Spec('how verbose to be in the log file', OPTION, choices=['DEBUG','INFO','WARN','ERROR'], force_default='INFO', radio='log'),
+                quiet=Spec('alias for --log-level=ERROR', FLAG, None, default='ERROR', target='log_level', radio='log'),
+                verbose=Spec('alias for --log-level=DEBUG', FLAG, None, default='DEBUG', target='log_level', radio='log'),
                 )
         def tester(config, log_level):
             pass
         tests = (
-                ( 'tester'.split(), (), {}, (Path(), 'INFO'), {}),
-                ( 'tester -o /here/stuff.text --log-level WARN'.split(), (), {}, (Path('/here/stuff.text'), 'WARN'), {}),
-                ( 'tester --quiet'.split(), (), {}, (Path(), 'ERROR'), {}),
+                ( 'tester'.split(), (), {}, (None, 'INFO'), {}),
+                ( 'tester -c /here/stuff.text --log-level WARN'.split(), (), {}, (Path('/here/stuff.text'), 'WARN'), {}),
+                ( 'tester --quiet'.split(), (), {}, (None, 'ERROR'), {}),
+                )
+        test_func_parsing(self, tester, tests)
+        #
+        self.assertRaisesRegex(
+                ScriptionError,
+                'only one of LOG_LEVEL, QUIET, and VERBOSE may be specified',
+                _usage, tester, 'tester --quiet --verbose'.split(),
                 )
 
 
@@ -1716,13 +1723,13 @@ class TestDocStrings(TestCase):
 
     def setUp(self):
         module = scription.script_module
-        script_module['script_name'] = '<unknown>'
-        script_module['script_fullname'] = '<unknown>'
-        script_module['script_main'] = None
-        script_module['script_commands'] = {}
-        script_module['script_command'] = None
-        script_module['script_commandname'] = ''
-        script_module['script_exception_lines'] = ''
+        module['script_name'] = '<unknown>'
+        module['script_fullname'] = '<unknown>'
+        module['script_main'] = None
+        module['script_commands'] = {}
+        module['script_command'] = None
+        module['script_commandname'] = ''
+        module['script_exception_lines'] = ''
 
     def test_single_line(self):
         @Script()
@@ -2724,8 +2731,6 @@ class TestEnums(TestCase):
         self.assertEqual(SpecKind.REQUIRED.value, 'required')
         self.assertEqual(SpecKind.FLAG._name_, 'FLAG')
         self.assertEqual(SpecKind.MULTI.__doc__, 'multiple values per name (list form, no whitespace)')
-        self.assertIs(SpecKind('radio'), SpecKind.RADIO)
-        self.assertIs(SpecKind['KEYWORD'], SpecKind.KEYWORD)
 
 
 class TestBox(TestCase):
@@ -3347,7 +3352,6 @@ class TestTable(TestCase):
                 )
 
     def test_naive_datetime_in_column(self):
-        from dbf import DateTime
         rows = [
                 ('name', 'date', 'passed', 'score'),
                 None,
@@ -3396,7 +3400,6 @@ class TestTable(TestCase):
                 )
 
     def test_naive_time_in_column(self):
-        from dbf import DateTime
         rows = [
                 ('name', 'time', 'passed', 'score'),
                 None,
