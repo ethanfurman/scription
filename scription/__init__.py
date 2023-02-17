@@ -1940,12 +1940,16 @@ class Job(object):
                             break
                 else:
                     # wait a moment for any passwords to be sent
-                    scription_debug('[echo: %s] sleeping at least 5 seconds so passwords can be sent and response read' % (self.get_echo(), ))
+                    scription_debug('[echo: %s] sleeping at most 5 seconds so passwords can be sent and response read' % (self.get_echo(), ))
                     waiting_time = 5.0
                     while waiting_time > 0.05:
+                        if self.get_echo():
+                            scription_debug('[echo: %s] password entry finished' % (self.get_echo(), ))
+                            break
                         scription_debug('[echo: %s]      quick sleep (%s remaning)' % (self.get_echo(), waiting_time))
                         waiting_time -= 0.1
                         time.sleep(0.1)
+                    else:
                         if not self.get_echo():
                             # host still wants a password -- not good
                             if not self.process:
@@ -1956,8 +1960,6 @@ class Job(object):
                                     e = self._set_exc(FailedPassword)
                                     self.kill()
                                     raise e
-                    else:
-                        scription_debug('[echo: %s] password entry finished' % (self.get_echo(), ))
             if input is not None:
                 scription_debug('writing input: %r' % input, verbose=2)
                 time.sleep(input_delay)
