@@ -1964,8 +1964,8 @@ class Job(object):
                 scription_debug('writing input: %r' % input, verbose=2)
                 time.sleep(input_delay)
                 for line in input:
-                    self.write(line)
-                    time.sleep(0.1)
+                    self.write(line, block=False)
+                    time.sleep(0.01)
             scription_debug('joining process thread...')
             while not self.abort:
                 process_thread.join(1)
