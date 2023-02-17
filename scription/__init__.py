@@ -1984,17 +1984,20 @@ class Job(object):
             scription_debug('closing job')
             self.close()
 
-    def close(self, force=True):
-        'parent method'
+    def close(self, timeout=0):
+        'parent method - timeout=0 means terminate immediately'
         if not self.closed:
             try:
-                if self.is_alive() and not self.abort:
-                    self.terminate()
-                    time.sleep(0.1)
-                    if force and self.is_alive():
-                        self.kill(error='ignore')
+                if not self.abort:
+                    while self.is_alive() and timeout > 0:
+                        timeout -= 0.1
                         time.sleep(0.1)
-                        self.is_alive()
+                    if self.is_alive():
+                        self.terminate()
+                        time.sleep(0.1)
+                        if self.is_alive():
+                            self.kill(error='ignore')
+                            time.sleep(0.1)
                 # shutdown stdin thread
                 self._all_input.put(None)
                 # close handles and pipes
@@ -2098,27 +2101,26 @@ class Job(object):
                 scription_debug('checking job for life')
                 if not self.is_alive():
                     scription_debug('dead, exiting')
-                    break
+                    return
             except Exception:
                 cls, exc, tb = sys.exc_info()
                 scription_debug('received', exc)
                 if cls in (IOError, OSError) and exc.errno in (errno.ESRCH, errno.ECHILD):
                     # child already died
-                    break
+                    return
+        # unable to kill job
+        self.abort = True
+        scription_debug('abort switch set')
+        if exc is None:
+            try:
+                raise UnableToKillJob('Signals %s failed' % ', '.join(self.kill_signals))
+            except Exception:
+                cls, exc, tb = sys.exc_info()
+                e = self._set_exc(UnableToKillJob, None, traceback=tb)
         else:
-            # unable to kill job
-            self.abort = True
-            scription_debug('abort switch set')
-            if exc is None:
-                try:
-                    raise UnableToKillJob('Signals %s failed' % ', '.join(self.kill_signals))
-                except Exception:
-                    cls, exc, tb = sys.exc_info()
-                    e = self._set_exc(UnableToKillJob, None, traceback=tb)
-            else:
-                e = self._set_exc(UnableToKillJob, '%s: %s' % (exc.__class__.__name__, exc), traceback=tb)
-            if error == 'raise':
-                raise e
+            e = self._set_exc(UnableToKillJob, '%s: %s' % (exc.__class__.__name__, exc), traceback=tb)
+        if error == 'raise':
+            raise e
 
     def poll(self):
         scription_debug('polling')
@@ -2209,8 +2211,9 @@ class Job(object):
         scription_debug('terminating')
         if self.is_alive() and self.kill_signals:
             sig = self.kill_signals[0]
-            os.kill(self.pid, sig)
-            time.sleep(0.1)
+            self.send_signal(sig)
+            if self.is_alive:
+                self.abort = True
 
     def write(self, data, block=True):
         'parent method'
