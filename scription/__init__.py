@@ -1235,7 +1235,7 @@ class Alias(object):
             _init_script_module(func)
         canonical = self.canonical
         if canonical:
-            func_name = func.__name__.replace('_', '-').lower()
+            func_name = func.__name__.replace('_', '-').lower().lstrip('-')
             try:
                 script_module['script_aliases'][func_name] = func
                 del script_module['script_commands'][func_name]
@@ -1274,17 +1274,13 @@ class Command(object):
         if func.__doc__ is not None:
             func.__doc__ = textwrap.dedent(func.__doc__).strip()
         _add_annotations(func, self.annotations)
-        func_name = func.__name__.replace('_', '-').lower()
-        if func_name.startswith('-'):
-            # internal name, possibly shadowing a keyword or data type -- an alias will be needed
-            # to access this command
-            pass
-        else:
-            if func_name in script_module['script_commands']:
-                raise ScriptionError('command name %r already defined' % (func_name, ))
-            elif func_name in script_module['script_aliases']:
-                raise ScriptionError('command name %r already defined as an alias' % (func_name, ))
-            script_module['script_commands'][func_name] = func
+        # a leading underscore is used so functions can be called by keywords or data types
+        func_name = func.__name__.replace('_', '-').lower().lstrip('-')
+        if func_name in script_module['script_commands']:
+            raise ScriptionError('command name %r already defined' % (func_name, ))
+        elif func_name in script_module['script_aliases']:
+            raise ScriptionError('command name %r already defined as an alias' % (func_name, ))
+        script_module['script_commands'][func_name] = func
         _help(func)
         return func
 
@@ -1328,7 +1324,7 @@ class Script(object):
             _init_script_module(func)
         if script_module['script_commands']:
             raise ScriptionError('Script must be defined before any Command')
-        func_name = func.__name__.replace('_', '-').lower()
+        func_name = func.__name__.replace('_', '-').lower().lstrip('-')
         if func_name in script_module['script_commands']:
             raise ScriptionError('%r cannot be both Command and Script' % func_name)
         if func.__doc__ is not None:
