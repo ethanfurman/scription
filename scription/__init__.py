@@ -46,6 +46,7 @@ PY33 = (3, 3)
 PY34 = (3, 4)
 PY35 = (3, 5)
 PY36 = (3, 6)
+ModuleType = type(sys)
 
 is_win = sys.platform.startswith('win')
 if is_win:
@@ -523,17 +524,22 @@ def _get_version(from_module, _try_other=True):
     return version
 
 def _get_all_versions(from_module, _try_other=True):
+    scription_debug('getting all versions', verbose=2)
     versions = ['%s=%s' % (from_module['module']['script_name'], _get_version(from_module, _try_other=False))]
-    for name, module in sys.modules.items():
-        fm_obj = from_module.get(name)
-        if fm_obj is module:
-            for ver in _version_strings:
-                if hasattr(module, ver):
-                    version = getattr(module, ver)
-                    if not isinstance(version, basestring):
-                        version = '.'.join(['%s' % x for x in version])
-                    versions.append('%s=%s' % (name, version))
-                    break
+    for name, obj in from_module.items():
+        if name.startswith('_') or not isinstance(obj, ModuleType):
+            continue
+        scription_debug('checking', name, verbose=2)
+        for ver in _version_strings:
+            scription_debug('  looking for', ver, verbose=3)
+            if hasattr(obj, ver):
+                version = getattr(obj, ver)
+                if not isinstance(version, basestring):
+                    version = '.'.join(['%s' % x for x in version])
+                versions.append('%s=%s' % (name, version))
+                break
+        else:
+            versions.append('%s=unknown' % (name, ))
     versions.append('python=%s' % '.'.join([str(i) for i in sys.version_info]))
     return versions
 
