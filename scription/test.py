@@ -1745,6 +1745,31 @@ class TestHelp(TestCase):
         result = Execute([sys.executable, test_file, '--help'], timeout=300)
         self.assertMultiLineEqual(result.stdout.strip(), target_result.strip())
 
+    def test_targeted_command(self):
+        file_data = dedent("""\
+                import sys
+                sys.path.insert(0, %r)
+                from scription import *
+
+                @Command(
+                    huh=Spec('misc options', 'multireq'),
+                    ident=Spec('testing order', 'flag', target='huh', default='-abc'),
+                    )
+                def tester(huh):
+                    echo(huh)
+
+                Main()
+                """)
+        target_result = dedent("""\
+                tester HUH --ident
+
+                    HUH     misc options\x20\x20\x20\x20
+                    IDENT   testing order\x20\x20\x20\x20
+                """)
+        test_file = self.write_script(file_data)
+        result = Execute([sys.executable, test_file, '--help'], timeout=300)
+        self.assertMultiLineEqual(result.stdout.strip(), target_result.strip())
+
 
 class TestDocStrings(TestCase):
 

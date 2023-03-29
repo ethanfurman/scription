@@ -670,10 +670,10 @@ def _help(func, script=False):
                         new_dflt.append(annote.type(d))
                     annote._script_default = tuple(new_dflt)
     # also prepare help for global options
-    global_params = [n for n in func.names if n not in func.all_params]
+    targeted_params = [n for n in func.names if n not in func.all_params]
     print_params = []
     in_required = True
-    for param in global_params + params:
+    for param in params + targeted_params:
         if param[0] == '_':
             # ignore private params
             continue
@@ -705,17 +705,12 @@ def _help(func, script=False):
             usage.append('    ' + line)
         usage.append('')
     name_order = []
-    in_params = False
-    for name in global_params + ['start'] + params:
+    for name in params + targeted_params:
         if name[0] == '_':
             # ignore private params
             continue
-        if name == 'start':
-            in_params = True
-            continue
         annote = annotations[name]
-        if in_params and annote.kind != 'required':
-            in_params = False
+        if annote.kind != 'required':
             if vararg and func._var_arg.kind == 'multireq':
                 name_order.append(vararg[0])
         name_order.append(name)
