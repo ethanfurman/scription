@@ -1468,7 +1468,7 @@ class Spec(object):
                 else:
                     value = self.type(value)
             scription_debug('     final --> %r' % (value, ), verbose=2)
-        elif self._type_default is not empty:
+        elif self._type_default is not empty and self.kind != 'multireq':
             value = self._type_default
             scription_debug('   type default --> %r' % (value, ), verbose=2)
         else:

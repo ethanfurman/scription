@@ -499,11 +499,17 @@ class TestCommandlineProcessing(TestCase):
         def tester(huh):
             pass
         tests = (
-                ( 'tester'.split(), (), {}, (tuple(), ), {} ),
                 ( 'tester file1'.split(), (), {}, ( ('file1',) , ), {} ),
                 ( 'tester file1,file2'.split(), (), {}, (('file1', 'file2'), ), {} ),
                 )
         test_func_parsing(self, tester, tests)
+        self.assertRaisesRegex(
+                ScriptionError,
+                "no value specified for HUH",
+                _usage,
+                tester,
+                "tester".split(),
+                )
 
     def test_multireq_with_private(self):
         @Command(
