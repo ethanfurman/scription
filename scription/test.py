@@ -1367,7 +1367,7 @@ class TestCommandlineProcessing(TestCase):
         @Command(
                 date=Spec('date to examine', OPTION, type=Date, radio='date'),
                 email=Spec('send email to these addresses', MULTI),
-                yesterday=Spec('examine yesterday', FLAG, target='date', radio='date', default=Date.today().replace(delta_day=-1)),
+                yesterday=Spec('examine yesterday', FLAG, target='date', default=Date.today().replace(delta_day=-1)),
                 )
         def tester(date, email):
             pass
@@ -1381,6 +1381,27 @@ class TestCommandlineProcessing(TestCase):
                 ScriptionError,
                 'only one of DATE and YESTERDAY may be specified',
                 _usage, tester, 'tester --date=2023-01-17 --yesterday'.split(),
+                )
+
+    def test_target_3(self):
+        @Command(
+                this=Spec('this arg', FLAG, ('t','h')),
+                where=Spec('location', OPTION),
+                here=Spec('location is here', FLAG, target='where', usage='local', default='blah'),
+                )
+        def tester(this, where):
+            pass
+        tests = (
+                ( 'tester'.split(), (), {}, (False, None), {}),
+                ( 'tester -h'.split(), (), {}, (True, None), {}),
+                ( 'tester -w hah'.split(), (), {}, (False, 'hah'), {}),
+                ( 'tester --local'.split(), (), {}, (False, 'blah'), {}),
+                )
+        test_func_parsing(self, tester, tests)
+        self.assertRaisesRegex(
+                ScriptionError,
+                'only one of LOCAL and WHERE may be specified',
+                _usage, tester, 'tester -w hah --local'.split(),
                 )
 
 

@@ -429,35 +429,50 @@ def _add_annotations(func, annotations, script=False):
     errors = []
     default_order = 128
     # add global, order, and radio attributes
-    for name, spec in annotations.items():
-        scription_debug('  processing %r with %r' % (name, spec), verbose=2)
-        annote = annotations[name]
+    for name, annote in annotations.items():
+        scription_debug('  processing %r with %r' % (name, annote), verbose=2)
         if name in params:
             annote._global = False
             annote._order = params.index(name)
-        elif spec._target in params:
+        elif annote._target in params:
             # sort it out in the next loop
             pass
         elif not script:
             errors.append(name)
+            continue
         else:
             annote._global = True
             annote._order = default_order
             default_order += 1
-        if spec._radio:
-            radio.setdefault(spec._radio, []).append(name)
+        if annote._radio:
+            radio.setdefault(annote._radio, set()).add(name)
     if errors:
         raise ScriptionError("name(s) %r not in %s's signature" % (errors, func.__name__))
     # assign correct targets
-    for name, spec in annotations.items():
-        if spec._target is not empty:
-            target = annotations.get(spec._target)
+    for name, annote in list(annotations.items()):
+        if annote._target is not empty:
+            target = annotations.get(annote._target)
             if target is None:
-                errors.append(target)
-            spec._order = target._order
-            spec._global = target._global
+                errors.append(annote._target)
+                continue
+            annote._order = target._order
+            annote._global = target._global
+            if annote.usage != name.upper():
+                # this annotation is not in the function header, and should be activated
+                # by the "usage" argument
+                annotations.pop(name)
+                annotations[annote.usage] = annote
+                name = annote.usage
+            _radio = target._radio or '#%s-radio' % target.__name__
+            target._radio = _radio  # just in case it wasn't already set
+            annote._radio = _radio  # ditto
+            if annote._radio and annote._radio != _radio:
+                errors.append(annote.__name__)
+                continue
+            radio.setdefault(_radio, set()).add(name)
+            radio[_radio].add(target.__name__)
     if errors:
-        raise ScriptionError("target name(s) %r not in %s's annotations" % (errors, func.__name__))
+        raise ScriptionError("target name(s) %r not in %s's annotations or have invalid radio settings" % (errors, func.__name__))
     func.__scription__ = annotations
     func.names = sorted(annotations.keys())
     func.radio = radio
@@ -553,6 +568,7 @@ def _help(func, script=False):
     params = func.params = list(params)
     vararg = func.vararg = [vararg] if vararg else []
     keywordarg = func.keywordarg = [keywordarg] if keywordarg else []
+    header_args = params + vararg + keywordarg
     annotations = func.__scription__
     pos = None
     max_pos = 0
@@ -560,7 +576,7 @@ def _help(func, script=False):
         script_obj = script_module['script_main']
         script_func = getattr(script_obj, 'command', None)
         max_pos = getattr(script_func, 'max_pos', max_pos)
-    for i, name in enumerate(params + vararg + keywordarg, start=max_pos):
+    for i, name in enumerate(header_args, start=max_pos):
         scription_debug('processing', name, verbose=3)
         if name[0] == '_':
             # ignore private params
