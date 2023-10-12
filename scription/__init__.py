@@ -1368,7 +1368,8 @@ class Spec(object):
     def __init__(self,
             help=empty, kind=empty, abbrev=empty, type=empty,
             choices=empty, usage=empty, remove=False, default=empty,
-            envvar=empty, force_default=empty, radio=empty, target=empty
+            envvar=empty, force_default=empty, radio=empty, target=empty,
+	    nargs=empty,
             ):
         if isinstance(help, Spec):
             self.__dict__.update(help.__dict__)
@@ -1378,7 +1379,7 @@ class Spec(object):
             help, kind, abbrev, type, choices, usage, remove, default, envvar, force_default = args
         if not help:
             help = ''
-        if not kind:
+        if kind is empty:
             kind = 'required'
         if not type:
             type = _identity
@@ -1402,6 +1403,8 @@ class Spec(object):
         if kind not in ('required', 'multireq', 'option', 'multi', 'flag'):
             raise ScriptionError('unknown parameter kind: %r' % kind)
         if kind == 'flag':
+            if nargs is empty:
+                nargs = 0
             if type is Trivalent:
                 arg_type_default = Unknown
             else:
@@ -1409,8 +1412,16 @@ class Spec(object):
                 if type is _identity:
                     type = Bool
         elif kind == 'option':
+            if nargs is empty:
+                nargs = 1
             arg_type_default = None
-        elif kind in ('multi', 'multireq'):
+        elif kind == 'multi':
+            if nargs is empty:
+                nargs = '*'
+            arg_type_default = tuple()
+        elif kind == 'multireq':
+            if nargs is empty:
+                nargs = '+'
             arg_type_default = tuple()
         elif default is not empty:
             arg_type_default = type_of(default)
