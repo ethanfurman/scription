@@ -570,26 +570,34 @@ def _help(func, script=False):
     keywordarg = func.keywordarg = [keywordarg] if keywordarg else []
     header_args = params + vararg + keywordarg
     annotations = func.__scription__
-    pos = None
     max_pos = 0
+    pos_args_allowed = True
     if not script:
         script_obj = script_module['script_main']
         script_func = getattr(script_obj, 'command', None)
         max_pos = getattr(script_func, 'max_pos', max_pos)
-    for i, name in enumerate(header_args, start=max_pos):
-        scription_debug('processing', name, verbose=3)
+    pos = max_pos
+    for name in header_args:
+        scription_debug('processing', name, 'pos_args_allowed:', pos_args_allowed, verbose=3)
         if name[0] == '_':
             # ignore private params
             continue
         spec = annotations.get(name, None)
-        pos = None
+        # pos = None
         if spec is None:
             raise ScriptionError('%s not annotated' % name)
-        help, kind, abbrev, arg_type, choices, usage_name, remove, default, envvar, target = spec
+        help, kind, abbrev, arg_type, choices, usage_name, remove, default, envvar, target, nargs = spec
+        if kind in ('required', 'multireq') and [name] != vararg:
+            if not pos_args_allowed:
+                raise ScriptionError('positional parameters must be listed first [%r]' % name)
+        else:
+            pos_args_allowed = False
         if name in vararg:
             spec._type_default = tuple()
-            if kind is empty:
-                kind = 'multi'
+            # if kind is empty:
+            kind = 'multireq'
+            if nargs is empty:
+                nargs = '+'
         elif name in keywordarg:
             spec._type_default = dict()
             if kind is empty:
@@ -641,11 +649,13 @@ def _help(func, script=False):
             else:
                 arg_type = type_of(default)
         spec.kind = kind
+        spec._nargs = nargs
         spec.abbrev = abbrev
         spec.type = arg_type
         spec.usage = usage_name
         if pos != max_pos:
-            annotations[i] = spec
+            annotations[pos] = spec
+            pos = max_pos
         annotations[name] = spec
         for ab in abbrev or ():
             annotations[ab] = spec
@@ -902,7 +912,7 @@ def _usage(func, param_line_args):
     radio = set()
     pos = 0
     max_pos = func.max_pos
-    scription_debug('max_pos:', max_pos, verbose=2)
+    scription_debug('pos: %d   max_pos: %d' % (pos, max_pos), verbose=2)
     print_help = print_version = print_all_versions = False
     value = None
     annotations = {}
@@ -922,65 +932,77 @@ def _usage(func, param_line_args):
         kwd_arg_spec._cli_value = {}
     to_be_removed = []
     all_to_varargs = False
+    multi_option = 0
     annote = last_item = None
+    #
+    def _handle_lone_value(value):
+        if item is None or item.startswith('-') or '=' in item:
+            scription_debug('new flag/option, checking for previous flag/option default', verbose=2)
+            # check for default
+            if annote._script_default:
+                scription_debug('found: %r' % (annote._script_default, ))
+                annote._cli_value = annote._script_default
+                if annote._cli_value and annote._radio:
+                    if annote._radio in radio:
+                        raise ScriptionError('only one of %s may be specified'
+                                    % _and_list(func.radio[annote._radio]))
+                    radio.add(annote._radio)
+            else:
+                raise ScriptionError('%s has no value' % last_item, use_help=True)
+            return False
+        else:
+            if annote.remove:
+                # only remove if not using the annotation default
+                to_be_removed.append(offset)
+            value = item
+            if annote.kind == 'option':
+                scription_debug('processing as option', verbose=2)
+                scription_debug('checking choice membership: %r in %r?' % (item, annote.choices), verbose=2)
+                if annote.choices and value not in annote.choices:
+                    raise ScriptionError('%s: %r not in [ %s ]' % (annote.usage, value, ' | '.join(annote.choices)), use_help=True)
+                annote._cli_value = annote.type(value)
+                if annote._cli_value and annote._radio:
+                    if annote._radio in radio:
+                        raise ScriptionError('only one of %s may be specified'
+                                    % _and_list(func.radio[annote._radio]))
+                    radio.add(annote._radio)
+            elif annote.kind in ('multi', 'multireq'):
+                scription_debug('processing as multi for', annote.usage, verbose=2)
+                scription_debug('checking choice membership: %r in %r?' % (item, annote.choices), verbose=2)
+                values = _split_on_comma(value)
+                if annote.choices:
+                    for v in values:
+                        if v not in annote.choices:
+                            raise ScriptionError(
+                                    '%s: %r not in [ %s ]'
+                                        % (annote.usage, v, ' | '.join(annote.choices)),
+                                    use_help=True,
+                                    )
+                values = [annote.type(v) for v in values]
+                annote._cli_value += tuple(values)
+                if annote._cli_value and annote._radio:
+                    if annote._radio in radio:
+                        raise ScriptionError('only one of %s may be specified'
+                                    % _and_list(func.radio[annote._radio]))
+                    radio.add(annote._radio)
+            else:
+                raise ScriptionError("Error: %s's kind %r not in (OPTION, MULTI, MULTIREQ)" % (last_item, annote.kind))
+            return True
+    #
     for offset, item in enumerate(param_line_args + [None]):
         scription_debug('%r: %r' % (offset, item), verbose=2)
         original_item = item
         if value is not None:
             scription_debug('None branch', verbose=2)
-            if item is None or item.startswith('-') or '=' in item:
-                scription_debug('new flag/option, checking for previous flag/option default', verbose=2)
-                # check for default
-                if annote._script_default:
-                    scription_debug('found: %r' % (annote._script_default, ))
-                    annote._cli_value = annote._script_default
-                    if annote._cli_value and annote._radio:
-                        if annote._radio in radio:
-                            raise ScriptionError('only one of %s may be specified'
-                                        % _and_list(func.radio[annote._radio]))
-                        radio.add(annote._radio)
-                else:
-                    raise ScriptionError('%s has no value' % last_item, use_help=True)
-                value = None
-            else:
-                if annote.remove:
-                    # only remove if not using the annotation default
-                    to_be_removed.append(offset)
-                value = item
-                if annote.kind == 'option':
-                    scription_debug('processing as option', verbose=2)
-                    scription_debug('checking choice membership: %r in %r?' % (item, annote.choices), verbose=2)
-                    if annote.choices and value not in annote.choices:
-                        raise ScriptionError('%s: %r not in [ %s ]' % (annote.usage, value, ' | '.join(annote.choices)), use_help=True)
-                    annote._cli_value = annote.type(value)
-                    if annote._cli_value and annote._radio:
-                        if annote._radio in radio:
-                            raise ScriptionError('only one of %s may be specified'
-                                        % _and_list(func.radio[annote._radio]))
-                        radio.add(annote._radio)
-                elif annote.kind in ('multi', 'multireq'):
-                    scription_debug('processing as multi', verbose=2)
-                    scription_debug('checking choice membership: %r in %r?' % (item, annote.choices), verbose=2)
-                    values = _split_on_comma(value)
-                    if annote.choices:
-                        for v in values:
-                            if v not in annote.choices:
-                                raise ScriptionError(
-                                        '%s: %r not in [ %s ]'
-                                            % (annote.usage, v, ' | '.join(annote.choices)),
-                                        use_help=True,
-                                        )
-                    values = [annote.type(v) for v in values]
-                    annote._cli_value += tuple(values)
-                    if annote._cli_value and annote._radio:
-                        if annote._radio in radio:
-                            raise ScriptionError('only one of %s may be specified'
-                                        % _and_list(func.radio[annote._radio]))
-                        radio.add(annote._radio)
-                else:
-                    raise ScriptionError("Error: %s's kind %r not in (option, multi, multireq)" % (last_item, annote.kind))
-                value = None
+            handled = _handle_lone_value(value)
+            value = None
+            if handled:
+                if isinstance(multi_option, int):
+                    multi_option -= 1
                 continue
+            else:
+                annote = None
+                multi_option = 0
         last_item = item
         if item is None:
             scription_debug('done with loop', verbose=2)
@@ -994,7 +1016,20 @@ def _usage(func, param_line_args):
                 raise ScriptionError("don't know what to do with %r" % item, use_help=True)
             var_arg_spec._cli_value += (var_arg_spec.type(item), )
             continue
-        if item.startswith('-'):
+        if multi_option and not item.startswith('-'):
+            scription_debug('multi_option: %r' % multi_option, verbose=2)
+            handled = _handle_lone_value(value)
+            value = None
+            if handled:
+                if isinstance(multi_option, int):
+                    multi_option -= 1
+                elif multi_option == '?':
+                    multi_option = 0
+                continue
+            else:
+                annote = None
+                multi_option = 0
+        if item.startswith('-') or multi_option:
             scription_debug('option or flag', verbose=2)
             # (multi)option or flag
             if item.lower() == '--help' or item == '-h' and 'h' not in annotations:
@@ -1044,6 +1079,7 @@ def _usage(func, param_line_args):
                 continue
             else:
                 raise ScriptionError('%s not valid' % original_item, use_help=True)
+            multi_option = annote._nargs
             if annote.remove:
                 scription_debug('removed setting', verbose=2)
                 to_be_removed.append(offset)
@@ -1133,11 +1169,20 @@ def _usage(func, param_line_args):
             kwd_arg_spec._cli_value[item] = value
             value = None
         else:
-            scription_debug('positional?', verbose=2)
+            scription_debug('positional?  pos=%d' % pos, verbose=2)
             # positional (required?) argument
-            scription_debug('positional argument:', item)
+            scription_debug('prior annotation:', annote, verbose=2)
+            scription_debug('multi_option:', multi_option, verbose=2)
+            if annote and multi_option == '+' or isinstance(multi_option, int) and multi_option > 0:
+                scription_debug('decrementing pos')
+                pos -= 1
             if pos < max_pos:
-                annote = annotations[pos]
+                scription_debug('positional argument:', item)
+                if annote is not annotations[pos]:
+                    annote = annotations[pos]
+                    multi_option = annote._nargs
+                    if isinstance(multi_option, int):
+                        multi_option -= 1
                 scription_debug('  with Spec:', annote)
                 if annote.remove:
                     to_be_removed.append(offset)
@@ -1162,7 +1207,10 @@ def _usage(func, param_line_args):
                     item = annote.type(item)
                     annote._cli_value = item
                 pos += 1
+                if multi_option == 0:
+                    annote = None
             else:
+                scription_debug('vararg', verbose=2)
                 if var_arg_spec is None:
                     raise ScriptionError("don't know what to do with %r" % item, use_help=True)
                 var_arg_spec._cli_value += (var_arg_spec.type(item), )
@@ -1369,7 +1417,7 @@ class Spec(object):
             help=empty, kind=empty, abbrev=empty, type=empty,
             choices=empty, usage=empty, remove=False, default=empty,
             envvar=empty, force_default=empty, radio=empty, target=empty,
-	    nargs=empty,
+            nargs=empty,
             ):
         if isinstance(help, Spec):
             self.__dict__.update(help.__dict__)
@@ -1379,8 +1427,21 @@ class Spec(object):
             help, kind, abbrev, type, choices, usage, remove, default, envvar, force_default = args
         if not help:
             help = ''
-        if kind is empty:
+        scription_debug('kind: %r   nargs: %r   help: %r' % (kind, nargs, help), verbose=3)
+        if nargs is empty and kind is empty:
             kind = 'required'
+        elif kind is empty:
+            if nargs == 0:
+                kind = 'flag'
+            elif nargs == '?':
+                kind = 'option'
+            elif nargs == '*':
+                kind = 'multi'
+            elif nargs == '+' or isinstance(nargs, int) and nargs > 0:
+                kind = 'multireq'
+            else:
+                raise ScriptionError('unknown nargs: %r  [no quotes needed for integers]' % nargs)
+        scription_debug('kind: %r   nargs: %r' % (kind, nargs), verbose=3)
         if not type:
             type = _identity
         if not choices:
@@ -1402,6 +1463,15 @@ class Spec(object):
             use_default = True
         if kind not in ('required', 'multireq', 'option', 'multi', 'flag'):
             raise ScriptionError('unknown parameter kind: %r' % kind)
+        # fix kind to match nargs
+        if kind == 'required':
+            if isinstance(nargs, int) and nargs != 1:
+                kind = 'multireq'
+            elif nargs is empty:
+                nargs = 1
+        elif kind == 'option':
+            if isinstance(nargs, int) and nargs > 1:
+                kind = 'multi'
         if kind == 'flag':
             if nargs is empty:
                 nargs = 0
@@ -1413,7 +1483,10 @@ class Spec(object):
                     type = Bool
         elif kind == 'option':
             if nargs is empty:
-                nargs = 1
+                if use_default:
+                    nargs = '?'
+                else:
+                    nargs = 1
             arg_type_default = None
         elif kind == 'multi':
             if nargs is empty:
@@ -1443,6 +1516,7 @@ class Spec(object):
         self._script_default = default
         self._type_default = arg_type_default
         self._use_default = use_default
+        self._nargs = nargs
         self._global = False
         self._envvar = envvar
         if radio is empty:
@@ -1456,11 +1530,11 @@ class Spec(object):
         self._target = target
 
     def __iter__(self):
-        return iter((self.help, self.kind, self.abbrev, self.type, self.choices, self.usage, self.remove, self._script_default, self._envvar, self._target))
+        return iter((self.help, self.kind, self.abbrev, self.type, self.choices, self.usage, self.remove, self._script_default, self._envvar, self._target, self._nargs))
 
     def __repr__(self):
-        return "Spec(help=%r, kind=%r, abbrev=%r, type=%r, choices=%r, usage=%r, remove=%r, default=%r, envvar=%r, target=%r)" % (
-                self.help, self.kind, self.abbrev, self.type, self.choices, self.usage, self.remove, self._script_default, self._envvar, self._target)
+        return "Spec(help=%r, kind=%r, abbrev=%r, type=%r, choices=%r, usage=%r, remove=%r, default=%r, envvar=%r, target=%r, nargs=%r)" % (
+                self.help, self.kind, self.abbrev, self.type, self.choices, self.usage, self.remove, self._script_default, self._envvar, self._target, self._nargs)
 
     @property
     def value(self):

@@ -73,7 +73,10 @@ def test_func_parsing(obj, func, tests, test_type=False):
                 verbose = 1
             elif '-vv' in params or '--verbose=2' in params:
                 verbose = 2
-            res_main_args, res_main_kwds, res_sub_args, res_sub_kwds = _usage(func, params)
+            try:
+                res_main_args, res_main_kwds, res_sub_args, res_sub_kwds = _usage(func, params)
+            except ScriptionError as exc:
+                obj.assertTrue(False, "%s (iteration %d)" % (exc, i))
             obj.assertEqual(
                     res_main_args, main_args,
                     "[main args] expected: %r, got: %r  (iteration %d)" % (main_args, res_main_args, i),
@@ -362,6 +365,20 @@ class TestCommandlineProcessing(TestCase):
                 )
         test_func_parsing(self, tester, tests)
 
+    def test_multi_nargs(self):
+        @Command(
+                huh=Spec('misc options', nargs='*'),
+                )
+        def tester(huh):
+            pass
+        tests = (
+                ( 'tester'.split(), (), {}, (tuple(), ), {} ),
+                ( 'tester -h file1'.split(), (), {}, (('file1', ), ), {} ),
+                ( 'tester -h file1 -h file2'.split(), (), {}, (('file1', 'file2'), ), {} ),
+                ( 'tester -h file1 file2 file3'.split(), (), {}, (('file1', 'file2', 'file3'), ), {} ),
+                )
+        test_func_parsing(self, tester, tests)
+
     def test_multi_with_private(self):
         @Command(
                 huh=('misc options', 'multi'),
@@ -562,6 +579,54 @@ class TestCommandlineProcessing(TestCase):
                 )
         test_func_parsing(self, tester, tests)
 
+    def test_multireq_with_option_nargs(self):
+        @Command(
+                huh=Spec('misc options', nargs='+'),
+                wow=Spec('oh yeah', OPTION, nargs=1),
+                )
+        def tester(huh, wow):
+            pass
+        tests = (
+                ( 'tester file1'.split(), (), {}, (('file1', ), None), {} ),
+                ( 'tester file1 -w google'.split(), (), {}, (('file1', ), 'google'), {} ),
+                ( 'tester file1 file2'.split(), (), {}, (('file1', 'file2'), None), {} ),
+                ( 'tester file1 file2 -w frizzle'.split(), (), {}, (('file1', 'file2'), 'frizzle'), {} ),
+                ( 'tester file1 file2 file3 -w frizzle'.split(), (), {}, (('file1', 'file2', 'file3'), 'frizzle'), {} ),
+                ( 'tester file1 file2 -w frizzle'.split(), (), {}, (('file1', 'file2'), 'frizzle'), {} ),
+                )
+        test_func_parsing(self, tester, tests)
+
+        self.assertRaisesRegex(
+                ScriptionError,
+                r"don't know what to do with .file2.",
+                _usage,
+                tester,
+                "tester file1 --wow ours file2".split(),
+                )
+
+        @Command(
+                huh=Spec('misc options', REQUIRED, nargs=2),
+                hah=Spec('more options', nargs='+'),
+                wow=Spec('oh yeah', OPTION, nargs=1),
+                )
+        def tester(huh, hah, wow):
+            pass
+
+        tests = (
+                ( 'tester file1 file2 file3'.split(), (), {}, (('file1', 'file2'), ('file3', ), None), {} ),
+                ( 'tester file1 file2 file3 -w frizzle'.split(), (), {}, (('file1', 'file2'), ('file3', ), 'frizzle'), {} ),
+                )
+        test_func_parsing(self, tester, tests)
+
+        with self.assertRaisesRegex(ScriptionError, 'positional parameters must be listed first ..hah..'):
+            @Command(
+                    huh=Spec('misc options', REQUIRED, nargs=2),
+                    hah=Spec('more options', nargs='+'),
+                    wow=Spec('oh yeah', OPTION, nargs=1),
+                    )
+            def tester(huh, wow, hah):
+                pass
+
     def test_multireq_with_Spec_default_str(self):
         @Command(
                 huh=Spec('misc options', 'multireq', default='woo', force_default=True),
@@ -682,6 +747,25 @@ class TestCommandlineProcessing(TestCase):
         @Command(
                 cardboard=('use cardboard', 'flag'),
                 plastic=('use plastic', 'flag'),
+                )
+        def tester(cardboard, plastic=True):
+            pass
+        tests = (
+                ( 'tester'.split(), (), {}, (False, True), {} ),
+                ( 'tester -c'.split(), (), {}, (True, True), {} ),
+                ( 'tester -p'.split(), (), {}, (False, True), {} ),
+                ( 'tester -c -p'.split(), (), {}, (True, True), {} ),
+                ( 'tester --cardboard --plastic'.split(), (), {}, (True, True), {} ),
+                ( 'tester --cardboard=yes --plastic'.split(), (), {}, (True, True), {} ),
+                ( 'tester --no-plastic'.split(), (), {}, (False, False), {} ),
+                ( 'tester --plastic=off'.split(), (), {}, (False, False), {} ),
+                )
+        test_func_parsing(self, tester, tests)
+
+    def test_flags_nargs(self):
+        @Command(
+                cardboard=Spec('use cardboard', nargs=0),
+                plastic=Spec('use plastic', nargs=0),
                 )
         def tester(cardboard, plastic=True):
             pass
@@ -904,8 +988,8 @@ class TestCommandlineProcessing(TestCase):
         def do_job(source, *stuff):
             pass
         tests = (
-                ('do_job --source -vv biscuit and gravy'.split(), (), {}, ('the cloud', 'biscuit', 'and' ,'gravy'), {}),
                 ('do_job biscuit and gravy'.split(), (), {}, ('the cloud', 'biscuit', 'and' ,'gravy'), {}),
+                ('do_job --source -vv biscuit and gravy'.split(), (), {}, ('the cloud', 'biscuit', 'and' ,'gravy'), {}),
                 )
         test_func_parsing(self, do_job, tests)
 
